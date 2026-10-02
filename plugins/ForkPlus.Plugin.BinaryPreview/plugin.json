@@ -13,11 +13,7 @@
       "id": "binary",
       "displayName": "Binary Structure",
       "priority": 150,
-      "extensions": [
-        ".bin", ".dat", ".rom", ".raw", ".wasm", ".class", ".pyc",
-        ".o", ".obj", ".a", ".lib", ".so", ".dll", ".dylib", ".exe",
-        ".hex", ".elf"
-      ]
+      "extensions": ["*"]
     }
   ]
 }
