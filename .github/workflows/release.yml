@@ -2,12 +2,15 @@
 #
 # 触发：push v* 标签（如 v1.0.0）→ 构建仓库内"随 ForkPlus 分发"的插件 → 自动创建 Release。
 #
-# 产物：每个插件一个 zip，zip 根目录 = 该插件目录内容（plugin.json + 宿主 dll + 依赖），
+# 产物：每个插件一个 tar.gz，归档根目录 = 该插件目录内容（plugin.json + 宿主 dll + 依赖），
 #       解压即得 <应用目录>/plugins/<插件名>/ 所需的全部文件。
-#       资产名不带版本号（ForkPlus.Plugin.ImageCompare.zip 等），与主仓 CI 的
+#       资产名不带版本号（ForkPlus.Plugin.ImageCompare.tar.gz 等），与主仓 CI 的
 #       biturbo / tokei 同模式，便于 ForkPlus 侧用
 #       https://github.com/hebin123456/ForkPlus-Plugins/releases/latest/download/<资产名>
 #       稳定取用（不必随版本改 URL）。
+#       用 tar.gz 而非 zip：ForkPlus 的四平台 runner 里 Windows 走 git-bash，
+#       没有可依赖的 unzip，而 tar 四平台都在（与 tokei 选 tar.gz 同一理由），
+#       消费端只需一条 `tar -xzf`。
 #
 # 为什么一份 publish 四平台通用：插件是纯托管程序集，宿主以 `dotnet <dll>` 拉起
 #       （见 PluginManifest.ResolveHostExecutable + PluginSession 的 .dll 分支），
@@ -53,13 +56,13 @@ jobs:
             # 清单必须与宿主 dll 同目录，否则宿主扫描时认不出这个插件
             [ -f "$out/plugin.json" ] || { echo "::error::MISSING plugin.json in $out"; exit 1; }
             [ -f "$out/$name.dll" ] || { echo "::error::MISSING $name.dll in $out"; exit 1; }
-            (cd "$out" && zip -qr "$GITHUB_WORKSPACE/artifacts/$name.zip" . -x "*.pdb")
-            ls -la "artifacts/$name.zip"
+            (cd "$out" && tar -czf "$GITHUB_WORKSPACE/artifacts/$name.tar.gz" --exclude='*.pdb' .)
+            ls -la "artifacts/$name.tar.gz"
           done
-          [ "$(ls -1 artifacts/*.zip | wc -l)" -ge 1 ] || { echo "::error::no plugin zip produced"; exit 1; }
+          [ "$(ls -1 artifacts/*.tar.gz | wc -l)" -ge 1 ] || { echo "::error::no plugin archive produced"; exit 1; }
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*.zip
+          files: artifacts/*.tar.gz
           generate_release_notes: true
