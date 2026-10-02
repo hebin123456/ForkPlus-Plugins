@@ -1,0 +1,65 @@
+# ForkPlus-Plugins 发布流水线
+#
+# 触发：push v* 标签（如 v1.0.0）→ 构建仓库内"随 ForkPlus 分发"的插件 → 自动创建 Release。
+#
+# 产物：每个插件一个 zip，zip 根目录 = 该插件目录内容（plugin.json + 宿主 dll + 依赖），
+#       解压即得 <应用目录>/plugins/<插件名>/ 所需的全部文件。
+#       资产名不带版本号（ForkPlus.Plugin.ImageCompare.zip 等），与主仓 CI 的
+#       biturbo / tokei 同模式，便于 ForkPlus 侧用
+#       https://github.com/hebin123456/ForkPlus-Plugins/releases/latest/download/<资产名>
+#       稳定取用（不必随版本改 URL）。
+#
+# 为什么一份 publish 四平台通用：插件是纯托管程序集，宿主以 `dotnet <dll>` 拉起
+#       （见 PluginManifest.ResolveHostExecutable + PluginSession 的 .dll 分支），
+#       不带 RID 的框架依赖发布即可跨平台，无需按平台矩阵构建。
+#
+# 新增插件：如需随 ForkPlus 分发，把它加进下方 Publish plugins 的循环列表即可
+#       （示例插件 ForkPlus.Plugin.ExampleSwatch 仅供本地参考，不入包）。
+
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: build & release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish plugins
+        shell: bash
+        run: |
+          set -e
+          mkdir -p artifacts
+          for name in ForkPlus.Plugin.ImageCompare ForkPlus.Plugin.BinaryPreview; do
+            proj="plugins/$name/$name.csproj"
+            [ -f "$proj" ] || { echo "::error::MISSING plugin project: $proj"; exit 1; }
+            out="publish/$name"
+            echo "Publishing $name ..."
+            dotnet publish "$proj" -c Release -o "$out" -p:DebugType=none --nologo
+            # 清单必须与宿主 dll 同目录，否则宿主扫描时认不出这个插件
+            [ -f "$out/plugin.json" ] || { echo "::error::MISSING plugin.json in $out"; exit 1; }
+            [ -f "$out/$name.dll" ] || { echo "::error::MISSING $name.dll in $out"; exit 1; }
+            (cd "$out" && zip -qr "$GITHUB_WORKSPACE/artifacts/$name.zip" .)
+            ls -la "artifacts/$name.zip"
+          done
+          [ "$(ls -1 artifacts/*.zip | wc -l)" -ge 1 ] || { echo "::error::no plugin zip produced"; exit 1; }
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.zip
+          generate_release_notes: true
