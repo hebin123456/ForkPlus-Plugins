@@ -1,0 +1,12 @@
+# 构建产物
+bin/
+obj/
+
+# IDE
+.vs/
+.idea/
+*.user
+
+# 发布/打包产物
+publish/
+*.nupkg

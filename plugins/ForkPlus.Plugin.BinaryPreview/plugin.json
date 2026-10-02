@@ -1,0 +1,23 @@
+{
+  "id": "com.forkplus.plugin.binary-preview",
+  "name": "Binary Structure Preview",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "license": "MIT",
+  "homepage": "https://github.com/hebin123456/ForkPlus-Plugins",
+  "host": {
+    "executable": "ForkPlus.Plugin.BinaryPreview.dll"
+  },
+  "viewers": [
+    {
+      "id": "binary",
+      "displayName": "Binary Structure",
+      "priority": 150,
+      "extensions": [
+        ".bin", ".dat", ".rom", ".raw", ".wasm", ".class", ".pyc",
+        ".o", ".obj", ".a", ".lib", ".so", ".dll", ".dylib", ".exe",
+        ".hex", ".elf"
+      ]
+    }
+  ]
+}

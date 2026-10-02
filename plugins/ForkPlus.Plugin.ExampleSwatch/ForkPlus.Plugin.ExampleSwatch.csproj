@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 公共属性（OutputType/TargetFramework/SDK 引用等）在 ../Directory.Build.props 里。 -->
+  <PropertyGroup>
+    <AssemblyName>ForkPlus.Plugin.ExampleSwatch</AssemblyName>
+    <RootNamespace>ForkPlus.Plugin.ExampleSwatch</RootNamespace>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 公共属性（OutputType/TargetFramework/SDK 引用等）在 ../Directory.Build.props 里。 -->
+  <PropertyGroup>
+    <AssemblyName>ForkPlus.Plugin.ImageCompare</AssemblyName>
+    <RootNamespace>ForkPlus.Plugin.ImageCompare</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 图片编解码用的第三方库。它只活在本插件进程内：宿主（MIT）既不链接也不加载它，
+         这正是"用非主程序许可的库时把它关进插件进程"的示例。
+         ImageSharp 3.x 采用 Six Labors Split License（非纯 OSI 许可），
+         在本插件仓里与主程序以进程边界隔离。 -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,19 @@
+{
+  "id": "com.forkplus.plugin.example-swatch",
+  "name": "Example Swatch Viewer",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "license": "MIT",
+  "homepage": "https://github.com/hebin123456/ForkPlus-Plugins",
+  "host": {
+    "executable": "ForkPlus.Plugin.ExampleSwatch.dll"
+  },
+  "viewers": [
+    {
+      "id": "swatch",
+      "displayName": "Example Swatch",
+      "priority": 150,
+      "extensions": [".swatch", ".swx"]
+    }
+  ]
+}

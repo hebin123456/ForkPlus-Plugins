@@ -1,0 +1,22 @@
+<Project>
+  <!-- plugins/ 下所有插件的公共属性：每个插件 = 一个独立进程（OutputType=Exe）+ 一份 plugin.json。
+       放在 plugins/ 而非仓库根，是为了不把 OutputType=Exe 误加到 sdk/ 里的库工程上。 -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <PlatformTarget>x64</PlatformTarget>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 清单必须与宿主 dll 同目录，宿主才能把 <插件目录>/plugin.json 与可执行文件对上。 -->
+    <None Update="plugin.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- 统一引用仓库内的 SDK 源码（sdk/ForkPlus.PluginSdk）。 -->
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\sdk\ForkPlus.PluginSdk\ForkPlus.PluginSdk.csproj" />
+  </ItemGroup>
+</Project>
