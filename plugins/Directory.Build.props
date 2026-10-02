@@ -12,11 +12,9 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <!-- 清单必须与宿主 dll 同目录，宿主才能把 <插件目录>/plugin.json 与可执行文件对上。 -->
-    <None Update="plugin.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
     <!-- 统一引用仓库内的 SDK 源码（sdk/ForkPlus.PluginSdk）。 -->
+    <!-- 注意：plugin.json 的拷贝必须写在 Directory.Build.targets（此文件在 SDK 建立
+         默认 None 项之前就被导入，此处 Update 会静默失效），见该文件的说明。 -->
     <ProjectReference Include="$(MSBuildThisFileDirectory)..\sdk\ForkPlus.PluginSdk\ForkPlus.PluginSdk.csproj" />
   </ItemGroup>
 </Project>

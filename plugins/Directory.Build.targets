@@ -1,0 +1,15 @@
+<Project>
+  <!-- 清单必须与宿主 dll 同目录（宿主扫描 <插件目录>/plugin.json 来对应可执行文件），
+       否则插件不会被识别。
+       这里刻意用 Directory.Build.targets 而非 Directory.Build.props：
+       targets 在工程体与 SDK 默认项（None 通配）都建立之后才导入，`None Update` 能命中；
+       放在 props 里则因早于默认项建立而静默失效（已实测：bin/publish 里都没有 plugin.json）。
+       CopyToPublishDirectory 必须显式写：它不会自动从 CopyToOutputDirectory 继承，
+       漏写会出现"本地 build 有清单、Release 包（publish）没有"的假绿。 -->
+  <ItemGroup>
+    <None Update="plugin.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+</Project>
