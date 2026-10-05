@@ -193,6 +193,26 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 
 ---
 
+## Pages 截图约定
+
+插件对比视图的截图由 CI 在真实 ForkPlus 中现场采集（无头 X + 整屏截图），并随 Pages 一起发布上线；
+站点与截图登记在 [.github/pages/plugins.json](.github/pages/plugins.json)，
+采集脚本为 [.github/scripts/capture-screenshots.sh](.github/scripts/capture-screenshots.sh)。
+
+**约定：每个插件的截图必须覆盖「增 / 删 / 改」三种变更场景**，一场景一张，全部随 Pages 发布上线：
+
+| 场景 | 差异两侧 | 截图要点 |
+| --- | --- | --- |
+| 修改 | `Src` / `Dst` 都在 | 左右两栏各渲染各自内容，逐页对齐 |
+| 新增 | 只有新侧（`Src == null`） | 旧侧显式标注 missing，新侧渲染全部内容 |
+| 删除 | 只有旧侧（`Dst == null`） | 旧侧渲染被删内容，新侧显式标注 missing |
+
+- 文件命名：`pages/assets/<插件>-<场景>.png`（PDF 插件即 `pdf-modify.png` / `pdf-add.png` / `pdf-remove.png`）；
+- 截图规格：整屏 `1920×1280`，完整软件界面，不做局部裁切；
+- 缺任一场景视为截图不完整；插件新增变更形态时，同步补对应场景截图与 `plugins.json` 登记。
+
+---
+
 ## 构建与打包
 
 ### 本地构建
