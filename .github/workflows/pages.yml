@@ -1,0 +1,92 @@
+# ForkPlus 插件仓库 · Pages 站点自动生成
+#
+# 全流程（对应 .github/scripts/）：
+#   ① 构建仓库内插件（plugins/*/*.csproj，linux-x64）
+#   ② 下载最新的 ForkPlus 发行包（releases/latest 的 linux-x64）
+#   ③ 把插件 DLL 装入 ForkPlus 的 plugins/ 目录
+#   ④ 无头环境（Xvfb + openbox）启动 ForkPlus，打开预置 demo 仓库
+#   ⑤ 触发示例插件的对比视图并截图（全窗口 + 插件区域裁切）
+#   ⑥ 注入模板生成 pages/ 站点并发布到 GitHub Pages
+#
+# 触发：master 分支涉及插件/脚本/模板的改动，或手动触发；tag 发布后也刷新一次。
+#
+# 发布前需在仓库 Settings → Pages 中将 Source 设为 "GitHub Actions"。
+
+name: pages
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'plugins/**'
+      - 'sdk/**'
+      - '.github/scripts/**'
+      - '.github/pages/**'
+      - '.github/workflows/pages.yml'
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build:
+    name: build site
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # 无头 GUI 截图所需的 X 环境与图像工具
+      - name: Install headless toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xvfb x11-utils xdotool openbox imagemagick wmctrl unzip
+
+      - name: Capture plugin diff screenshots
+        run: bash .github/scripts/capture-screenshots.sh
+
+      - name: Build pages
+        run: python3 .github/scripts/build-pages.py
+
+      # 截图同时作为构建产物上传，便于排查
+      - name: Upload screenshots (debug)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-screenshots
+          path: pages/assets/*.png
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages
+
+  deploy:
+    name: deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

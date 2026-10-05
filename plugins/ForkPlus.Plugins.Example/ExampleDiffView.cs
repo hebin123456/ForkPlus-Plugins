@@ -76,6 +76,8 @@ namespace ForkPlus.Plugins.Example
 		{
 			_srcText.Text = Describe(context?.Src, "old");
 			_dstText.Text = Describe(context?.Dst, "new");
+			// 日志汇入宿主 NLog 输出（契约不引用宿主类型，只用 PluginLog 门面）。
+			PluginLog.Info($"ExampleDiffView.SetContent src='{context?.Src?.Path ?? "<none>"}' dst='{context?.Dst?.Path ?? "<none>"}'");
 		}
 
 		/// <summary>切换视图模式：本示例只有一个视图，无模式可切。</summary>

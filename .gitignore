@@ -7,3 +7,6 @@ artifacts/
 *.suo
 .vs/
 .idea/
+
+# Pages 站点产物（由 .github/workflows/pages.yml 在 CI 中生成）
+/pages/

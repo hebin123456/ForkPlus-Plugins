@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ForkPlus 插件对比视图 · ForkPlus-Plugins</title>
+<meta name="description" content="ForkPlus 插件系统的对比视图效果演示：以仓库内示例插件为例，展示插件如何接管指定扩展名文件的差异渲染。">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">ForkPlus-Plugins</p>
+    <h1>插件对比视图效果</h1>
+    <p class="lede">
+      本页由 CI 自动生成：构建仓库内的插件 → 下载最新 ForkPlus → 装入插件 →
+      在无头环境中打开示例仓库 → 截取插件的差异对比视图。
+    </p>
+    <ul class="badges">
+      <li>ForkPlus <strong>{{FORKPLUS_VERSION}}</strong></li>
+      <li>Plugins <strong>{{PLUGINS_VERSION}}</strong></li>
+      <li>生成于 <strong>{{GENERATED_AT}}</strong></li>
+    </ul>
+  </div>
+</header>
+
+<main class="wrap">
+  <section>
+    <h2>插件是怎么接管的</h2>
+    <p>
+      ForkPlus 的差异视图以进程内 DLL 插件形式扩展。插件实现
+      <code>IDiffViewPlugin</code>，声明自己认领的扩展名，并返回一个
+      <code>IDiffView</code>；宿主在渲染某个文件差异时，按扩展名路由到对应插件，
+      再把 <code>DiffViewContext</code>（<code>Src</code> / <code>Dst</code> 两侧的
+      <code>DiffFileInfo</code>）交给插件视图去渲染。
+    </p>
+    <div class="grid grid-3">
+      <div class="card">
+        <h3>① 声明扩展名</h3>
+        <p>示例插件认领 <code>.example</code> 与 <code>.exampletxt</code>，宿主据此决定何时调用它。</p>
+      </div>
+      <div class="card">
+        <h3>② 接收上下文</h3>
+        <p><code>SetContent(context, host)</code> 收到 old / new 两侧的文件信息与可访问字节的 host。</p>
+      </div>
+      <div class="card">
+        <h3>③ 自绘视图</h3>
+        <p><code>BuildView()</code> 返回任意 Avalonia 控件，插件完全掌握这块区域的呈现。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>对比视图效果</h2>
+    <p>
+      下方是 ForkPlus 打开示例仓库后的真实截图。提交
+      <code>update: modify sample files</code> 修改了 <code>sample.example</code>，
+      点击该文件后，差异区被示例插件接管，渲染为左右两栏的 old / new 对比面板。
+    </p>
+    <figure>
+      <img src="assets/example-diff-full.png" alt="ForkPlus 主窗口中，sample.example 的差异区域由示例插件渲染">
+      <figcaption>
+        完整窗口：左侧为提交的文件列表，底部高亮文件行下方即插件渲染的
+        <strong>Example Plugin</strong> 对比视图；同一提交中的文本文件仍走 ForkPlus 内置文本差异。
+      </figcaption>
+    </figure>
+
+    <figure>
+      <img src="assets/example-diff-detail.png" alt="示例插件对比视图放大：old / new 两栏面板">
+      <figcaption>
+        视图放大：两栏分别标注 <code>old</code> / <code>new</code>，展示该侧的文件路径与字节大小——
+        本例为 <code>sample.example</code> 从 28 B 变为 37 B。两侧均存在时即为「修改」对比。
+      </figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>视图结构</h2>
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>old 栏（左）</h3>
+        <p>来自 <code>context.Src</code>（提交前的版本）。显示路径与字节数；当该侧不存在（新增文件）时显示 <code>(not present)</code>。</p>
+      </div>
+      <div class="card">
+        <h3>new 栏（右）</h3>
+        <p>来自 <code>context.Dst</code>（提交后的版本）。两侧信息对称，便于快速判断文件在两版之间的体量变化。</p>
+      </div>
+    </div>
+    <p class="note">
+      示例插件刻意保持极简，只为演示插件接口的接线方式；它同时演示了通过
+      <code>PluginLog</code> 门面把日志汇入宿主 NLog 输出（本页截图流程正是靠这条日志
+      判定插件视图已被触发）。
+    </p>
+  </section>
+
+  <section>
+    <h2>截图是怎么生成的</h2>
+    <ol class="steps">
+      <li><strong>构建插件</strong>：<code>dotnet build plugins/*/*.csproj -c Release -r linux-x64</code>。</li>
+      <li><strong>下载最新 ForkPlus</strong>：解析 <code>releases/latest</code> 的 linux-x64 发行包并解压。</li>
+      <li><strong>安装插件</strong>：把插件 DLL 复制进 ForkPlus 的 <code>plugins/</code> 目录。</li>
+      <li><strong>启动无头环境</strong>：Xvfb + openbox，预置设置跳过引导并最大化窗口。</li>
+      <li><strong>打开示例仓库并触发插件视图</strong>：点击改动文件行，等待插件日志确认视图已渲染。</li>
+      <li><strong>截图并生成站点</strong>：全窗口截图 + 插件区域裁切，再注入本模板输出 Pages。</li>
+    </ol>
+  </section>
+</main>
+
+<footer class="wrap">
+  <p>由 <code>.github/workflows/pages.yml</code> 自动构建 · ForkPlus-Plugins</p>
+</footer>
+</body>
+</html>
