@@ -1,0 +1,159 @@
+# ForkPlus 插件仓库 · 四平台自动构建与发布
+#
+# 触发：
+#   - push v* 标签：四平台构建 + 打包，并创建 GitHub Release
+#   - workflow_dispatch：只构建 + 上传 Artifacts（不发 Release）
+#
+# 四平台与 ForkPlus 宿主一致：
+#   windows-x64  → windows-latest   / win-x64
+#   linux-x64    → ubuntu-latest    / linux-x64
+#   linux-arm64  → ubuntu-22.04-arm / linux-arm64（原生 ARM64 runner，公开仓库免费）
+#   macos-arm64  → macos-latest     / osx-arm64
+#
+# 出包内容：每个平台的包内是 plugins/ 目录 + 各插件的**自身主 DLL**。
+#   契约（ForkPlus.Plugins.Abstractions）/ 共享组件（ForkPlus.Plugins.Ui）/ Avalonia / NLog
+#   等均由宿主在运行期提供，绝不随插件包分发（详见 README「依赖与共享程序集」）。
+#   包名：ForkPlus-Plugins-<版本>-<平台>.zip
+#
+# 新增插件无需改本文件：构建与打包按 plugins/*/*.csproj 自动发现。
+
+name: build
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows-x64
+            rid: win-x64
+          - os: ubuntu-latest
+            name: linux-x64
+            rid: linux-x64
+          - os: ubuntu-22.04-arm
+            name: linux-arm64
+            rid: linux-arm64
+          - os: macos-latest
+            name: macos-arm64
+            rid: osx-arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # 版本号：标签 v1.2.3 → 1.2.3；手动触发 → 0.0.0-dev-<短 SHA>
+      - name: Resolve version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="0.0.0-dev-${GITHUB_SHA:0:7}"
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "packaging version: $version"
+
+      # 逐个插件工程按 RID 构建（插件工程位于 plugins/<AssemblyName>/，见根 README「插件开发规范」）
+      - name: Build plugins
+        shell: bash
+        run: |
+          set -e
+          shopt -s nullglob
+          projects=(plugins/*/*.csproj)
+          if [ "${#projects[@]}" -eq 0 ]; then
+            echo "::error::plugins/ 下没有找到插件工程（plugins/*/*.csproj）"
+            exit 1
+          fi
+          for proj in "${projects[@]}"; do
+            echo "==> build $proj (${{ matrix.rid }})"
+            dotnet build "$proj" -c Release -r ${{ matrix.rid }} --nologo
+          done
+
+      # 打包：只取每个插件自身的主 DLL（AssemblyName，缺省为工程目录名），放入 plugins/
+      - name: Package
+        shell: bash
+        run: |
+          set -e
+          rm -rf dist
+          mkdir -p dist/plugins
+          count=0
+          for proj in plugins/*/*.csproj; do
+            dir=$(dirname "$proj")
+            name=$(basename "$dir")
+            # csproj 里的 <AssemblyName> 覆盖默认目录名（sed 跨平台，不用 grep -P）
+            assembly=$(sed -n 's:.*<AssemblyName>\([^<]*\)</AssemblyName>.*:\1:p' "$proj" | head -n1)
+            assembly="${assembly:-$name}"
+            dll=""
+            for cand in \
+              "$dir/bin/Release/net10.0/${{ matrix.rid }}/$assembly.dll" \
+              "$dir/bin/Release/net10.0/$assembly.dll"; do
+              if [ -f "$cand" ]; then dll="$cand"; break; fi
+            done
+            if [ -z "$dll" ]; then
+              echo "::error::找不到插件产物 $assembly.dll（工程目录 $dir）"
+              exit 1
+            fi
+            echo "packaging $dll"
+            cp "$dll" dist/plugins/
+            count=$((count + 1))
+          done
+          echo "packaged $count plugin(s)"
+          zip_name="ForkPlus-Plugins-${VERSION}-${{ matrix.name }}.zip"
+          if command -v zip >/dev/null 2>&1; then
+            (cd dist && zip -qr "../$zip_name" plugins)
+          else
+            # windows runner 的 git-bash 通常无 zip，用 PowerShell 兜底
+            powershell -NoProfile -Command "Compress-Archive -Path dist/plugins -DestinationPath '$zip_name' -Force"
+          fi
+          ls -la "$zip_name"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ForkPlus-Plugins-${{ matrix.name }}
+          path: ForkPlus-Plugins-*-${{ matrix.name }}.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  # 仅 tag 触发：四平台全绿后创建 Release，附带各平台 zip
+  release:
+    name: Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*.zip
+          generate_release_notes: true

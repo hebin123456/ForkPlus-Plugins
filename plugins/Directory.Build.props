@@ -1,0 +1,14 @@
+<Project>
+  <!-- 插件公共属性：先继承仓库级属性（根 Directory.Build.props），再统一引用 SDK 契约。 -->
+  <Import Project="$(MSBuildThisFileDirectory)../Directory.Build.props" />
+
+  <ItemGroup>
+    <!-- 所有插件统一引用 SDK 契约源码（sdk/ForkPlus.Plugins.Abstractions）。
+         Private=false：仅作编译期引用，不把契约 DLL 拷进插件产物——运行期由宿主提供
+         同一程序集；plugins/ 里出现重复程序集会造成加载器类型身份漂移（宿主与插件
+         对同一契约类型产生两份 Type，is/as 判断全部失效）。 -->
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../sdk/ForkPlus.Plugins.Abstractions/ForkPlus.Plugins.Abstractions.csproj">
+      <Private>false</Private>
+    </ProjectReference>
+  </ItemGroup>
+</Project>

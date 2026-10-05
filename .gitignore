@@ -1,0 +1,9 @@
+# .NET 构建产物
+bin/
+obj/
+publish/
+artifacts/
+*.user
+*.suo
+.vs/
+.idea/

@@ -1,0 +1,17 @@
+<Project>
+  <!-- 仓库级公共构建属性：sdk/ 与 plugins/ 下所有工程通用。 -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+
+    <!-- Avalonia 版本必须与宿主 ForkPlus 严格一致（宿主当前为 12.1.1）。
+         契约公开面（Control/IBrush/IImage）与插件视图都基于 Avalonia，
+         版本漂移会在运行期出现 XAML IL 加载失败 / MissingMethodException 类崩溃。 -->
+    <AvaloniaVersion>12.1.1</AvaloniaVersion>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- 示例对比视图插件：演示 IDiffViewPlugin / IDiffView 的最小完整实现。
+         公共属性（net10.0 / AvaloniaVersion / 契约引用）见 ../Directory.Build.props；
+         契约经 ProjectReference 引用，Private=false（不打进插件产物）。 -->
+    <AssemblyName>ForkPlus.Plugins.Example</AssemblyName>
+    <RootNamespace>ForkPlus.Plugins.Example</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 本示例视图用 Avalonia 控件纯代码构建（未使用 .axaml）。
+         若插件使用 .axaml，同样只需引用本包（Avalonia 的 MSBuild targets 会编译 XAML）。
+         运行期 Avalonia 由宿主提供，打包时不随插件分发（见 README「依赖与共享程序集」）。 -->
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- 插件契约工程（ForkPlus.Plugins.Abstractions）：
+         IDiffView* 契约 + PluginEnvironment 宿主能力桥 + PluginLog / PluginSizeFormat
+         等插件侧基础设施。本工程是主仓 src/ForkPlus.Plugins.Abstractions 的**源码镜像**，
+         供第三方插件编译期引用（见 README「SDK 同步约定」）。
+
+         运行期宿主进程内已加载同名程序集（ForkPlus.Plugins.Abstractions.dll），
+         插件不得把本 DLL 打进 plugins/ 分发；plugins/Directory.Build.props 已用
+         Private=false 把它限定为编译期引用。 -->
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 契约公开面上含 Avalonia 类型，版本须与宿主一致（AvaloniaVersion 见根 Directory.Build.props）。 -->
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="NLog" Version="6.1.3" />
+  </ItemGroup>
+</Project>
