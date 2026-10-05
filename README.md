@@ -19,8 +19,14 @@ ForkPlus 的「文件对比视图」是插件化的：宿主启动时扫描可�
 ```
 ForkPlus-Plugins/
 ├── .github/
+│   ├── scripts/
+│   │   ├── install-plugin-artifacts.sh   # 单插件产物安装（主 DLL + 私有依赖 + 原生库，排除宿主共享程序集）
+│   │   ├── capture-screenshots.sh        # Pages 截图采集（装插件 → 无头启动 ForkPlus → 截图）
+│   │   └── build-pages.py                # Pages 站点生成
+│   ├── pages/                            # Pages 模板与插件登记表（template-*.html / style.css / plugins.json）
 │   └── workflows/
-│       └── build.yml                     # GitHub Actions：四平台构建 + 打包 + Release
+│       ├── build.yml                     # GitHub Actions：四平台构建 + 打包 + Release
+│       └── pages.yml                     # GitHub Actions：截图 + 生成站点 + 发布 Pages
 ├── sdk/
 │   └── ForkPlus.Plugins.Abstractions/    # 插件契约工程（主仓 src/ForkPlus.Plugins.Abstractions 的源码镜像）
 │       ├── IDiffViewPlugin.cs            # IDiffViewPlugin / DiffViewRequest
@@ -35,12 +41,18 @@ ForkPlus-Plugins/
 │       └── ForkPlus.Plugins.Abstractions.csproj
 ├── plugins/
 │   ├── Directory.Build.props             # 插件公共属性：统一引用 SDK 契约（Private=false）
-│   └── ForkPlus.Plugins.Example/         # 示例插件（新插件复制本目录即可）
-│       ├── ExampleDiffPlugin.cs
-│       ├── ExampleDiffView.cs
-│       └── ForkPlus.Plugins.Example.csproj
+│   ├── ForkPlus.Plugins.Example/         # 示例插件（新插件复制本目录即可）
+│   │   ├── ExampleDiffPlugin.cs
+│   │   ├── ExampleDiffView.cs
+│   │   └── ForkPlus.Plugins.Example.csproj
+│   └── ForkPlus.Plugins.Pdf/             # PDF 对比插件（左右两栏逐页并排渲染旧 / 新 PDF）
+│       ├── PdfDiffPlugin.cs
+│       ├── PdfDiffView.cs
+│       ├── PdfNativeLibrary.cs           # PDFium 原生库解析（从插件目录 runtimes/ 加载）
+│       └── ForkPlus.Plugins.Pdf.csproj   # 私有依赖 Docnet.Core（MIT）
 ├── Directory.Build.props                 # 仓库级公共构建属性（net10.0 / AvaloniaVersion）
 ├── ForkPlus.Plugins.slnx                 # 解决方案（新增插件在此登记）
+├── pages/                                # 生成产物：Pages 站点（index + 各插件子页 + 截图）
 └── README.md
 ```
 
@@ -122,6 +134,8 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
   版本漂移会在运行期出现 XAML IL 加载失败 / `MissingMethodException` 类崩溃。
 - 若确有私有依赖，与插件 DLL 放在 `plugins/` 同目录即可 —— 加载器的 `Resolving` 钩子会兜底解析。
   但不支持同名程序集多版本并存。
+- **原生库**（`.so` / `.dll` / `.dylib`）不在上述钩子覆盖范围内，需插件自行注册
+  `DllImportResolver` 从插件目录解析（参见 PDF 插件 `PdfNativeLibrary`）。
 
 ### 5. 宿主能力桥
 
@@ -161,6 +175,24 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 
 ---
 
+## PDF 对比插件
+
+[plugins/ForkPlus.Plugins.Pdf](plugins/ForkPlus.Plugins.Pdf) 认领 `.pdf`：命中后把差异区替换为
+左右两栏，按页号逐页并排渲染旧 / 新 PDF —— 两侧同页号顶对齐，纵向滚动天然同步；两侧页数不一致时，
+按较大页数铺行，多出的一侧留空，新增 / 删除页面一眼可见。
+
+渲染用 MIT 许可的 **Docnet.Core**（底层为 BSD-3-Clause 的 **PDFium** 原生库）：
+
+- `Docnet.Core` 为私有托管依赖，与插件 DLL 同放 `plugins/`；
+- 原生库按 RID 随插件包分发，运行期由插件内的 `PdfNativeLibrary`（`DllImportResolver`）
+  从插件目录递归解析 `pdfium.*` / `libpdfium.*`，不依赖宿主探测；
+- 第三方包随产物带出的 `LICENSE` 由打包脚本落成 `ForkPlus.Plugins.Pdf.LICENSE.txt`。
+
+> 注意：宿主只对**二进制**差异查询插件路由。PDF 一般含非文本字节、会被判为二进制；demo 截图用的
+> `sample.pdf` 特意夹带 NUL 字节以确保这一点。
+
+---
+
 ## 构建与打包
 
 ### 本地构建
@@ -187,12 +219,18 @@ workflow：[.github/workflows/build.yml](.github/workflows/build.yml)
   | linux-arm64 | `ubuntu-22.04-arm` | `linux-arm64` |
   | macos-arm64 | `macos-latest` | `osx-arm64` |
 
-- **出包**：每个平台构建一遍全部插件，把每个插件**自身的主 DLL** 打进一个包：
+- **出包**：每个平台构建一遍全部插件，用 `install-plugin-artifacts.sh` 把每个插件的
+  **主 DLL + 私有依赖（托管程序集 / 原生库）+ 第三方许可声明** 打进一个包；
+  宿主共享程序集（契约 / Avalonia / SkiaSharp / NLog…）由脚本排除，不随插件分发：
 
   ```
   ForkPlus-Plugins-<版本>-<平台>.zip
   └── plugins/
       ├── ForkPlus.Plugins.Example.dll
+      ├── ForkPlus.Plugins.Pdf.dll
+      ├── Docnet.Core.dll                    # PDF 插件私有依赖
+      ├── pdfium.so                          # PDF 插件私有原生库（按平台）
+      ├── ForkPlus.Plugins.Pdf.LICENSE.txt   # 三方许可声明（Docnet.Core / PDFium）
       └── …（其余插件）
   ```
 

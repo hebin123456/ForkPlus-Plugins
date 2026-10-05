@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- PDF 对比视图插件：认领 .pdf，左右两栏分别渲染旧 / 新 PDF 的每一页。
+         公共属性（net10.0 / AvaloniaVersion / 契约引用）见 ../Directory.Build.props。 -->
+    <AssemblyName>ForkPlus.Plugins.Pdf</AssemblyName>
+    <RootNamespace>ForkPlus.Plugins.Pdf</RootNamespace>
+
+    <!-- 本插件带私有依赖（Docnet.Core.dll + 按 RID 的原生 PDFium），需随插件产物拷贝出来。
+         类库工程默认不拷 PackageReference 资产，这里显式开启；打包脚本再排除宿主共享程序集
+         （Avalonia / SkiaSharp / NLog / 契约…），私有依赖与插件 DLL 同放 plugins/。 -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+
+    <!-- Docnet.Core：MIT 许可的 PDF 渲染库（底层为 BSD-3-Clause 的 PDFium 原生库）。
+         纯托管程序集无传递依赖，原生库按 RID 随插件包分发，运行期由插件内的
+         DllImportResolver（PdfNativeLibrary）从 plugins/ 下的 runtimes/<rid>/native 解析。 -->
+    <PackageReference Include="Docnet.Core" Version="2.6.0" />
+  </ItemGroup>
+</Project>

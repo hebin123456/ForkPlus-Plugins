@@ -10,7 +10,7 @@
 #   linux-arm64  → ubuntu-22.04-arm / linux-arm64（原生 ARM64 runner，公开仓库免费）
 #   macos-arm64  → macos-latest     / osx-arm64
 #
-# 出包内容：每个平台的包内是 plugins/ 目录 + 各插件的**自身主 DLL**。
+# 出包内容：每个平台的包内是 plugins/ 目录，含各插件的**自身主 DLL + 私有依赖（托管 / 原生）+ 许可声明**。
 #   契约（ForkPlus.Plugins.Abstractions）/ 共享组件（ForkPlus.Plugins.Ui）/ Avalonia / NLog
 #   等均由宿主在运行期提供，绝不随插件包分发（详见 README「依赖与共享程序集」）。
 #   包名：ForkPlus-Plugins-<版本>-<平台>.zip
@@ -91,7 +91,8 @@ jobs:
             dotnet build "$proj" -c Release -r ${{ matrix.rid }} --nologo
           done
 
-      # 打包：只取每个插件自身的主 DLL（AssemblyName，缺省为工程目录名），放入 plugins/
+      # 打包：每个插件装「自身主 DLL + 私有依赖（托管 / 原生）+ 许可声明」，放入 plugins/。
+      # 宿主共享程序集（契约 / Avalonia / SkiaSharp / NLog…）由 install-plugin-artifacts.sh 排除。
       - name: Package
         shell: bash
         run: |
@@ -101,22 +102,8 @@ jobs:
           count=0
           for proj in plugins/*/*.csproj; do
             dir=$(dirname "$proj")
-            name=$(basename "$dir")
-            # csproj 里的 <AssemblyName> 覆盖默认目录名（sed 跨平台，不用 grep -P）
-            assembly=$(sed -n 's:.*<AssemblyName>\([^<]*\)</AssemblyName>.*:\1:p' "$proj" | head -n1)
-            assembly="${assembly:-$name}"
-            dll=""
-            for cand in \
-              "$dir/bin/Release/net10.0/${{ matrix.rid }}/$assembly.dll" \
-              "$dir/bin/Release/net10.0/$assembly.dll"; do
-              if [ -f "$cand" ]; then dll="$cand"; break; fi
-            done
-            if [ -z "$dll" ]; then
-              echo "::error::找不到插件产物 $assembly.dll（工程目录 $dir）"
-              exit 1
-            fi
-            echo "packaging $dll"
-            cp "$dll" dist/plugins/
+            echo "==> package $dir (${{ matrix.rid }})"
+            bash .github/scripts/install-plugin-artifacts.sh "$dir" dist/plugins "${{ matrix.rid }}"
             count=$((count + 1))
           done
           echo "packaged $count plugin(s)"

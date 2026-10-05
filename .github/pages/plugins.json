@@ -1,39 +1,53 @@
 {
   "plugins": [
     {
-      "id": "example",
-      "name": "示例插件 · Example",
-      "assembly": "ForkPlus.Plugins.Example",
-      "source": "plugins/ForkPlus.Plugins.Example",
-      "summary": "最小可用的对比视图插件：认领 .example 与 .exampletxt，二进制文件命中后，把差异区替换为「左旧 / 右新」两栏只读信息面板。",
-      "extensions": [".example", ".exampletxt"],
+      "id": "pdf",
+      "name": "PDF 对比插件 · PDF Compare",
+      "assembly": "ForkPlus.Plugins.Pdf",
+      "source": "plugins/ForkPlus.Plugins.Pdf",
+      "summary": "PDF 文件对比视图：认领 .pdf，命中后把差异区替换为左右两栏，按页号逐页并排渲染旧版本与新版本 PDF，天然纵向同步滚动；新增 / 删除 / 修改三种变更都有对应形态。",
+      "extensions": [".pdf"],
       "screenshots": [
         {
-          "file": "example-diff.png",
-          "alt": "ForkPlus 完整软件界面：提交侧栏选中 update: modify sample files，文件列表中的 sample.example 被选中，窗口下半部的差异区由示例插件渲染",
-          "caption": "完整软件界面（1920×1280）：顶部菜单与工具栏、左栏提交列表与文件列表、下半部的差异区都在画面内，未做任何裁切。差异区里有两段：<code>notes.exampletxt</code> 是文本文件，仍由内置文本差异渲染；<code>sample.example</code> 是二进制文件，命中本插件——它下方两个带边框的面板即插件绘制。"
+          "file": "pdf-modify.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.pdf，差异区由 PDF 插件渲染成左右两栏，左 old、右 new 各是渲染后的两页 sample.pdf",
+          "caption": "「修改」对比（1920×1280 完整界面，未裁切）：左侧标题为 <code>旧 · sample.pdf · 1.13 KB</code>（提交前版本），右侧标题为 <code>新 · sample.pdf · 1.13 KB</code>（提交后版本），两侧各 2 页、逐页顶对齐；状态行给出 <code>PDF compare: 2 / 2 pages</code>。"
+        },
+        {
+          "file": "pdf-add.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 add: sample.pdf，差异区右栏渲染新增的 sample.pdf 页面，左栏显示 old · not present 占位",
+          "caption": "「新增」对比：提交给仓库新增了 sample.pdf，旧侧不存在。插件在左栏给出标题 <code>旧 · not present</code> 与栏内 <code>not present</code> 占位，右栏标题 <code>已创建 · sample.pdf · 1.13 KB</code> 并渲染新增文件的全部页面——一眼看出这是纯新增，而非渲染失败。"
+        },
+        {
+          "file": "pdf-remove.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.pdf，差异区左栏渲染被删除的 sample.pdf 页面，右栏显示 new · not present 占位",
+          "caption": "「删除」对比：提交删除了 sample.pdf，新侧不存在。插件在左栏标题 <code>已删除 · sample.pdf · 1.13 KB</code> 下渲染被删文件的页面（状态行 <code>PDF compare: 2 / 0 pages</code>），右栏给出标题 <code>新 · not present</code> 与占位——删除场景同样可见完整内容。"
         }
       ],
       "sections": [
         {
           "heading": "对比视图长什么样",
-          "html": "<p>插件视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,*\"</code> 分出顶部提示行，<code>ColumnDefinitions=\"*,*\"</code> 把下方等分为左右两栏。顶部提示行是标题 <strong>Example Plugin</strong>（经 <code>PluginEnvironment.Translate</code> 取当前语言译文，宿主未接线时原样返回 key）；两栏各是一个 <code>Border</code>（1px <code>Gainsboro</code> 边框、6px 圆角、8px 外边距），里面套 <code>ScrollViewer</code> 包住可换行的 <code>TextBlock</code>。</p><p class=\"note\">示例刻意不使用 <code>.axaml</code>，纯代码构建，方便直接对照 <code>ExampleDiffView.cs</code> 阅读。</p>"
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>页面区</strong>。标题行本身也是两列 <code>Grid</code>，左旧右新各一个 <code>TextBlock</code>，文字形如 <code>old  ·  sample.pdf  ·  1.13 KB</code>（角色名取 <code>PluginEnvironment.Translate</code>，文件名取 <code>Path.GetFileName</code>，体积取 <code>PluginSizeFormat.ReadableFileSize</code>），并直接采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>DstTitleBrush</code> 着色，跟随主题。</p><p>状态行显示 <code>Rendering PDF…</code>，随后变成 <code>Rendered n/N pages</code>，结束后落到 <code>PDF compare: 源页数 / 目标页数</code>；出错则显示 <code>Failed to render PDF: …</code>。</p>"
         },
         {
-          "heading": "两栏的内容从哪里来",
-          "html": "<p>宿主每次刷新对比都会调用 <code>SetContent(context, host)</code>，把 <code>context.Src</code> / <code>context.Dst</code>（两个 <code>DiffSideContent</code>）交给视图。插件按同一套规则分别渲染两侧，因此两栏结构对称、可直接对照：</p><div class=\"grid grid-2\"><div class=\"card\"><h3>左栏 old</h3><p>来自 <code>context.Src</code>，即提交前的版本。依次显示角色名 <code>old</code>、<code>Path</code>、格式化后的 <code>Size</code>；<code>Data</code> 懒加载成功后追加 <code>Loaded bytes: N</code>。</p></div><div class=\"card\"><h3>右栏 new</h3><p>来自 <code>context.Dst</code>，即提交后的版本。<code>Data</code> 未加载（未点开该侧或超过宿主阈值）时为 <code>null</code>，对应行整体省略而不是显示 0。</p></div></div>"
+          "heading": "逐页对齐与同步滚动",
+          "html": "<p>页面区是<strong>单个</strong> <code>ScrollViewer</code>（纵向 <code>Auto</code>、横向 <code>Disabled</code>），内容是一个两列 <code>Grid</code>：<code>ColumnDefinitions=\"*,*\"</code>，<strong>每一页占一行</strong>。左栏页放第 0 列、右栏页放第 1 列，同一页号写进同一 <code>Grid.Row</code>——因此两侧同页号的两页<strong>天然顶对齐</strong>，滚动也只有一条纵向滚动条，两边永远同步。</p><p>总行数取两侧页数的较大值 <code>max(源页数, 目标页数)</code>：某侧页数较少时，多出来的行只渲染存在的一侧，另一侧留空——同一文档里新增或删除页面在对比中一眼可见。每页卡片是一个 <code>Border</code>（1px <code>Gainsboro</code> 边框、4px 圆角），内含 <code>Page N</code> 小标题与自适应宽度的 <code>Image</code>。</p>"
         },
         {
-          "heading": "截图里读得到什么",
-          "html": "<p>demo 仓库的第二次提交改了 <code>sample.example</code>：内容从 <code>ForkPlus plugin demo v1</code> 变为 <code>…demo v2 CHANGED</code>。截图中的两栏因此显示同一条路径 <code>sample.example</code>，而 <code>Size</code> 一行由 <code>PluginSizeFormat.ReadableFileSize</code> 渲染成可读单位（28 B → 37 B），这就是「修改」对比的形态：两侧都存在，体量变化一眼可见。</p><p>若换成新增文件（只有 <code>context.Dst</code>）或删除文件（只有 <code>context.Src</code>），缺失的一侧会整栏显示角色名加 <code>(not present)</code>——同一段代码同时覆盖三种变更类型。</p>"
+          "heading": "新增 / 删除 / 修改三种场景",
+          "html": "<p>插件按异构的 <code>DiffViewContext</code> 适配三种变更，本页三张截图分别对应：</p><div class=\"grid grid-2\"><div class=\"card\"><h3>修改（两侧都在）</h3><p><code>Src</code> 与 <code>Dst</code> 均非空，角色为 <code>old</code> / <code>new</code>，两栏各渲染各自页数，逐页对齐。</p></div><div class=\"card\"><h3>新增（只有新侧）</h3><p>宿主令 <code>Src == null</code>、<code>DstRole = Created</code>。插件左栏标题写 <code>old · not present</code> 并在栏内落一块 <code>not present</code> 占位，右栏标 <code>created</code> 渲染全部页面。</p></div></div><p>删除是新增的镜像：<code>Dst == null</code>、<code>SrcRole = Removed</code>，左栏标 <code>removed</code> 渲染被删页，右栏写 <code>new · not present</code> 占位。与其让缺文件的一侧留白（容易被误读成渲染失败），不如显式说明——这是 <code>ReportMissing</code> / <code>DescribeSide</code> 对 <code>null</code> 侧的统一处理。</p>"
         },
         {
-          "heading": "生命周期与宿主协作",
-          "html": "<p>宿主对每个差异区调用 <code>CreateView()</code> 拿一个视图实例，随后进入 <code>SetContent →（SetMode / Activate / Deactivate / ApplyLocalization 循环）→ Release</code>。<code>Modes</code> 返回空数组，表示本示例只有单一视图，宿主不会渲染模式切换工具条；<code>Release()</code> 清空两侧文本，此后实例不再复用。</p><p>视图不引用任何宿主类型，只通过 <code>PluginEnvironment</code>（取译文、应用语言）与 <code>PluginLog</code>（日志）两个门面协作。<code>SetContent</code> 里的 <code>PluginLog.Info(\"ExampleDiffView.SetContent src=… dst=…\")</code> 会汇入宿主 NLog 输出——本页截图正是靠这条日志判定插件视图已被触发。</p>"
+          "heading": "PDF 字节从哪里来",
+          "html": "<p>宿主对每个差异区调用 <code>SetContent(context, host)</code>，视图按同一套优先级取每一侧的原始字节：<strong>宿主 Hex 预载</strong>（<code>context.HexSrc</code> / <code>HexDst</code>，二进制差异 ≤50MB 时由宿主直接给到）→ <strong>侧内容懒加载</strong>（<code>DiffSideContent.Data</code>）→ <strong>LFS 缓存 / smudge</strong>（<code>host.GetCachedLfsData</code>，未命中再用 <code>host.RunLfsSmudge</code> 触发下载）。<code>Src</code> / <code>Dst</code> 为 <code>null</code> 的整侧直接跳过，不取字节；有侧但拿不到字节时，该栏显示 <code>PDF content unavailable</code> 加路径，而不是空白。</p><p>渲染在后台线程逐页进行，每个位图创建时回到 UI 线程；<code>CancelRender</code> 用「代次 + <code>CancellationToken</code>」保证切换文件后旧任务立即作废，不会把上一次的内容画到本次视图上。</p>"
         },
         {
-          "heading": "为什么同提交的另一个文件没走插件",
-          "html": "<p>本插件声明 <code>Priority = 100</code>，认领 <code>.example</code> 与 <code>.exampletxt</code>。但截图里 <code>notes.exampletxt</code> 显示的是内置文本差异——因为 diff 类型优先于扩展名：<strong>宿主只对二进制差异查询插件路由</strong>，纯文本差异固定由内置文本编辑器差异渲染。demo 里的 <code>notes.exampletxt</code> 是文本，因此它的 <code>.exampletxt</code> 声明在这条路径上不会生效。</p><p>要让 <code>.exampletxt</code> 真正命中，文件需要被判为二进制（例如含 NUL 字节或写入非文本内容）——这也正是示例仓库把 <code>sample.example</code> 写成含 NUL 二进制内容的原因。</p><p>二进制且无具体插件认领时，由内置 Hex 视图兜底（<code>Priority = 0</code>，认领 <code>\"*\"</code>）；用户还可以在设置里手动把扩展名绑定到指定插件，用户绑定优先级最高。</p>"
+          "heading": "用的哪个 MIT 三方件",
+          "html": "<p>PDF 解析与光栅化用 <strong>Docnet.Core 2.6.0</strong>（MIT 许可，纯托管程序集），底层是 <strong>PDFium</strong> 原生库（BSD-3-Clause）。构建时按 RID 带出平台原生库，<code>install-plugin-artifacts.sh</code> 把 <code>pdfium.so / pdfium.dll / pdfium.dylib</code> 与私有依赖 <code>Docnet.Core.dll</code> 随插件 DLL 一起放进 <code>plugins/</code>，并把第三方包随产物带出的 <code>LICENSE</code> 落成 <code>ForkPlus.Plugins.Pdf.LICENSE.txt</code>。</p><p>宿主的程序集解析钩子只覆盖 <code>plugins/</code> 下的<strong>托管</strong> DLL，PDFium 这类原生库默认找不到。因此插件在首次渲染前调用 <code>PdfNativeLibrary.EnsureRegistered()</code>，给 Docnet.Core 的程序集注册一个 <code>DllImportResolver</code>，从插件自身目录（含 <code>runtimes/&lt;rid&gt;/native/</code>）递归查找 <code>pdfium.*</code> / <code>libpdfium.*</code> 加载；失败只记日志，交回默认探测兜底。渲染时用 <code>NaiveTransparencyRemover(255,255,255)</code> 把整页合成到不透明白底，避免透明像素在暗色主题下发黑。</p>"
+        },
+        {
+          "heading": "为什么 PDF 一定会走这个插件",
+          "html": "<p>本插件声明 <code>Priority = 100</code>，认领 <code>.pdf</code>。<strong>宿主只对二进制差异查询插件路由</strong>，纯文本差异固定由内置文本编辑器差异渲染——所以 demo 里的 <code>sample.pdf</code> 特意在流对象里夹带 NUL 字节，确保 git 把它判为二进制，从而命中本插件而不是 Hex 兜底。新增 / 删除的 PDF 同样是二进制差异，路由规则一致。</p><p>若某个 PDF 未被判为二进制、或用户已在设置里把 <code>.pdf</code> 绑定到别的插件，则走对应的路由结果：后者用户绑定优先级最高，前者回落到内置 Hex 视图（<code>Priority = 0</code>，认领 <code>*</code>）。</p>"
         }
       ]
     }

@@ -7,9 +7,10 @@
 # 全流程（与用户诉求一一对应）：
 #   ① 构建仓库内插件（plugins/*/*.csproj）
 #   ② 下载最新的 ForkPlus（linux-x64 发行包）
-#   ③ 把插件 DLL 装入 ForkPlus 的 plugins/ 目录
-#   ④ 无头 X 环境（Xvfb + openbox）启动 ForkPlus，打开预置 demo 仓库
-#   ⑤ 触发示例插件的对比视图，截取完整软件界面（整屏 1920x1280，不做局部裁切）
+#   ③ 把插件产物（主 DLL + 私有依赖 + 原生库）装入 ForkPlus 的 plugins/ 目录
+#   ④ 准备三种 diff 场景（修改 / 新增 / 删除）的 demo 仓库，各自只涉及 sample.pdf
+#   ⑤ 无头 X 环境（Xvfb + openbox）启动 ForkPlus，逐场景触发 PDF 插件对比视图，
+#      截取完整软件界面（整屏 1920x1280，不做局部裁切）
 #   ⑥ 产物落到 <repo>/pages/assets/，交由 build-pages.py 生成站点
 #
 # 仅在 Linux（Xvfb）下工作；CI 使用 ubuntu-latest。本地可用同样命令复现。
@@ -82,23 +83,16 @@ download_forkplus() {
 	echo "  安装目录：$APPDIR"
 }
 
-# ── ③ 安装插件 DLL ───────────────────────────────────────────────────────────
+# ── ③ 安装插件产物 ───────────────────────────────────────────────────────────
 install_plugins() {
-	log "把插件 DLL 装入 ForkPlus 的 plugins/ 目录"
+	log "把插件产物（主 DLL + 私有依赖 + 原生库）装入 ForkPlus 的 plugins/ 目录"
 	mkdir -p "$APPDIR/plugins"
 	shopt -s nullglob
 	local count=0
 	for proj in "$REPO_ROOT"/plugins/*/*.csproj; do
-		local dir name assembly dll
+		local dir
 		dir="$(dirname "$proj")"
-		name="$(basename "$dir")"
-		assembly="$(sed -n 's:.*<AssemblyName>\([^<]*\)</AssemblyName>.*:\1:p' "$proj" | head -n1)"
-		assembly="${assembly:-$name}"
-		dll="$dir/bin/Release/net10.0/$RID/$assembly.dll"
-		[ -f "$dll" ] || dll="$dir/bin/Release/net10.0/$assembly.dll"
-		[ -f "$dll" ] || die "找不到插件产物 $assembly.dll（工程 $dir）"
-		cp "$dll" "$APPDIR/plugins/"
-		echo "  - $assembly.dll"
+		bash "$REPO_ROOT/.github/scripts/install-plugin-artifacts.sh" "$dir" "$APPDIR/plugins" "$RID"
 		count=$((count + 1))
 	done
 	[ "$count" -gt 0 ] || die "没有可安装的插件"
@@ -106,34 +100,134 @@ install_plugins() {
 }
 
 # ── ④ demo 仓库与设置 ────────────────────────────────────────────────────────
-prepare_demo_repo() {
-	log "准备 demo 仓库（含 .example / .exampletxt 变更）"
-	local repo="$WORK/repo"
+# 生成一份最小合法 PDF 作为 .pdf 对比样本（v1 旧 / v2 新）。
+# 纯 Python 构造，不依赖 ghostscript 等外部工具；末尾的流对象夹带 NUL 字节，
+# 确保 git 把 PDF 判为二进制——只有二进制差异才会走插件路由（见 README）。
+write_demo_pdf() {
+	local repo="$1" version="$2"
+	python3 - "$repo" "$version" <<'PY'
+import os, sys
+repo, version = sys.argv[1], sys.argv[2]
+is_new = version == "v2"
+
+def _escape(text):
+    return text.replace("\\", r"\\").replace("(", r"\(").replace(")", r"\)")
+
+def _content(title, lines):
+    out = "BT\n/F1 20 Tf\n72 730 Td\n(" + _escape(title) + ") Tj\nET\n"
+    y = 690
+    for line in lines:
+        out += "BT\n/F1 12 Tf\n72 " + str(y) + " Td\n(" + _escape(line) + ") Tj\nET\n"
+        y -= 20
+    return out.encode("latin-1")
+
+def make_pdf(path, pages):
+    objects = {}
+    objects[3] = b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
+    n = len(pages)
+    page_ids = [4 + i for i in range(n)]
+    content_ids = [4 + n + i for i in range(n)]
+    binary_id = 4 + 2 * n
+    kids = " ".join("%d 0 R" % i for i in page_ids)
+    objects[1] = b"<< /Type /Catalog /Pages 2 0 R >>"
+    objects[2] = ("<< /Type /Pages /Kids [%s] /Count %d >>" % (kids, n)).encode()
+    for i, (title, lines) in enumerate(pages):
+        objects[page_ids[i]] = (
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            "/Resources << /Font << /F1 3 0 R >> >> /Contents %d 0 R >>" % content_ids[i]
+        ).encode()
+        body = _content(title, lines)
+        objects[content_ids[i]] = (
+            b"<< /Length " + str(len(body)).encode() + b" >>\nstream\n" + body + b"\nendstream"
+        )
+    binary = bytes([0, 1, 2, 3, 255, 254, 16, 32, 48]) + b"\x00" * 24
+    objects[binary_id] = (
+        b"<< /Length " + str(len(binary)).encode() + b" >>\nstream\n" + binary + b"\nendstream"
+    )
+    out = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+    offsets = {}
+    for num in sorted(objects):
+        offsets[num] = len(out)
+        out += str(num).encode() + b" 0 obj\n" + objects[num] + b"\nendobj\n"
+    xref_off = len(out)
+    count = max(objects) + 1
+    out += b"xref\n0 " + str(count).encode() + b"\n"
+    out += b"0000000000 65535 f \n"
+    for num in sorted(objects):
+        out += ("%010d 00000 n \n" % offsets[num]).encode()
+    out += (
+        b"trailer\n<< /Size " + str(count).encode() + b" /Root 1 0 R >>\nstartxref\n"
+        + str(xref_off).encode() + b"\n%%EOF\n"
+    )
+    with open(path, "wb") as f:
+        f.write(bytes(out))
+
+title = "ForkPlus Manual v2" if is_new else "ForkPlus Manual v1"
+# 文件名排在 sample.example 之后（"sample.example" < "sample.pdf"）：提交视图按路径顺序
+# 上下堆叠各文件的差异区，PDF 一页很高，放最后才不会把示例插件的差异区顶出可视范围。
+make_pdf(os.path.join(repo, "sample.pdf"), [
+    (title, ["NEW revision" if is_new else "old revision", "shared line", "page one body"]),
+    ("Chapter 2", ["new content on page two" if is_new else "old content on page two"]),
+])
+print("  demo PDF ->", os.path.join(repo, "sample.pdf"), "(" + version + ")")
+PY
+}
+
+# 三种 diff 类型的 demo 仓库：modify（修改）/ add（新增）/ remove（删除）。
+# 每个仓库只涉及 sample.pdf 一个文件，命中插件后其对比视图紧贴差异区顶部，
+# 不会被别的文件差异区顶下去（PDF 一页很高，尤其需要这一点），截图即可完整呈现。
+init_demo_repo() {
+	local repo="$1"
 	rm -rf "$repo"
 	mkdir -p "$repo"
 	git -C "$repo" init -q
 	git -C "$repo" config user.name "ForkPlus Demo"
 	git -C "$repo" config user.email "demo@forkplus.local"
 	git -C "$repo" config commit.gpgsign false
+}
 
-	# 两次提交：后一次修改前一次的文件。打开仓库时默认选中最新提交，
-	# 其文件行即为「修改」对比（old/new 两侧内容齐全），无需再切侧栏视图。
-	# 二进制内容（含 NUL）保证 git 判为二进制；扩展名 .example 由示例插件认领
-	printf 'ForkPlus plugin demo v1\x00\x01\x02\x03\xff' >"$repo/sample.example"
-	printf 'line one\nline two\n' >"$repo/notes.exampletxt"
-	git -C "$repo" add -A
-	git -C "$repo" commit -q -m "initial: add sample files"
-
-	printf 'ForkPlus plugin demo v2 CHANGED\x00\x10\x20\x30\xfe\xfd' >"$repo/sample.example"
-	printf 'line one\nline two\nline three (added)\n' >"$repo/notes.exampletxt"
-	git -C "$repo" add -A
-	git -C "$repo" commit -q -m "update: modify sample files"
-	echo "  仓库：$repo"
+# sample.pdf 夹带 NUL，确保 git 判为二进制，命中 PDF 插件而非 Hex 兜底。
+prepare_repo_pdf() {
+	local mode="$1"
+	local repo="$WORK/repo-pdf-$mode"
+	init_demo_repo "$repo"
+	case "$mode" in
+	add)
+		# 首提交只放无关文本；第二次提交「新增」sample.pdf
+		printf 'baseline\n' >"$repo/readme.txt"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: baseline"
+		write_demo_pdf "$repo" v2
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "add: sample.pdf"
+		;;
+	remove)
+		# 首提交带 sample.pdf；第二次提交「删除」它
+		printf 'baseline\n' >"$repo/readme.txt"
+		write_demo_pdf "$repo" v1
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: add sample.pdf"
+		git -C "$repo" rm -q sample.pdf
+		git -C "$repo" commit -q -m "remove: delete sample.pdf"
+		;;
+	*)
+		# modify：两次提交同一文件，老 / 新两侧内容齐全
+		write_demo_pdf "$repo" v1
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: add sample.pdf"
+		write_demo_pdf "$repo" v2
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "update: modify sample.pdf"
+		;;
+	esac
+	echo "  $repo ($mode)"
 }
 
 seed_settings() {
 	log "预置 ForkPlus 设置（跳过引导 / 亮色主题 / 最大化窗口 / 记录已读更新说明）"
 	local dir="$HOME/.local/share/ForkPlus"
+	# 每次截图都从干净状态起步：清掉上一次的工作区 / 日志，保证本次只打开目标仓库这一个标签页
+	rm -rf "$dir"
 	mkdir -p "$dir"
 	FORKPLUS_VERSION="$FORKPLUS_VERSION" GIT_PATH="$(command -v git || echo /usr/bin/git)" SETTINGS_DIR="$dir" \
 		python3 - <<'PY'
@@ -214,10 +308,13 @@ dismiss_dialogs() {
 }
 
 # ── ⑥ 启动并截图 ─────────────────────────────────────────────────────────────
-capture() {
-	log "启动 ForkPlus 并打开 demo 仓库"
+# 打开单个仓库，逐行扫过差异区的文件行；日志一出现目标插件的 marker 就整屏截图。
+# marker 由各插件在 SetContent 里写日志给出；日志从头读起，自动加载或点击触发都能命中。
+capture_one() {
+	local repo="$1" marker="$2" outfile="$3" settle="$4" label="$5"
+	log "启动 ForkPlus 打开 $repo（$label）"
 	mkdir -p "$OUT"
-	( cd "$APPDIR" && DISPLAY="$DISPLAY_NUM" ./ForkPlus "$WORK/repo" >"$WORK/forkplus.log" 2>&1 & )
+	( cd "$APPDIR" && DISPLAY="$DISPLAY_NUM" ./ForkPlus "$repo" >"$WORK/forkplus.log" 2>&1 & )
 
 	local ok=0
 	# 等待主窗口期间持续关闭启动期模态弹窗（git 版本提示等会阻塞主窗口创建）
@@ -238,30 +335,29 @@ capture() {
 		&& grep "Diff view plugins loaded" "$logfile" | tail -n1 \
 		|| echo "  （未找到插件加载日志，继续）"
 
-	log "定位并点击提交文件行，触发示例插件对比视图"
-	local marker="ExampleDiffView.SetContent"
-	local before=0
-	[ -f "$logfile" ] && before="$(wc -c <"$logfile")"
-	local start_y=$(( SCREEN_H * 68 / 100 ))
-	local end_y=$(( SCREEN_H * 96 / 100 ))
-	local hit_y=""
-	local y
-	for (( y=start_y; y<=end_y; y+=14 )); do
+	local start_y=$(( SCREEN_H * 45 / 100 ))
+	local end_y=$(( SCREEN_H * 99 / 100 ))
+	local y hit=0
+	# 每点一行就看整份日志是否已含 marker：视图若在启动时已加载，第一轮即命中
+	for (( y=start_y; y<=end_y; y+=12 )); do
 		DISPLAY="$DISPLAY_NUM" xdotool mousemove "$CLICK_X" "$y" click 1 2>/dev/null || true
 		sleep 1.2
-		if [ -f "$logfile" ] && tail -c "+$((before + 1))" "$logfile" 2>/dev/null | grep -q "$marker"; then
-			hit_y="$y"
+		if [ -f "$logfile" ] && grep -qF "$marker" "$logfile"; then
+			hit=1
 			break
 		fi
 	done
-	[ -n "$hit_y" ] || die "未能触发插件对比视图（可调大扫描范围或检查 $logfile）"
-	echo "  命中文件行 y=$hit_y"
+	[ "$hit" = 1 ] || die "未能触发「$label」对比视图（marker=$marker，见 $logfile）"
+	echo "  $label：命中文件行 y=$y"
 
-	sleep 2
+	sleep "$settle"
 	# 截取整个软件界面：整屏（默认 1920x1280），保留菜单 / 工具栏 / 侧栏 / 差异区，不做局部裁切。
 	# 文件名与 .github/pages/plugins.json 里登记的截图项一一对应。
-	DISPLAY="$DISPLAY_NUM" import -window root "$OUT/example-diff.png"
-	echo "  完整界面截图 -> $OUT/example-diff.png"
+	DISPLAY="$DISPLAY_NUM" import -window root "$OUT/$outfile"
+	echo "  $label：完整界面截图 -> $OUT/$outfile"
+
+	pkill -x ForkPlus 2>/dev/null || true
+	sleep 2
 }
 
 # ── ⑦ 元数据 ─────────────────────────────────────────────────────────────────
@@ -286,9 +382,14 @@ mkdir -p "$WORK"
 build_plugins
 download_forkplus
 install_plugins
-prepare_demo_repo
-seed_settings
+prepare_repo_pdf modify
+prepare_repo_pdf add
+prepare_repo_pdf remove
 start_x
-capture
+# PDF 插件三种场景各截一张：修改 / 新增 / 删除
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-pdf-$mode" "PdfDiffView.SetContent" "pdf-$mode.png" 4 "PDF 插件 · $mode"
+done
 write_metadata
 log "完成：截图已输出到 $OUT"
