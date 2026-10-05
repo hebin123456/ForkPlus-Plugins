@@ -6,7 +6,8 @@
 #   - 插件自身主 DLL（<AssemblyName>.dll）
 #   - 私有托管依赖（如 PDF 插件的 Docnet.Core.dll）
 #   - 私有原生库（如 PDF 插件的 pdfium.so / pdfium.dll / pdfium.dylib）
-#   - 第三方许可声明（第三方包随产物带出的 LICENSE → <AssemblyName>.LICENSE.txt）
+#   - 第三方许可声明（由插件的 third-party.json + licenses/ 全文合并为
+#     <AssemblyName>.THIRD-PARTY-NOTICES.txt，见 collect-third-party-notices.py）
 #
 # 宿主共享程序集（契约 ForkPlus.Plugins.Abstractions / ForkPlus.Plugins.Ui、
 # Avalonia、SkiaSharp、HarfBuzzSharp、NLog、MicroCom…）一律**不**随插件分发——
@@ -59,10 +60,10 @@ for f in "$outdir"/*.dll "$outdir"/*.so "$outdir"/*.dylib; do
 	cp "$f" "$dest/"
 done
 
-# 第三方包随产物带出的许可声明（Docnet.Core 的原生 PDFium 包带 LICENSE）
-if [ -f "$outdir/LICENSE" ]; then
-	cp "$outdir/LICENSE" "$dest/$assembly.LICENSE.txt"
-fi
+# 第三方许可声明：按插件的 third-party.json 登记表合并 licenses/ 全文。
+# 不再依赖 NuGet 恰好落在输出根的 LICENSE（名字不定、多依赖会互相覆盖）。
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+python3 "$script_dir/collect-third-party-notices.py" plugin "$projdir" "$dest/$assembly.THIRD-PARTY-NOTICES.txt"
 
 echo "  installed: $assembly.dll" >&2
 echo "$dest/$assembly.dll"

@@ -33,8 +33,22 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
+  # 第三方许可清单防漂移：THIRD-PARTY-NOTICES.md 由脚本从各插件的 third-party.json + licenses/
+  # 全文生成。改了登记表却忘了重新生成会让此步失败，避免「声明」与「实际分发内容」脱节。
+  notices:
+    name: third-party notices
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify THIRD-PARTY-NOTICES.md is up to date
+        run: python3 .github/scripts/collect-third-party-notices.py repo THIRD-PARTY-NOTICES.md --check
+
   build:
     name: ${{ matrix.name }}
+    needs: notices
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:

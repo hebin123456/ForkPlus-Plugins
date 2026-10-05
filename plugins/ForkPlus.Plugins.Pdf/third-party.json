@@ -1,0 +1,21 @@
+{
+  "$comment": "本插件随包分发的第三方组件登记表。字段：name/version/license/copyright/homepage 用于生成声明头部，licenseFile 是仓库根目录下 licenses/ 里的许可全文（相对仓库根）。新增依赖时在此追加条目即可，打包脚本会据此合并进 <Assembly>.THIRD-PARTY-NOTICES.txt。",
+  "components": [
+    {
+      "name": "Docnet.Core",
+      "version": "2.6.0",
+      "license": "MIT",
+      "copyright": "Copyright (c) 2018 Modestas Petravicius",
+      "homepage": "https://github.com/GowenGit/docnet",
+      "licenseFile": "licenses/docnet-core/LICENSE.txt"
+    },
+    {
+      "name": "PDFium",
+      "version": "随 Docnet.Core 2.6.0 的原生运行时分发",
+      "license": "BSD-3-Clause（PDFium 本体；同文件另含其捆绑组件各自许可）",
+      "copyright": "Copyright 2014 The PDFium Authors",
+      "homepage": "https://pdfium.googlesource.com/pdfium/",
+      "licenseFile": "licenses/pdfium/LICENSE.txt"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+# 第三方许可 / Third-Party Notices
+
+本仓库自身以 MIT 许可发布（见 [LICENSE](LICENSE)）。插件在运行期还会随包分发下列第三方组件，
+这些组件以各自的许可条款为准，完整许可全文集中存放在 [`licenses/`](licenses/)。
+
+## 组件总览
+
+| 组件 | 版本 | 许可 | 版权 | 分发的插件 | 全文 |
+| --- | --- | --- | --- | --- | --- |
+| Docnet.Core | 2.6.0 | MIT | Copyright (c) 2018 Modestas Petravicius | [ForkPlus.Plugins.Pdf](plugins/ForkPlus.Plugins.Pdf) | [LICENSE.txt](licenses/docnet-core/LICENSE.txt) |
+| PDFium | 随 Docnet.Core 2.6.0 的原生运行时分发 | BSD-3-Clause（PDFium 本体；同文件另含其捆绑组件各自许可） | Copyright 2014 The PDFium Authors | [ForkPlus.Plugins.Pdf](plugins/ForkPlus.Plugins.Pdf) | [LICENSE.txt](licenses/pdfium/LICENSE.txt) |
+
+## 分发形态
+
+每个插件包内附带一份合并声明 `<Assembly>.THIRD-PARTY-NOTICES.txt`，由
+[.github/scripts/collect-third-party-notices.py](.github/scripts/collect-third-party-notices.py)
+依据各插件的 `third-party.json` 与 `licenses/` 下的全文自动生成。
+
+新增依赖：把许可全文落到 `licenses/<组件>/`，并在对应插件的 `third-party.json` 追加条目——脚本与 CI 均无需改动。
+
+> 本文件由脚本生成，请勿手改；修改请编辑 `third-party.json` 后执行
+> `python3 .github/scripts/collect-third-party-notices.py repo THIRD-PARTY-NOTICES.md`。

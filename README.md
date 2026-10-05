@@ -21,6 +21,7 @@ ForkPlus-Plugins/
 ├── .github/
 │   ├── scripts/
 │   │   ├── install-plugin-artifacts.sh   # 单插件产物安装（主 DLL + 私有依赖 + 原生库，排除宿主共享程序集）
+│   │   ├── collect-third-party-notices.py# 由插件登记表 + licenses/ 全文生成第三方许可声明
 │   │   ├── capture-screenshots.sh        # Pages 截图采集（装插件 → 无头启动 ForkPlus → 截图）
 │   │   └── build-pages.py                # Pages 站点生成
 │   ├── pages/                            # Pages 模板与插件登记表（template-*.html / style.css / plugins.json）
@@ -49,9 +50,14 @@ ForkPlus-Plugins/
 │       ├── PdfDiffPlugin.cs
 │       ├── PdfDiffView.cs
 │       ├── PdfNativeLibrary.cs           # PDFium 原生库解析（从插件目录 runtimes/ 加载）
+│       ├── third-party.json              # 本插件分发的三方组件登记（许可统一管理的单一事实来源）
 │       └── ForkPlus.Plugins.Pdf.csproj   # 私有依赖 Docnet.Core（MIT）
+├── licenses/                             # 第三方许可全文仓库（按组件分目录，集中管理）
+│   ├── docnet-core/LICENSE.txt           # Docnet.Core（MIT）
+│   └── pdfium/LICENSE.txt                # PDFium 及其捆绑组件（BSD-3-Clause 等）
 ├── Directory.Build.props                 # 仓库级公共构建属性（net10.0 / AvaloniaVersion）
 ├── ForkPlus.Plugins.slnx                 # 解决方案（新增插件在此登记）
+├── THIRD-PARTY-NOTICES.md                # 第三方许可总览（由脚本生成，勿手改）
 ├── pages/                                # 生成产物：Pages 站点（index + 各插件子页 + 截图）
 └── README.md
 ```
@@ -186,7 +192,8 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 - `Docnet.Core` 为私有托管依赖，与插件 DLL 同放 `plugins/`；
 - 原生库按 RID 随插件包分发，运行期由插件内的 `PdfNativeLibrary`（`DllImportResolver`）
   从插件目录递归解析 `pdfium.*` / `libpdfium.*`，不依赖宿主探测；
-- 第三方包随产物带出的 `LICENSE` 由打包脚本落成 `ForkPlus.Plugins.Pdf.LICENSE.txt`。
+- 第三方许可（Docnet.Core / PDFium）登记在插件目录的 `third-party.json`，
+  打包时合并成 `ForkPlus.Plugins.Pdf.THIRD-PARTY-NOTICES.txt`（见「第三方许可管理」）。
 
 > 注意：宿主只对**二进制**差异查询插件路由。PDF 一般含非文本字节、会被判为二进制；demo 截图用的
 > `sample.pdf` 特意夹带 NUL 字节以确保这一点。
@@ -210,6 +217,48 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 - 文件命名：`pages/assets/<插件>-<场景>.png`（PDF 插件即 `pdf-modify.png` / `pdf-add.png` / `pdf-remove.png`）；
 - 截图规格：整屏 `1920×1280`，完整软件界面，不做局部裁切；
 - 缺任一场景视为截图不完整；插件新增变更形态时，同步补对应场景截图与 `plugins.json` 登记。
+
+---
+
+## 第三方许可管理
+
+插件分发的第三方组件（如 PDF 插件的 Docnet.Core / PDFium）**统一登记、集中存放、按包合并**，
+单一事实来源是两处：
+
+1. **`licenses/`** —— 各组件许可全文的中央仓库，按组件分目录（`licenses/<组件>/LICENSE.txt`）。
+   全文原样落库（含三方文件自身的编码），不依赖构建时从 NuGet 缓存临时抓取。
+2. **`plugins/<插件>/third-party.json`** —— 该插件随包分发的组件登记表：
+
+   ```json
+   {
+     "components": [
+       {
+         "name": "Docnet.Core",
+         "version": "2.6.0",
+         "license": "MIT",
+         "copyright": "Copyright (c) 2018 Modestas Petravicius",
+         "homepage": "https://github.com/GowenGit/docnet",
+         "licenseFile": "licenses/docnet-core/LICENSE.txt"
+       }
+     ]
+   }
+   ```
+
+**由登记表自动派生两份产物**（脚本：[.github/scripts/collect-third-party-notices.py](.github/scripts/collect-third-party-notices.py)）：
+
+- **包内声明** `<Assembly>.THIRD-PARTY-NOTICES.txt`：头部列出该插件分发的组件元信息，
+  后附各组件许可全文；由 `install-plugin-artifacts.sh` 在打包时生成，随 zip 分发。
+- **仓库总览** [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)：汇总全仓库组件（跨插件去重）
+  的表格，含版本 / 许可 / 版权 / 分发插件 / 全文链接。
+
+**接入新许可（无需改脚本、无需改 CI）**：
+
+1. 把许可全文放到 `licenses/<组件>/LICENSE.txt`；
+2. 在使用它的插件 `third-party.json` 的 `components` 里追加一条（指向 `licenseFile`）；
+3. 重新生成总览：`python3 .github/scripts/collect-third-party-notices.py repo THIRD-PARTY-NOTICES.md`。
+
+> `THIRD-PARTY-NOTICES.md` 由脚本生成，**请勿手改**；[build.yml](.github/workflows/build.yml)
+> 的 `notices` 作业会用 `--check` 校验它与登记表一致，改了登记表却忘了重新生成会直接失败。
 
 ---
 
@@ -250,7 +299,7 @@ workflow：[.github/workflows/build.yml](.github/workflows/build.yml)
       ├── ForkPlus.Plugins.Pdf.dll
       ├── Docnet.Core.dll                    # PDF 插件私有依赖
       ├── pdfium.so                          # PDF 插件私有原生库（按平台）
-      ├── ForkPlus.Plugins.Pdf.LICENSE.txt   # 三方许可声明（Docnet.Core / PDFium）
+      ├── ForkPlus.Plugins.Pdf.THIRD-PARTY-NOTICES.txt   # 三方许可声明（Docnet.Core / PDFium）
       └── …（其余插件）
   ```
 
