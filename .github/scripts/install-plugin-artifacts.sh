@@ -63,7 +63,13 @@ done
 # 第三方许可声明：按插件的 third-party.json 登记表合并 licenses/ 全文。
 # 不再依赖 NuGet 恰好落在输出根的 LICENSE（名字不定、多依赖会互相覆盖）。
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-python3 "$script_dir/collect-third-party-notices.py" plugin "$projdir" "$dest/$assembly.THIRD-PARTY-NOTICES.txt"
+# windows runner 的 git-bash 通常只有 python（无 python3），这里回退选择解释器。
+if command -v python3 >/dev/null 2>&1; then
+	python_bin=python3
+else
+	python_bin=python
+fi
+"$python_bin" "$script_dir/collect-third-party-notices.py" plugin "$projdir" "$dest/$assembly.THIRD-PARTY-NOTICES.txt"
 
 echo "  installed: $assembly.dll" >&2
 echo "$dest/$assembly.dll"
