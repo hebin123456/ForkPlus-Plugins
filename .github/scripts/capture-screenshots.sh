@@ -9,7 +9,7 @@
 #   ② 下载最新的 ForkPlus（linux-x64 发行包）
 #   ③ 把插件 DLL 装入 ForkPlus 的 plugins/ 目录
 #   ④ 无头 X 环境（Xvfb + openbox）启动 ForkPlus，打开预置 demo 仓库
-#   ⑤ 触发示例插件的对比视图并截图（全窗口 + 插件视图区域裁切）
+#   ⑤ 触发示例插件的对比视图，截取完整软件界面（整屏 1920x1280，不做局部裁切）
 #   ⑥ 产物落到 <repo>/pages/assets/，交由 build-pages.py 生成站点
 #
 # 仅在 Linux（Xvfb）下工作；CI 使用 ubuntu-latest。本地可用同样命令复现。
@@ -132,7 +132,7 @@ prepare_demo_repo() {
 }
 
 seed_settings() {
-	log "预置 ForkPlus 设置（跳过引导 / 最大化窗口 / 记录已读更新说明）"
+	log "预置 ForkPlus 设置（跳过引导 / 亮色主题 / 最大化窗口 / 记录已读更新说明）"
 	local dir="$HOME/.local/share/ForkPlus"
 	mkdir -p "$dir"
 	FORKPLUS_VERSION="$FORKPLUS_VERSION" GIT_PATH="$(command -v git || echo /usr/bin/git)" SETTINGS_DIR="$dir" \
@@ -152,8 +152,8 @@ cfg.update({
     "LastShownReleaseNotesVersion": os.environ["FORKPLUS_VERSION"],  # 跳过「更新内容」弹窗
     "GitInstancePath": os.environ["GIT_PATH"],
     "UiLanguage": "zh-Hans",
-    "Theme": 0,
-    "FollowSystemTheme": True,
+    "Theme": 0,                                        # 0 = Light（截图用亮色，跟站点风格一致）
+    "FollowSystemTheme": False,                        # 关闭跟随系统，否则无头环境会被判成暗色
     "MainWindowLocationState": {
         "Left": 0.0, "Top": 0.0,
         "Width": 1920.0, "Height": 1280.0,
@@ -258,18 +258,10 @@ capture() {
 	echo "  命中文件行 y=$hit_y"
 
 	sleep 2
-	DISPLAY="$DISPLAY_NUM" import -window root "$OUT/example-diff-full.png"
-	echo "  全窗口截图 -> $OUT/example-diff-full.png"
-
-	local crop_x=$(( SCREEN_W * 155 / 1000 ))
-	local crop_w=$(( SCREEN_W * 84 / 100 ))
-	local crop_h=170
-
-	# 插件视图区域裁切：以命中行上方一点为起点，覆盖文件行 + 插件面板
-	local crop_y=$(( hit_y - 22 ))
-	convert "$OUT/example-diff-full.png" -crop "${crop_w}x${crop_h}+${crop_x}+${crop_y}" +repage \
-		"$OUT/example-diff-detail.png"
-	echo "  插件视图裁切 -> $OUT/example-diff-detail.png"
+	# 截取整个软件界面：整屏（默认 1920x1280），保留菜单 / 工具栏 / 侧栏 / 差异区，不做局部裁切。
+	# 文件名与 .github/pages/plugins.json 里登记的截图项一一对应。
+	DISPLAY="$DISPLAY_NUM" import -window root "$OUT/example-diff.png"
+	echo "  完整界面截图 -> $OUT/example-diff.png"
 }
 
 # ── ⑦ 元数据 ─────────────────────────────────────────────────────────────────

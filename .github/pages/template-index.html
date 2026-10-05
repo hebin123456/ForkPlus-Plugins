@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ForkPlus 插件 · 对比视图效果总览</title>
+<meta name="description" content="ForkPlus 插件系统的对比视图效果总览：插件如何按扩展名接管文件差异渲染，以及各插件的对比视图截图。">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">ForkPlus-Plugins</p>
+    <h1>ForkPlus 插件 · 对比视图效果总览</h1>
+    <p class="lede">
+      本仓库中的插件以进程内 DLL 形式扩展 ForkPlus 的差异视图。本页说明插件机制与扩展名路由，
+      并按插件列出各自的对比视图截图；每张截图都由 CI 在真实 ForkPlus 中现场生成，非手工拼接。
+    </p>
+    <ul class="badges">
+      <li>ForkPlus <strong>{{FORKPLUS_VERSION}}</strong></li>
+      <li>Plugins <strong>{{PLUGINS_VERSION}}</strong></li>
+      <li>插件数 <strong>{{PLUGIN_COUNT}}</strong></li>
+      <li>生成于 <strong>{{GENERATED_AT}}</strong></li>
+    </ul>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="about">
+    <h2>这套站点是什么</h2>
+    <p>
+      ForkPlus 的差异（diff）视图可以交给插件渲染。插件是放在 ForkPlus
+      <code>plugins/</code> 目录下的普通 DLL，宿主启动时扫描并注册；当用户点开某个
+      <strong>二进制</strong>文件的差异时，宿主按文件扩展名挑出插件，把这块界面让给它自绘。
+      本仓库就是这类插件的集合，每个插件在下方「插件清单」里有自己的子页面，
+      子页面里放它在真实软件中的对比视图截图。
+    </p>
+    <p class="note">
+      站点本身没有构建产物依赖：截图与版本号都由 CI 从真实运行态采集，静态 HTML 由模板注入生成。
+    </p>
+  </section>
+
+  <section id="contract">
+    <h2>插件是怎么接管的</h2>
+    <p>
+      一个对比视图插件实现两个契约：<code>IDiffViewPlugin</code> 负责「我是谁、我认领什么扩展名」，
+      <code>IDiffView</code> 负责「这块界面长什么样、内容怎么更新」。宿主在渲染二进制差异时
+      按扩展名路由，再把上下文交给插件视图。
+    </p>
+    <div class="grid grid-3">
+      <div class="card">
+        <h3>① 注册与认领</h3>
+        <p>
+          <code>IDiffViewPlugin</code> 暴露 <code>Id</code>、<code>DisplayNameKey</code>、
+          <code>Priority</code> 与 <code>FileExtensions</code>，宿主据此把扩展名映射到插件。
+        </p>
+      </div>
+      <div class="card">
+        <h3>② 二次判定与建视图</h3>
+        <p>
+          扩展名命中后仍会调 <code>CanHandle(request)</code> 做二次确认（例如校验文件头魔数）；
+          通过后由 <code>CreateView()</code> 返回一个 <code>IDiffView</code> 实例。
+        </p>
+      </div>
+      <div class="card">
+        <h3>③ 下发内容并自绘</h3>
+        <p>
+          <code>SetContent(context, host)</code> 传入 <code>context.Src</code> /
+          <code>context.Dst</code> 两侧数据；<code>View</code> 返回任意 Avalonia 控件，插件完全掌握该区域。
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section id="routing">
+    <h2>插件在什么时机被查询</h2>
+    <p>
+      差异类型是先决条件：<strong>只有二进制差异（含图片、未知二进制、LFS）会查询插件路由</strong>；
+      纯文本差异由 ForkPlus 内置的文本编辑器差异固定渲染，不经过插件选择。所以插件接管的是
+      「二进制差异怎么呈现」，而不是替换文本差异界面。
+    </p>
+    <p>
+      对二进制文件，宿主按扩展名（小写含点）匹配插件，顺序为
+      <strong>用户绑定 &gt; 精确扩展名（按优先级）&gt; 通配 <code>"*"</code>（按优先级）</strong>。
+      多个插件认领同一扩展名时优先级大者胜出；用户也可以手动把某个扩展名绑定到指定插件，该绑定覆盖自动路由。
+    </p>
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>通配兜底仍然接住</h3>
+        <p>
+          ForkPlus 内置的 Hex 差异视图本身就是插件（<code>Priority = 0</code>，认领
+          <code>"*"</code>），所以二进制文件即使没有具体插件认领也总有视图可用；
+          插件是能力叠加，并非必须覆盖全部格式。
+        </p>
+      </div>
+      <div class="card">
+        <h3>视图实例按需复用</h3>
+        <p>
+          宿主对每个差异区调用一次 <code>CreateView()</code>，之后通过
+          <code>SetContent</code> 循环刷新同一实例，并在无需展示时调用 <code>Release()</code> 回收。
+        </p>
+      </div>
+    </div>
+    <p class="note">
+      因此插件声明了某个扩展名，并不等于「该扩展名的所有文件都归它」——只有当文件被判为二进制时才会命中。
+    </p>
+  </section>
+
+  <section id="plugins">
+    <h2>插件清单</h2>
+    <p>每个插件一个子页面，内含它在真实 ForkPlus 中的完整界面截图与视图讲解。</p>
+    <div class="grid grid-2">
+{{PLUGIN_CARDS}}
+    </div>
+  </section>
+
+  <section id="how">
+    <h2>这些页面是怎么生成的</h2>
+    <p>
+      全部由 <code>.github/workflows/pages.yml</code> 在 CI 中自动完成，无需人工截图：
+    </p>
+    <ol class="steps">
+      <li><strong>构建插件</strong>：编译 <code>plugins/*/*.csproj</code>（linux-x64）。</li>
+      <li><strong>下载最新 ForkPlus</strong>：解析 <code>releases/latest</code> 的发行包并解压。</li>
+      <li><strong>安装插件</strong>：把插件 DLL 复制进 ForkPlus 的 <code>plugins/</code> 目录。</li>
+      <li><strong>启动无头环境</strong>：Xvfb + openbox，预置设置跳过引导、使用亮色主题并最大化窗口。</li>
+      <li><strong>打开 demo 仓库并触发插件视图</strong>：点击改动文件行，等待插件日志确认视图已渲染。</li>
+      <li><strong>截取完整界面并生成站点</strong>：对整屏截图（不裁切），再由模板注入生成总览页与各插件子页。</li>
+    </ol>
+    <p class="note">
+      截图口径：整屏 1920×1280，保留软件完整界面（菜单、工具栏、侧栏、差异区），不做局部裁切。
+    </p>
+  </section>
+
+  <section id="add">
+    <h2>如何新增一个插件</h2>
+    <ol class="steps">
+      <li>复制 <code>plugins/ForkPlus.Plugins.Example</code>，改掉 <code>AssemblyName</code>、命名空间与 <code>Id</code>。</li>
+      <li>在 <code>FileExtensions</code> 里声明要认领的扩展名，必要时用 <code>CanHandle</code> 做二次判定。</li>
+      <li>在 <code>.github/pages/plugins.json</code> 里追加一条登记项：<code>id</code>、名称、说明、扩展名与截图文件名。</li>
+      <li>让 <code>capture-screenshots.sh</code> 产出同名截图（命名约定：<code>assets/&lt;id&gt;-diff.png</code>），推送到 <code>master</code> 后 CI 会自动重建站点。</li>
+    </ol>
+  </section>
+</main>
+
+<footer class="wrap">
+  <p>由 <code>.github/workflows/pages.yml</code> 自动构建 · ForkPlus-Plugins</p>
+</footer>
+</body>
+</html>

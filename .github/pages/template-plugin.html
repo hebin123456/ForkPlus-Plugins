@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{PLUGIN_NAME}} · ForkPlus 插件对比视图</title>
+<meta name="description" content="{{PLUGIN_NAME}} 的对比视图效果：{{PLUGIN_SUMMARY}}">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <p class="crumbs"><a href="../index.html">← 返回插件总览</a></p>
+    <p class="eyebrow">{{PLUGIN_ID}}</p>
+    <h1>{{PLUGIN_NAME}}</h1>
+    <p class="lede">{{PLUGIN_SUMMARY}}</p>
+    <ul class="badges">
+      <li>程序集 <strong>{{PLUGIN_ASSEMBLY}}</strong></li>
+      <li>源码 <strong>{{PLUGIN_SOURCE}}</strong></li>
+      <li>ForkPlus <strong>{{FORKPLUS_VERSION}}</strong></li>
+      <li>Plugins <strong>{{PLUGINS_VERSION}}</strong></li>
+      <li>生成于 <strong>{{GENERATED_AT}}</strong></li>
+    </ul>
+    <p class="exts">认领扩展名：{{PLUGIN_EXTENSIONS}}</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="shot">
+    <h2>对比视图效果</h2>
+    <p>
+      下面是 ForkPlus 在本插件装入后的真实截图，保留软件的完整界面（菜单、工具栏、提交与文件列表、
+      差异区），未做局部裁切；点击图片可在新标签页查看原始尺寸。
+    </p>
+{{PLUGIN_SCREENSHOTS}}
+  </section>
+
+{{PLUGIN_SECTIONS}}
+</main>
+
+<footer class="wrap">
+  <p>
+    <a href="../index.html">← 返回插件总览</a> ·
+    由 <code>.github/workflows/pages.yml</code> 自动构建 · ForkPlus-Plugins
+  </p>
+</footer>
+</body>
+</html>

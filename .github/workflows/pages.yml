@@ -5,8 +5,8 @@
 #   ② 下载最新的 ForkPlus 发行包（releases/latest 的 linux-x64）
 #   ③ 把插件 DLL 装入 ForkPlus 的 plugins/ 目录
 #   ④ 无头环境（Xvfb + openbox）启动 ForkPlus，打开预置 demo 仓库
-#   ⑤ 触发示例插件的对比视图并截图（全窗口 + 插件区域裁切）
-#   ⑥ 注入模板生成 pages/ 站点并发布到 GitHub Pages
+#   ⑤ 触发示例插件的对比视图，截取完整软件界面（整屏 1920x1280，不裁切）
+#   ⑥ 注入模板生成 pages/ 站点（总览页 + 各插件子页）并发布到 GitHub Pages
 #
 # 触发：master 分支涉及插件/脚本/模板的改动，或手动触发；tag 发布后也刷新一次。
 #

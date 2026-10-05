@@ -1,0 +1,41 @@
+{
+  "plugins": [
+    {
+      "id": "example",
+      "name": "示例插件 · Example",
+      "assembly": "ForkPlus.Plugins.Example",
+      "source": "plugins/ForkPlus.Plugins.Example",
+      "summary": "最小可用的对比视图插件：认领 .example 与 .exampletxt，二进制文件命中后，把差异区替换为「左旧 / 右新」两栏只读信息面板。",
+      "extensions": [".example", ".exampletxt"],
+      "screenshots": [
+        {
+          "file": "example-diff.png",
+          "alt": "ForkPlus 完整软件界面：提交侧栏选中 update: modify sample files，文件列表中的 sample.example 被选中，窗口下半部的差异区由示例插件渲染",
+          "caption": "完整软件界面（1920×1280）：顶部菜单与工具栏、左栏提交列表与文件列表、下半部的差异区都在画面内，未做任何裁切。差异区里有两段：<code>notes.exampletxt</code> 是文本文件，仍由内置文本差异渲染；<code>sample.example</code> 是二进制文件，命中本插件——它下方两个带边框的面板即插件绘制。"
+        }
+      ],
+      "sections": [
+        {
+          "heading": "对比视图长什么样",
+          "html": "<p>插件视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,*\"</code> 分出顶部提示行，<code>ColumnDefinitions=\"*,*\"</code> 把下方等分为左右两栏。顶部提示行是标题 <strong>Example Plugin</strong>（经 <code>PluginEnvironment.Translate</code> 取当前语言译文，宿主未接线时原样返回 key）；两栏各是一个 <code>Border</code>（1px <code>Gainsboro</code> 边框、6px 圆角、8px 外边距），里面套 <code>ScrollViewer</code> 包住可换行的 <code>TextBlock</code>。</p><p class=\"note\">示例刻意不使用 <code>.axaml</code>，纯代码构建，方便直接对照 <code>ExampleDiffView.cs</code> 阅读。</p>"
+        },
+        {
+          "heading": "两栏的内容从哪里来",
+          "html": "<p>宿主每次刷新对比都会调用 <code>SetContent(context, host)</code>，把 <code>context.Src</code> / <code>context.Dst</code>（两个 <code>DiffSideContent</code>）交给视图。插件按同一套规则分别渲染两侧，因此两栏结构对称、可直接对照：</p><div class=\"grid grid-2\"><div class=\"card\"><h3>左栏 old</h3><p>来自 <code>context.Src</code>，即提交前的版本。依次显示角色名 <code>old</code>、<code>Path</code>、格式化后的 <code>Size</code>；<code>Data</code> 懒加载成功后追加 <code>Loaded bytes: N</code>。</p></div><div class=\"card\"><h3>右栏 new</h3><p>来自 <code>context.Dst</code>，即提交后的版本。<code>Data</code> 未加载（未点开该侧或超过宿主阈值）时为 <code>null</code>，对应行整体省略而不是显示 0。</p></div></div>"
+        },
+        {
+          "heading": "截图里读得到什么",
+          "html": "<p>demo 仓库的第二次提交改了 <code>sample.example</code>：内容从 <code>ForkPlus plugin demo v1</code> 变为 <code>…demo v2 CHANGED</code>。截图中的两栏因此显示同一条路径 <code>sample.example</code>，而 <code>Size</code> 一行由 <code>PluginSizeFormat.ReadableFileSize</code> 渲染成可读单位（28 B → 37 B），这就是「修改」对比的形态：两侧都存在，体量变化一眼可见。</p><p>若换成新增文件（只有 <code>context.Dst</code>）或删除文件（只有 <code>context.Src</code>），缺失的一侧会整栏显示角色名加 <code>(not present)</code>——同一段代码同时覆盖三种变更类型。</p>"
+        },
+        {
+          "heading": "生命周期与宿主协作",
+          "html": "<p>宿主对每个差异区调用 <code>CreateView()</code> 拿一个视图实例，随后进入 <code>SetContent →（SetMode / Activate / Deactivate / ApplyLocalization 循环）→ Release</code>。<code>Modes</code> 返回空数组，表示本示例只有单一视图，宿主不会渲染模式切换工具条；<code>Release()</code> 清空两侧文本，此后实例不再复用。</p><p>视图不引用任何宿主类型，只通过 <code>PluginEnvironment</code>（取译文、应用语言）与 <code>PluginLog</code>（日志）两个门面协作。<code>SetContent</code> 里的 <code>PluginLog.Info(\"ExampleDiffView.SetContent src=… dst=…\")</code> 会汇入宿主 NLog 输出——本页截图正是靠这条日志判定插件视图已被触发。</p>"
+        },
+        {
+          "heading": "为什么同提交的另一个文件没走插件",
+          "html": "<p>本插件声明 <code>Priority = 100</code>，认领 <code>.example</code> 与 <code>.exampletxt</code>。但截图里 <code>notes.exampletxt</code> 显示的是内置文本差异——因为 diff 类型优先于扩展名：<strong>宿主只对二进制差异查询插件路由</strong>，纯文本差异固定由内置文本编辑器差异渲染。demo 里的 <code>notes.exampletxt</code> 是文本，因此它的 <code>.exampletxt</code> 声明在这条路径上不会生效。</p><p>要让 <code>.exampletxt</code> 真正命中，文件需要被判为二进制（例如含 NUL 字节或写入非文本内容）——这也正是示例仓库把 <code>sample.example</code> 写成含 NUL 二进制内容的原因。</p><p>二进制且无具体插件认领时，由内置 Hex 视图兜底（<code>Priority = 0</code>，认领 <code>\"*\"</code>）；用户还可以在设置里手动把扩展名绑定到指定插件，用户绑定优先级最高。</p>"
+        }
+      ]
+    }
+  ]
+}
