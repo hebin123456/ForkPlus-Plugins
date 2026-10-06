@@ -5,4 +5,5 @@
   <Project Path="plugins/ForkPlus.Plugins.Example/ForkPlus.Plugins.Example.csproj" />
   <Project Path="plugins/ForkPlus.Plugins.Pdf/ForkPlus.Plugins.Pdf.csproj" />
   <Project Path="plugins/ForkPlus.Plugins.Office/ForkPlus.Plugins.Office.csproj" />
+  <Project Path="plugins/ForkPlus.Plugins.Archive/ForkPlus.Plugins.Archive.csproj" />
 </Solution>

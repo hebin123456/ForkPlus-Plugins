@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- 压缩包对比视图插件：认领 zip / 7z / rar / tar 及 gz / bz2 / xz / zst 等主流压缩包
+         （含包在其中的 tar），把压缩包展开成条目树左右并排对比，支持带密码压缩包输入密码。
+         公共属性（net10.0 / AvaloniaVersion / 契约引用）见 ../Directory.Build.props。 -->
+    <AssemblyName>ForkPlus.Plugins.Archive</AssemblyName>
+    <RootNamespace>ForkPlus.Plugins.Archive</RootNamespace>
+
+    <!-- 插件自身版本（与宿主版本解耦）；偏好设置 → 插件页展示的 Version 与此一致（暂为 0.0.1）。 -->
+    <Version>0.0.1</Version>
+
+    <!-- 本插件带私有依赖（SharpCompress 及其托管传递依赖），需随插件产物拷贝出来。
+         类库工程默认不拷 PackageReference 资产，这里显式开启；打包脚本再排除宿主共享程序集。 -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+
+    <!-- SharpCompress：MIT 许可，纯托管的压缩库。选它是因为一套 API 覆盖主流格式：
+         zip（含传统 / AES 加密）、7z（含头部加密）、rar、tar，以及 gzip / bzip2 / xz /
+         zstd / lzip 等流式压缩（可与 tar 组合）。许可为 MIT（符合首选），无原生依赖。
+         随包分发的依赖与许可全文见本目录 third-party.json 与 licenses/。 -->
+    <PackageReference Include="SharpCompress" Version="1.0.0" />
+  </ItemGroup>
+</Project>

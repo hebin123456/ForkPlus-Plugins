@@ -8,7 +8,7 @@
 #   ① 构建仓库内插件（plugins/*/*.csproj）
 #   ② 下载最新的 ForkPlus（linux-x64 发行包）
 #   ③ 把插件产物（主 DLL + 私有依赖 + 原生库）装入 ForkPlus 的 plugins/ 目录
-#   ④ 准备 demo 仓库：PDF 与 Office 各三种 diff 场景（修改 / 新增 / 删除）
+#   ④ 准备 demo 仓库：PDF / Office / 压缩包 各三种 diff 场景（修改 / 新增 / 删除）
 #   ⑤ 无头 X 环境（Xvfb + openbox）启动 ForkPlus，逐场景触发对应插件对比视图，
 #      截取完整软件界面（整屏 1920x1280，不做局部裁切）
 #   ⑥ 产物落到 <repo>/pages/assets/，交由 build-pages.py 生成站点
@@ -342,6 +342,49 @@ def build_pptx():
 PY
 }
 
+# 生成一份压缩包对比样本（.zip / .tar.gz / .tar.xz，v1 旧 / v2 新）。
+# 纯标准库（zipfile + tarfile）构造，不依赖 7z 等外部工具：包内是一个两级目录树
+# （docs/ + assets/ + 顶层 README.md），v2 比 v1 多一个 docs/release-notes.md 并改动
+# changelog，正好体现「压缩包展开成条目树后左右对比」。tar 用 GNU 格式，避免 PAX 扩展头
+# 在条目树里多出 @PaxHeader 噪音行。压缩包一律为二进制，git 判为二进制，命中 Archive 插件。
+write_demo_archive() {
+	local repo="$1" version="$2" ext="$3"
+	python3 - "$repo" "$version" "$ext" <<'PY'
+import io, os, sys, tarfile, zipfile
+repo, version, ext = sys.argv[1], sys.argv[2], sys.argv[3]
+is_new = version == "v2"
+
+def enc(text):
+    return text.encode("utf-8")
+
+files = [
+    ("docs/guide.md", enc("# ForkPlus Guide\nRevision: %s\n" % version)),
+    ("docs/changelog.md", enc("## %s\n- %s\n" % (version, "new: SVG export" if is_new else "old: PNG export"))),
+    ("assets/logo.bin", bytes(range(16))),
+    ("README.md", enc("ForkPlus sample archive (%s)\n" % version)),
+]
+if is_new:
+    files.append(("docs/release-notes.md", enc("Release notes for v2\n")))
+
+name = "sample." + ext
+target = os.path.join(repo, name)
+if ext == "zip":
+    with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as z:
+        for n, data in files:
+            z.writestr(n, data)
+elif ext in ("tar.gz", "tgz", "tar.xz", "tar.bz2"):
+    mode = {"tar.gz": "w:gz", "tgz": "w:gz", "tar.xz": "w:xz", "tar.bz2": "w:bz2"}[ext]
+    with tarfile.open(target, mode, format=tarfile.GNU_FORMAT) as t:
+        for n, data in files:
+            info = tarfile.TarInfo(n)
+            info.size = len(data)
+            t.addfile(info, io.BytesIO(data))
+else:
+    raise SystemExit("unsupported demo archive ext: " + ext)
+print("  demo archive ->", target, "(" + version + ")")
+PY
+}
+
 # 三种 diff 类型的 demo 仓库：modify（修改）/ add（新增）/ remove（删除）。
 # 每个仓库只涉及 sample.pdf 一个文件，命中插件后其对比视图紧贴差异区顶部，
 # 不会被别的文件差异区顶下去（PDF 一页很高，尤其需要这一点），截图即可完整呈现。
@@ -422,6 +465,42 @@ prepare_repo_office() {
 		git -C "$repo" add -A
 		git -C "$repo" commit -q -m "initial: add sample.$ext"
 		write_demo_office "$repo" v2 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "update: modify sample.$ext"
+		;;
+	esac
+	echo "  $repo ($mode · .$ext)"
+}
+
+# 压缩包 demo 仓库：三种 diff 场景各用一种包格式——modify 用 .zip（显式目录树）、
+# add 用 .tar.gz（gzip + tar 组合）、remove 用 .tar.xz。压缩包为二进制，git 判为二进制，
+# 命中 Archive 插件而非文本 / Hex 兜底。
+prepare_repo_archive() {
+	local mode="$1" ext="$2"
+	local repo="$WORK/repo-archive-$mode"
+	init_demo_repo "$repo"
+	case "$mode" in
+	add)
+		printf 'baseline\n' >"$repo/readme.txt"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: baseline"
+		write_demo_archive "$repo" v2 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "add: sample.$ext"
+		;;
+	remove)
+		printf 'baseline\n' >"$repo/readme.txt"
+		write_demo_archive "$repo" v1 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: add sample.$ext"
+		git -C "$repo" rm -q "sample.$ext"
+		git -C "$repo" commit -q -m "remove: delete sample.$ext"
+		;;
+	*)
+		write_demo_archive "$repo" v1 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: add sample.$ext"
+		write_demo_archive "$repo" v2 "$ext"
 		git -C "$repo" add -A
 		git -C "$repo" commit -q -m "update: modify sample.$ext"
 		;;
@@ -595,6 +674,10 @@ prepare_repo_pdf remove
 prepare_repo_office modify docx
 prepare_repo_office add xlsx
 prepare_repo_office remove pptx
+# 压缩包 demo：三场景各用一种包格式（modify=zip / add=tar.gz / remove=tar.xz）
+prepare_repo_archive modify zip
+prepare_repo_archive add tar.gz
+prepare_repo_archive remove tar.xz
 start_x
 # PDF 插件三种场景各截一张：修改 / 新增 / 删除
 for mode in modify add remove; do
@@ -605,6 +688,11 @@ done
 for mode in modify add remove; do
 	seed_settings
 	capture_one "$WORK/repo-office-$mode" "OfficeDiffView.SetContent" "office-$mode.png" 4 "Office 插件 · $mode"
+done
+# 压缩包插件三种场景各截一张（zip / tar.gz / tar.xz 各覆盖一种）
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-archive-$mode" "ArchiveDiffView.SetContent" "archive-$mode.png" 4 "Archive 插件 · $mode"
 done
 write_metadata
 log "完成：截图已输出到 $OUT"

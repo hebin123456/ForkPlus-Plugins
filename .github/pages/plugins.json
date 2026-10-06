@@ -107,6 +107,66 @@
           "html": "<p>本插件声明 <code>Priority = 100</code>，认领 <code>.docx</code> / <code>.xlsx</code> / <code>.pptx</code>。<strong>宿主只对二进制差异查询插件路由</strong>，纯文本差异固定由内置文本编辑器差异渲染——Office 文档本质是 ZIP 包（OOXML），git 一律判为二进制，因此必然命中本插件而非 Hex 兜底。新增 / 删除的 Office 文档同样是二进制差异，路由规则一致。</p><p>若用户已在设置里把对应扩展名绑定到别的插件，则以用户绑定为准（优先级最高）。</p>"
         }
       ]
+    },
+    {
+      "id": "archive",
+      "name": "压缩包对比插件 · Archive Compare",
+      "version": "0.0.1",
+      "assembly": "ForkPlus.Plugins.Archive",
+      "source": "plugins/ForkPlus.Plugins.Archive",
+      "summary": "压缩包对比视图：认领 zip / 7z / rar / tar 及 gz / bz2 / xz / zst 等主流压缩包，命中后把两侧压缩包各自展开成「条目树」左右并排对比——只看压缩包里有什么（目录 / 文件 / 大小 / 是否加密），不读取解压后的文件内容；带密码的压缩包（如头部加密的 7z / rar）可在视图里输入密码。",
+      "extensions": [".zip", ".7z", ".rar", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".zst", ".jar", ".apk", ".nupkg"],
+      "screenshots": [
+        {
+          "file": "archive-modify.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.zip，差异区由压缩包插件渲染成左右两栏，左 old、右 new 各是 sample.zip 展开后的条目树",
+          "caption": "「修改」对比（ZIP · .zip，1920×1280 完整界面，未裁切）：左栏标题为 <code>旧 · sample.zip · …</code>（提交前版本），右栏 <code>新 · sample.zip · …</code>（提交后版本），两栏各列出包内条目树 <code>assets/</code>、<code>docs/</code>、<code>README.md</code> 与文件体积；旧侧 <code>docs/</code> 下是 <code>changelog.md</code> / <code>guide.md</code>，新侧多出 <code>release-notes.md</code>，状态行给出 <code>Archive compare: 6 / 7 entries</code>。"
+        },
+        {
+          "file": "archive-add.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 add: sample.tar.gz，差异区右栏渲染新增压缩包展开后的条目树，左栏显示 old · not present 占位",
+          "caption": "「新增」对比（TAR · GZIP · .tar.gz）：提交给仓库新增了 sample.tar.gz，旧侧不存在。插件在左栏给出标题 <code>旧 · not present</code> 与栏内 <code>not present</code> 占位，右栏标题 <code>已创建 · sample.tar.gz · …</code> 并把 gzip 解开、按 tar 展开成条目树（<code>assets/logo.bin</code>、<code>docs/guide.md</code>、<code>docs/changelog.md</code>、<code>docs/release-notes.md</code>、<code>README.md</code>）——一眼看出这是纯新增，而非解析失败。"
+        },
+        {
+          "file": "archive-remove.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.tar.xz，差异区左栏渲染被删除压缩包展开后的条目树，右栏显示 new · not present 占位",
+          "caption": "「删除」对比（TAR · XZ · .tar.xz）：提交删除了 sample.tar.xz，新侧不存在。插件在左栏标题 <code>已删除 · sample.tar.xz · …</code> 下渲染被删包展开的条目树（xz 解压后按 tar 展开），右栏给出标题 <code>新 · not present</code> 与占位（状态行 <code>Archive compare: 6 / 0 entries</code>）——删除场景同样可见完整条目。"
+        }
+      ],
+      "sections": [
+        {
+          "heading": "对比视图长什么样",
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>密码输入行</strong>、<strong>条目树区</strong>。标题行本身也是两列 <code>Grid</code>，左旧右新各一个 <code>TextBlock</code>，文字形如 <code>old  ·  sample.zip  ·  1.09 KB</code>（角色名取 <code>PluginEnvironment.Translate</code>，文件名取 <code>Path.GetFileName</code>，体积取 <code>PluginSizeFormat.ReadableFileSize</code>），并直接采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>DstTitleBrush</code> 着色，跟随主题。</p><p>状态行显示 <code>Reading archive…</code>，随后落到 <code>Archive compare: 源条目数 / 目标条目数</code>；解析失败或密码问题则在状态行与密码行给出提示。</p>"
+        },
+        {
+          "heading": "条目树：只看有什么，不读内容",
+          "html": "<p>这是本插件与 PDF / Office 插件的根本区别：它<strong>不读取解压后的文件内容</strong>，只把压缩包「列表化」成条目树——每条一行 <code>名称</code>（目录带 <code>/</code> 后缀、加粗）与 <code>体积</code>，加密条目额外标注 <code>[encrypted]</code>。两栏各自一个 <code>ScrollViewer</code> 包着 <code>StackPanel</code>，独立滚动。</p><p>条目树由包内路径还原：<code>Build</code> 按 <code>/</code> 拆段建树（压缩包常常只登记文件、不登记目录，插件会自动补出中间目录节点），再以「目录在前，其后按名排序（忽略大小写优先、序数兜底）」的树序遍历展平；渲染时按 <code>Depth</code> 缩进。<code>Path</code> 里的 <code>\\</code> 会归一成 <code>/</code>，开头的 <code>./</code> 与多余分隔符一并去掉。条目数超过 <strong>20000</strong> 时只保留前 20000 条并标记截断，用一行 <code>Showing first N entries only.</code> 说明，防止超大包卡死 UI。</p>"
+        },
+        {
+          "heading": "各格式怎么展开",
+          "html": "<p>展开用 <strong>SharpCompress</strong>，分两路：</p><div class=\"grid grid-2\"><div class=\"card\"><h3>压缩包本体</h3><p><code>zip</code> / <code>7z</code> / <code>rar</code> / <code>tar</code> 交给 <code>ArchiveFactory.Open</code> 按类型识别，逐个 <code>IArchiveEntry</code> 取 <code>Key</code> / <code>IsDirectory</code> / <code>Size</code> / <code>CompressedSize</code> / <code>IsEncrypted</code> 建树。<code>jar</code> / <code>war</code> / <code>apk</code> / <code>nupkg</code> / <code>whl</code> 本质是 zip 系容器，按内容识别后格式名按扩展名细分展示。</p></div><div class=\"card\"><h3>流式压缩</h3><p><code>gz</code> / <code>bz2</code> / <code>xz</code> / <code>zst</code>（含 <code>.tar.gz</code> / <code>.tgz</code> / <code>.tar.xz</code> 等组合）先解压 512 字节嗅探：命中 tar 的 <code>ustar</code> 魔数、或文件名形如 <code>.tar.gz</code> / <code>.tgz</code>，就整体解压后按 tar 建树，格式名记为 <code>TAR · GZIP</code> 这类；否则视为「单文件压缩流」，给出唯一一条条目。解压总量超过 <strong>512 MB</strong> 直接判失败，防压缩炸弹。</p></div></div><p>单文件压缩流里 <code>gzip</code> 的未压缩大小可由末尾 4 字节 <code>ISIZE</code> 直接读出，无需为列表整包解压；<code>bz2</code> / <code>xz</code> / <code>zst</code> 无此捷径，体积显示为未知（<code>-</code>）——符合「只列表、不解压内容」的取舍。</p>"
+        },
+        {
+          "heading": "密码与加密",
+          "html": "<p>密码行是一个 <code>TextBox</code>（<code>PasswordChar = '●'</code>）+「应用」按钮。压缩包做了<strong>头部加密</strong>（如 7z / rar）时，未给密码会抛 <code>CryptographicException</code>，插件归类为 <code>PasswordRequired</code>，视图提示 <code>This archive is encrypted. Enter the password and press Apply.</code>；输入密码后点「应用」即重新展开。</p><p>7z 密码错误时 SharpCompress 抛的是内部类型 <code>DataErrorException</code>（无法按类型捕获，插件按异常类型名识别），归类为 <code>PasswordIncorrect</code>，提示 <code>Incorrect password. Try again.</code>。<strong>zip 是个例外</strong>：其中央目录未加密，条目名与大小在不开锁的情况下就可见，插件据此把加密条目标注 <code>[encrypted]</code>（<code>ArchiveModel.HasEncrypted</code> 汇总到摘要行），此时输不输密码都能列出条目——这与「不读内容」的定位一致。</p>"
+        },
+        {
+          "heading": "新增 / 删除 / 修改三种场景",
+          "html": "<p>插件按异构的 <code>DiffViewContext</code> 适配三种变更，本页三张截图分别对应（同时正好覆盖 ZIP / TAR·GZIP / TAR·XZ 三种包格式）：</p><div class=\"grid grid-2\"><div class=\"card\"><h3>修改（两侧都在）</h3><p><code>Src</code> 与 <code>Dst</code> 均非空，角色为 <code>old</code> / <code>new</code>，两栏各展开各自条目树，逐条对照。</p></div><div class=\"card\"><h3>新增（只有新侧）</h3><p>宿主令 <code>Src == null</code>、<code>DstRole = Created</code>。插件左栏标题写 <code>old · not present</code> 并在栏内落一块 <code>not present</code> 占位，右栏标 <code>created</code> 展开全部条目。</p></div></div><p>删除是新增的镜像：<code>Dst == null</code>、<code>SrcRole = Removed</code>，左栏标 <code>removed</code> 展开被删包的条目，右栏写 <code>new · not present</code> 占位。与其让缺文件的一侧留白（容易被误读成解析失败），不如显式说明——这是 <code>ReportMissing</code> / <code>DescribeSide</code> 对 <code>null</code> 侧的统一处理。</p>"
+        },
+        {
+          "heading": "压缩包字节从哪里来",
+          "html": "<p>宿主对每个差异区调用 <code>SetContent(context, host)</code>，视图按同一套优先级取每一侧的原始字节：<strong>宿主 Hex 预载</strong>（<code>context.HexSrc</code> / <code>HexDst</code>，二进制差异 ≤50MB 时由宿主直接给到）→ <strong>侧内容懒加载</strong>（<code>DiffSideContent.Data</code>）→ <strong>LFS 缓存 / smudge</strong>（<code>host.GetCachedLfsData</code>，未命中再用 <code>host.RunLfsSmudge</code> 触发下载）。<code>Src</code> / <code>Dst</code> 为 <code>null</code> 的整侧直接跳过，不取字节；有侧但拿不到字节时，该栏显示 <code>Archive content unavailable</code> 加路径，而不是空白。</p><p>展开在后台线程进行（<code>Task.Run</code>），控件构建回到 UI 线程；<code>CancelRender</code> 用「代次 + <code>CancellationToken</code>」保证切换文件或重新输入密码后旧任务立即作废，不会把上一次的条目树画到本次视图上。</p>"
+        },
+        {
+          "heading": "用的哪个 MIT 三方件",
+          "html": "<p>压缩包解析用 <strong>SharpCompress 1.0.0</strong>（MIT 许可、纯托管、无原生依赖），一套 API 覆盖 zip（含传统 / AES 加密）、7z（含头部加密）、rar、tar，以及 gzip / bzip2 / xz / zstd 等流式压缩。<code>net10.0</code> 目标下它无额外 NuGet 依赖，因此随包分发的只有 <code>SharpCompress.dll</code> 一个私有托管程序集；许可全文与元信息登记在插件目录的 <code>third-party.json</code>，打包时合并成 <code>ForkPlus.Plugins.Archive.THIRD-PARTY-NOTICES.txt</code>，并汇入仓库根 <code>THIRD-PARTY-NOTICES.md</code>。</p>"
+        },
+        {
+          "heading": "为什么压缩包一定会走这个插件",
+          "html": "<p>本插件声明 <code>Priority = 100</code>，认领 19 种压缩包扩展名（zip / 7z / rar / tar 及 gz / tgz / bz2 / tbz / xz / txz / zst / tzst 等组合，外加 jar / war / apk / nupkg / whl）。<strong>宿主只对二进制差异查询插件路由</strong>，纯文本差异固定由内置文本编辑器差异渲染——压缩包一律含非文本字节，git 判为二进制，因此必然命中本插件而非 Hex 兜底。新增 / 删除的压缩包同样是二进制差异，路由规则一致。</p><p><code>CanHandle</code> 一律返回 <code>true</code>（此阶段宿主尚未加载字节，扩展名已足够判定）；真正的格式识别放在展开时，识别不了归类为 <code>Unsupported</code> 并在栏内说明，而不是空白。若用户已在设置里把对应扩展名绑定到别的插件，则以用户绑定为准（优先级最高）。</p>"
+        }
+      ]
     }
   ]
 }

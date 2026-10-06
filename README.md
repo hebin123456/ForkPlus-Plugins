@@ -1,5 +1,8 @@
 # ForkPlus Plugins
 
+[![build](https://github.com/hebin123456/ForkPlus-Plugins/actions/workflows/build.yml/badge.svg)](https://github.com/hebin123456/ForkPlus-Plugins/actions/workflows/build.yml)
+[![release](https://img.shields.io/github/v/release/hebin123456/ForkPlus-Plugins?label=release&color=blue)](https://github.com/hebin123456/ForkPlus-Plugins/releases)
+
 ForkPlus 对比视图插件仓库。
 
 ForkPlus 的「文件对比视图」是插件化的：宿主启动时扫描可执行文件旁的 `plugins/` 目录，
@@ -53,17 +56,25 @@ ForkPlus-Plugins/
 │   │   ├── PdfNativeLibrary.cs           # PDFium 原生库解析（从插件目录 runtimes/ 加载）
 │   │   ├── third-party.json              # 本插件分发的三方组件登记（许可统一管理的单一事实来源）
 │   │   └── ForkPlus.Plugins.Pdf.csproj   # 私有依赖 Docnet.Core（MIT）
-│   └── ForkPlus.Plugins.Office/          # Office 套件对比插件（.docx/.xlsx/.pptx 正文左右并排）
-│       ├── OfficeDiffPlugin.cs
-│       ├── OfficeDiffView.cs
-│       ├── OfficeContentExtractor.cs     # 用 Open XML SDK 提取三件套正文
-│       ├── OfficeContent.cs              # 标题 / 段落 / 表格内容块模型
-│       ├── third-party.json              # Open XML SDK 等（MIT）登记
-│       └── ForkPlus.Plugins.Office.csproj # 私有依赖 Open XML SDK（MIT）
+│   ├── ForkPlus.Plugins.Office/          # Office 套件对比插件（.docx/.xlsx/.pptx 正文左右并排）
+│   │   ├── OfficeDiffPlugin.cs
+│   │   ├── OfficeDiffView.cs
+│   │   ├── OfficeContentExtractor.cs     # 用 Open XML SDK 提取三件套正文
+│   │   ├── OfficeContent.cs              # 标题 / 段落 / 表格内容块模型
+│   │   ├── third-party.json              # Open XML SDK 等（MIT）登记
+│   │   └── ForkPlus.Plugins.Office.csproj # 私有依赖 Open XML SDK（MIT）
+│   └── ForkPlus.Plugins.Archive/         # 压缩包对比插件（zip/7z/rar/tar 条目树左右并排）
+│       ├── ArchiveDiffPlugin.cs
+│       ├── ArchiveDiffView.cs            # 条目树视图 + 密码输入
+│       ├── ArchiveContentExtractor.cs    # 用 SharpCompress 把压缩包列表化成条目树
+│       ├── ArchiveContent.cs             # 条目节点 / 展开结果模型
+│       ├── third-party.json              # SharpCompress（MIT）登记
+│       └── ForkPlus.Plugins.Archive.csproj # 私有依赖 SharpCompress（MIT）
 ├── licenses/                             # 第三方许可全文仓库（按组件分目录，集中管理）
 │   ├── docnet-core/LICENSE.txt           # Docnet.Core（MIT）
 │   ├── open-xml-sdk/LICENSE.txt          # Open XML SDK（MIT）
 │   ├── dotnet-runtime/LICENSE.txt        # System.IO.Packaging（MIT）
+│   ├── sharpcompress/LICENSE.txt         # SharpCompress（MIT）
 │   └── pdfium/LICENSE.txt                # PDFium 及其捆绑组件（BSD-3-Clause 等）
 ├── Directory.Build.props                 # 仓库级公共构建属性（net10.0 / AvaloniaVersion）
 ├── ForkPlus.Plugins.slnx                 # 解决方案（新增插件在此登记）
@@ -199,7 +210,7 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 
 约定：
 
-- 版本号与工程文件的 `<Version>` 保持一致（本仓库示例、PDF 与 Office 插件当前均为 **0.0.1**）。
+- 版本号与工程文件的 `<Version>` 保持一致（本仓库示例、PDF、Office 与压缩包插件当前均为 **0.0.1**）。
 - 名称 / 描述在 5.0.1 固定为中文；后续版本才会引入多语言元数据（`DisplayNameKey` 仍用于翻译 key）。
 
 ---
@@ -267,6 +278,46 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 
 ---
 
+## 压缩包对比插件
+
+[plugins/ForkPlus.Plugins.Archive](plugins/ForkPlus.Plugins.Archive) 认领主流压缩包，命中后把两侧
+压缩包各自**展开成条目树**左右并排对比——只看压缩包里有什么（目录 / 文件 / 大小 / 是否加密），
+**不读取解压后的文件内容**。带密码的压缩包（如做了头部加密的 7z / rar）可在视图里输入密码。
+
+认领的扩展名（19 种）：
+
+- **压缩包本体**：`.zip` / `.7z` / `.rar` / `.tar`；
+- **流式压缩**（含与 tar 的组合，如 `.tar.gz` / `.tgz`）：`.gz` / `.tgz` / `.taz` / `.bz2` /
+  `.tbz` / `.tbz2` / `.xz` / `.txz` / `.zst` / `.tzst`；
+- **zip 系容器**：`.jar` / `.war` / `.apk` / `.nupkg` / `.whl`。
+
+展开分两路：
+
+- **压缩包本体**：交给 SharpCompress 的 `ArchiveFactory` 按类型识别，逐条取 `Key` / `IsDirectory` /
+  `Size` / `CompressedSize` / `IsEncrypted`，再按 `/` 拆段还原成目录树（压缩包常常只登记文件、
+  不登记目录，插件自动补出中间目录），按「目录在前 + 名称排序」的树序遍历展平后渲染。
+- **流式压缩**：先解压少量字节嗅探——命中 tar 的 `ustar` 魔数、或文件名形如 `.tar.gz` / `.tgz`，
+  就整体解压后按 tar 建树；否则视为「单文件压缩流」给出唯一一条条目。
+
+条目数超过 20000 条会截断并在视图里说明；流式解压总量超过 512 MB 直接判失败，防压缩炸弹。
+
+密码：视图顶部有密码输入框 +「应用」按钮。未给密码但压缩包已加密（头部加密的 7z / rar）提示
+「需要密码」，密码错误提示「密码不正确」，点「应用」重新展开。zip 是例外——中央目录未加密，
+条目名 / 大小无需密码即可列出，加密条目标注 `[encrypted]`。
+
+解析用 MIT 许可的 **SharpCompress 1.0.0**（纯托管，`net10.0` 下无额外依赖）：
+
+- `SharpCompress.dll` 为私有托管依赖，与插件 DLL 同放 `plugins/`；
+- 第三方许可登记在插件目录的 `third-party.json`，打包时合并成
+  `ForkPlus.Plugins.Archive.THIRD-PARTY-NOTICES.txt`（见「第三方许可管理」）。
+
+> 注意：宿主只对**二进制**差异查询插件路由。压缩包一律含非文本字节、会被判为二进制，因此必然
+> 命中本插件而非 Hex 兜底。
+
+插件同样实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「压缩包对比」、版本 `0.0.1` 与描述。
+
+---
+
 ## Pages 截图约定
 
 插件对比视图的截图由 CI 在真实 ForkPlus 中现场采集（无头 X + 整屏截图），并随 Pages 一起发布上线；
@@ -282,19 +333,22 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 | 删除 | 只有旧侧（`Dst == null`） | 旧侧渲染被删内容，新侧显式标注 missing |
 
 - 文件命名：`pages/assets/<插件>-<场景>.png`（PDF 插件即 `pdf-modify.png` / `pdf-add.png` / `pdf-remove.png`，
-  Office 插件即 `office-modify.png` / `office-add.png` / `office-remove.png`）；
+  Office 插件即 `office-modify.png` / `office-add.png` / `office-remove.png`，
+  压缩包插件即 `archive-modify.png` / `archive-add.png` / `archive-remove.png`）；
 - 截图规格：整屏 `1920×1280`，完整软件界面，不做局部裁切；
 - 缺任一场景视为截图不完整；插件新增变更形态时，同步补对应场景截图与 `plugins.json` 登记。
-- demo 素材由采集脚本现场构造（PDF 用 `write_demo_pdf`，Office 用 `write_demo_office`），纯 Python 标准库
-  生成最小合法样本，不依赖 ghostscript / python-docx 等外部工具；Office 三张截图各用一种格式
-  （modify=`.docx`、add=`.xlsx`、remove=`.pptx`），三张正好覆盖 Word / Excel / PowerPoint 三件套。
+- demo 素材由采集脚本现场构造（PDF 用 `write_demo_pdf`，Office 用 `write_demo_office`，
+  压缩包用 `write_demo_archive`），纯 Python 标准库生成最小合法样本，不依赖 ghostscript /
+  python-docx / 7z 等外部工具；Office 与压缩包三张截图各用一种格式
+  （Office：modify=`.docx`、add=`.xlsx`、remove=`.pptx`，覆盖 Word / Excel / PowerPoint；
+  压缩包：modify=`.zip`、add=`.tar.gz`、remove=`.tar.xz`）。
 
 ---
 
 ## 第三方许可管理
 
-插件分发的第三方组件（如 PDF 插件的 Docnet.Core / PDFium、Office 插件的 Open XML SDK）
-**统一登记、集中存放、按包合并**，单一事实来源是两处：
+插件分发的第三方组件（如 PDF 插件的 Docnet.Core / PDFium、Office 插件的 Open XML SDK、
+压缩包插件的 SharpCompress）**统一登记、集中存放、按包合并**，单一事实来源是两处：
 
 1. **`licenses/`** —— 各组件许可全文的中央仓库，按组件分目录（`licenses/<组件>/LICENSE.txt`）。
    全文原样落库（含三方文件自身的编码），不依赖构建时从 NuGet 缓存临时抓取。
@@ -376,6 +430,9 @@ workflow：[.github/workflows/build.yml](.github/workflows/build.yml)
       ├── DocumentFormat.OpenXml.Framework.dll
       ├── System.IO.Packaging.dll
       ├── ForkPlus.Plugins.Office.THIRD-PARTY-NOTICES.txt # 三方许可声明（Open XML SDK 等）
+      ├── ForkPlus.Plugins.Archive.dll
+      ├── SharpCompress.dll                  # 压缩包插件私有依赖
+      ├── ForkPlus.Plugins.Archive.THIRD-PARTY-NOTICES.txt # 三方许可声明（SharpCompress）
       └── …（其余插件）
   ```
 
