@@ -8,7 +8,8 @@
 #   ① 构建仓库内插件（plugins/*/*.csproj）
 #   ② 下载最新的 ForkPlus（linux-x64 发行包）
 #   ③ 把插件产物（主 DLL + 私有依赖 + 原生库）装入 ForkPlus 的 plugins/ 目录
-#   ④ 准备 demo 仓库：PDF / Office / 压缩包 各三种 diff 场景（修改 / 新增 / 删除）
+#   ④ 准备 demo 仓库：PDF / Office / 压缩包 / 字体 / 可执行文件 / 证书 各三种 diff 场景
+#      （修改 / 新增 / 删除）
 #   ⑤ 无头 X 环境（Xvfb + openbox）启动 ForkPlus，逐场景触发对应插件对比视图，
 #      截取完整软件界面（整屏 1920x1280，不做局部裁切）
 #   ⑥ 产物落到 <repo>/pages/assets/，交由 build-pages.py 生成站点
@@ -416,6 +417,167 @@ print("  demo archive ->", target, "(" + version + ")")
 PY
 }
 
+# ── demo 素材：字体 ──────────────────────────────────────────────────────────
+# 字体插件靠「同一句话的多字号样张 + sfnt 表结构 diff（name / head / OS/2 / maxp / hhea /
+# cmap）」呈现差异。字体文件无法用标准库从零构造，也不便在没有 fontTools 的环境里原地
+# 改写，因此直接取 CI runner 上 apt 安装的两套系统字体充当旧 / 新两侧：DejaVu Sans（旧）
+# 与 DejaVu Serif（新）。两者家族 / 版本 / 字重 / 字形 / 码位覆盖都有真实差异——样张并排
+# 即可看出字形变化，元数据与码位模式也能看到逐行标注。
+FONT_OLD_CANDIDATES=(
+	/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+	/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf
+)
+FONT_NEW_CANDIDATES=(
+	/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf
+	/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf
+	/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf
+)
+
+# 取第一个存在的候选路径；都不存在则返回非零（pages.yml 已 apt 安装这些字体包）。
+first_existing() {
+	local path
+	for path in "$@"; do
+		if [ -f "$path" ]; then
+			printf '%s\n' "$path"
+			return 0
+		fi
+	done
+	return 1
+}
+
+write_demo_font() {
+	local repo="$1" version="$2"
+	local src
+	if [ "$version" = "v2" ]; then
+		src="$(first_existing "${FONT_NEW_CANDIDATES[@]}")" || die "找不到可用系统字体（请 apt 安装 fonts-dejavu / fonts-liberation）"
+	else
+		src="$(first_existing "${FONT_OLD_CANDIDATES[@]}")" || die "找不到可用系统字体（请 apt 安装 fonts-dejavu / fonts-liberation）"
+	fi
+	# 统一叫 sample.ttf：两侧同名才能构成「同一文件旧 / 新两版」的修改场景。
+	cp "$src" "$repo/sample.ttf"
+	echo "  demo font -> $repo/sample.ttf ($version, 源: $(basename "$src"))"
+}
+
+# ── demo 素材：可执行文件 / 库 ──────────────────────────────────────────────
+# 三种场景各用一种真实格式（都用 CI runner 自带工具现造），一次覆盖 ELF / PE / ar 三条
+# 解析路径，也覆盖「结构摘要 / 段节表 / 导入导出 / 体积构成」四种模式所需的字段：
+#   modify → .so（ELF 共享库，cc 编译；v2 多一个导出符号）
+#   add    → .dll（.NET 托管 PE，dotnet build 出最小类库）
+#   remove → .a（ar 归档，ar rcs 打包两个目标文件）
+
+# 用 cc 编一个最小 ELF 共享库；v2 额外导出一个符号，制造「导出符号」差异。
+write_demo_elf() {
+	local out="$1" version="$2" tmp="$3"
+	local rev="$version"
+	cat >"$tmp/sample.c" <<EOF
+#include <stdio.h>
+__attribute__((visibility("default"))) const char *forkplus_revision(void) { return "$rev"; }
+__attribute__((visibility("default"))) int sample_add(int a, int b) { return a + b; }
+__attribute__((visibility("default"))) void sample_log(void) { puts("forkplus sample library"); }
+EOF
+	if [ "$version" = "v2" ]; then
+		cat >>"$tmp/sample.c" <<'EOF'
+__attribute__((visibility("default"))) int sample_mul(int a, int b) { return a * b; }
+EOF
+	fi
+	# -Wl,-soname 让 .dynamic 带上 SONAME；puts 让动态段出现 NEEDED libc。
+	cc -shared -fPIC -O2 -Wl,-soname,libsample.so -o "$out" "$tmp/sample.c"
+}
+
+# 用 dotnet 编一个最小托管类库，产出的 sample.dll 是真实 PE（含 COR 元数据）。
+write_demo_pe() {
+	local out="$1" version="$2" tmp="$3"
+	local proj="$tmp/peproj"
+	mkdir -p "$proj"
+	cat >"$proj/sample.csproj" <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>sample</AssemblyName>
+    <RootNamespace>ForkPlus.Sample</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+</Project>
+EOF
+	cat >"$proj/Sample.cs" <<EOF
+namespace ForkPlus.Sample
+{
+	public static class Sample
+	{
+		public const string Revision = "$version";
+		public static int Add(int a, int b) { return a + b; }
+	}
+}
+EOF
+	# 需要 dotnet 在 PATH（pages.yml 已 setup-dotnet）；-v:q 压缩日志噪音。
+	dotnet build "$proj/sample.csproj" -c Release -o "$tmp/peout" --nologo -v:q
+	cp "$tmp/peout/sample.dll" "$out"
+}
+
+# 用 ar 打一个静态库（.a）：两个目标文件 → 归档里两个成员 + 符号表。
+write_demo_ar() {
+	local out="$1" tmp="$2"
+	printf 'int sample_one(void) { return 1; }\n' >"$tmp/one.c"
+	printf 'int sample_two(void) { return 2; }\n' >"$tmp/two.c"
+	cc -c -o "$tmp/one.o" "$tmp/one.c"
+	cc -c -o "$tmp/two.o" "$tmp/two.c"
+	rm -f "$out"
+	ar rcs "$out" "$tmp/one.o" "$tmp/two.o"
+}
+
+# ── demo 素材：证书 ──────────────────────────────────────────────────────────
+# 三种场景各用一种容器（都用 CI runner 自带的 openssl 现造）：
+#   modify → .der（自签 DER 证书，v2 改 SAN / 有效期 / 密钥长度）
+#   add    → .p12（PKCS#12 证书链，空密码 → 视图无需输入密码即可读出证书）
+#   remove → .p7b（PKCS#7 证书袋）
+# 证书带 SAN / KeyUsage / EKU / BasicConstraints / CRL / OCSP 等扩展，让「用途 / 扩展」
+# 分组与有效期时间轴、SAN 彩色徽章这些可视化元素都能呈现出来。
+write_demo_certificate() {
+	local repo="$1" version="$2" fmt="$3"
+	local tmp="$WORK/demo-certificate-$fmt"
+	rm -rf "$tmp"
+	mkdir -p "$tmp"
+	local days bits subject san
+	if [ "$version" = "v2" ]; then
+		days=825
+		bits=4096
+		subject="/C=US/ST=CA/L=San Francisco/O=ForkPlus/OU=Release/CN=sample.example"
+		san="DNS:sample.example,DNS:api.example,DNS:www.example,IP:10.0.0.2,email:dev@example.com"
+	else
+		days=365
+		bits=2048
+		subject="/C=US/ST=CA/L=San Francisco/O=ForkPlus/OU=Release/CN=sample.example"
+		san="DNS:sample.example,IP:10.0.0.1"
+	fi
+	openssl req -x509 -newkey "rsa:$bits" -nodes -sha256 -days "$days" \
+		-keyout "$tmp/key.pem" -out "$tmp/cert.pem" \
+		-subj "$subject" \
+		-addext "subjectAltName=$san" \
+		-addext "keyUsage=critical,digitalSignature,keyEncipherment" \
+		-addext "extendedKeyUsage=serverAuth,clientAuth" \
+		-addext "basicConstraints=critical,CA:FALSE" \
+		-addext "crlDistributionPoints=URI:http://crl.example.com/sample.crl" \
+		-addext "authorityInfoAccess=OCSP;URI:http://ocsp.example.com" \
+		>/dev/null 2>&1
+	case "$fmt" in
+	der)
+		openssl x509 -in "$tmp/cert.pem" -outform DER -out "$repo/sample.der"
+		;;
+	p12)
+		# -passout pass: → 空密码；插件用空密码即可读出证书链（安全边界：只读证书、不碰私钥）。
+		openssl pkcs12 -export -inkey "$tmp/key.pem" -in "$tmp/cert.pem" \
+			-name "ForkPlus Sample" -out "$repo/sample.p12" -passout pass:
+		;;
+	p7b)
+		openssl crl2pkcs7 -nocrl -certfile "$tmp/cert.pem" | openssl pkcs7 -outform DER -out "$repo/sample.p7b"
+		;;
+	esac
+	rm -rf "$tmp"
+	echo "  demo certificate -> $repo/sample.$fmt ($version)"
+}
+
 # 三种 diff 类型的 demo 仓库：modify（修改）/ add（新增）/ remove（删除）。
 # 每个仓库只涉及 sample.pdf 一个文件，命中插件后其对比视图紧贴差异区顶部，
 # 不会被别的文件差异区顶下去（PDF 一页很高，尤其需要这一点），截图即可完整呈现。
@@ -537,6 +699,116 @@ prepare_repo_archive() {
 		;;
 	esac
 	echo "  $repo ($mode · .$ext)"
+}
+
+# 字体 demo 仓库：三场景都用同一对系统字体（旧 DejaVu Sans / 新 DejaVu Serif），
+# 两侧文件名同为 sample.ttf，构成「同一文件旧 / 新两版」的修改场景；字体含 NUL 字节，
+# git 判为二进制，命中字体插件而非 Hex 兜底。样张 / 元数据 / 码位三模式都有真实差异。
+prepare_repo_font() {
+	local mode="$1"
+	local repo="$WORK/repo-font-$mode"
+	init_demo_repo "$repo"
+	case "$mode" in
+	add)
+		printf 'baseline\n' >"$repo/readme.txt"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: baseline"
+		write_demo_font "$repo" v2
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "add: sample.ttf"
+		;;
+	remove)
+		printf 'baseline\n' >"$repo/readme.txt"
+		write_demo_font "$repo" v1
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: add sample.ttf"
+		git -C "$repo" rm -q sample.ttf
+		git -C "$repo" commit -q -m "remove: delete sample.ttf"
+		;;
+	*)
+		write_demo_font "$repo" v1
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: add sample.ttf"
+		write_demo_font "$repo" v2
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "update: modify sample.ttf"
+		;;
+	esac
+	echo "  $repo ($mode)"
+}
+
+# 可执行文件 demo 仓库：modify 用 .so（ELF 共享库，v2 多一个导出符号）、add 用 .dll
+# （.NET 托管 PE）、remove 用 .a（ar 归档）——一次覆盖四条解析路径与四种模式所需字段。
+prepare_repo_executable() {
+	local mode="$1" ext="$2"
+	local repo="$WORK/repo-executable-$mode"
+	local tmp="$WORK/demo-executable-$mode"
+	init_demo_repo "$repo"
+	rm -rf "$tmp"
+	mkdir -p "$tmp"
+	case "$mode" in
+	add)
+		printf 'baseline\n' >"$repo/readme.txt"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: baseline"
+		write_demo_pe "$repo/sample.$ext" v2 "$tmp"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "add: sample.$ext"
+		;;
+	remove)
+		printf 'baseline\n' >"$repo/readme.txt"
+		write_demo_ar "$repo/sample.$ext" "$tmp"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: add sample.$ext"
+		git -C "$repo" rm -q "sample.$ext"
+		git -C "$repo" commit -q -m "remove: delete sample.$ext"
+		;;
+	*)
+		write_demo_elf "$repo/sample.$ext" v1 "$tmp"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: add sample.$ext"
+		write_demo_elf "$repo/sample.$ext" v2 "$tmp"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "update: modify sample.$ext"
+		;;
+	esac
+	rm -rf "$tmp"
+	echo "  $repo ($mode · .$ext)"
+}
+
+# 证书 demo 仓库：modify 用 .der（自签 DER 证书）、add 用 .p12（PKCS#12）、remove 用 .p7b
+# （PKCS#7 证书袋）。v2 改 SAN / 有效期 / 密钥长度，让详情行与有效期时间轴、SAN 徽章都有差异。
+prepare_repo_certificate() {
+	local mode="$1" fmt="$2"
+	local repo="$WORK/repo-certificate-$mode"
+	init_demo_repo "$repo"
+	case "$mode" in
+	add)
+		printf 'baseline\n' >"$repo/readme.txt"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: baseline"
+		write_demo_certificate "$repo" v2 "$fmt"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "add: sample.$fmt"
+		;;
+	remove)
+		printf 'baseline\n' >"$repo/readme.txt"
+		write_demo_certificate "$repo" v1 "$fmt"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: add sample.$fmt"
+		git -C "$repo" rm -q "sample.$fmt"
+		git -C "$repo" commit -q -m "remove: delete sample.$fmt"
+		;;
+	*)
+		write_demo_certificate "$repo" v1 "$fmt"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: add sample.$fmt"
+		write_demo_certificate "$repo" v2 "$fmt"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "update: modify sample.$fmt"
+		;;
+	esac
+	echo "  $repo ($mode · .$fmt)"
 }
 
 seed_settings() {
@@ -709,6 +981,18 @@ prepare_repo_office remove pptx
 prepare_repo_archive modify zip
 prepare_repo_archive add tar.gz
 prepare_repo_archive remove tar.xz
+# 字体 demo：三场景均用同一对系统字体（旧 DejaVu Sans / 新 DejaVu Serif）
+prepare_repo_font modify
+prepare_repo_font add
+prepare_repo_font remove
+# 可执行文件 demo：三场景各用一种格式（modify=so(ELF) / add=dll(PE) / remove=a(ar)）
+prepare_repo_executable modify so
+prepare_repo_executable add dll
+prepare_repo_executable remove a
+# 证书 demo：三场景各用一种容器（modify=der / add=p12 / remove=p7b）
+prepare_repo_certificate modify der
+prepare_repo_certificate add p12
+prepare_repo_certificate remove p7b
 start_x
 # PDF 插件三种场景各截一张：修改 / 新增 / 删除
 for mode in modify add remove; do
@@ -724,6 +1008,21 @@ done
 for mode in modify add remove; do
 	seed_settings
 	capture_one "$WORK/repo-archive-$mode" "ArchiveDiffView.SetContent" "archive-$mode.png" 4 "Archive 插件 · $mode"
+done
+# 字体插件三种场景各截一张：修改 / 新增 / 删除
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-font-$mode" "FontDiffView.SetContent" "font-$mode.png" 4 "字体插件 · $mode"
+done
+# 可执行文件插件三种场景各截一张（ELF(.so) / PE(.dll) / ar(.a) 各覆盖一种）
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-executable-$mode" "ExecutableDiffView.SetContent" "executable-$mode.png" 4 "可执行文件插件 · $mode"
+done
+# 证书插件三种场景各截一张（DER / PKCS#12 / PKCS#7 各覆盖一种）
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-certificate-$mode" "CertificateDiffView.SetContent" "certificate-$mode.png" 4 "证书插件 · $mode"
 done
 write_metadata
 log "完成：截图已输出到 $OUT"

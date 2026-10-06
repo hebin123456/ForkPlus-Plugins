@@ -1,6 +1,6 @@
 # 可执行文件 / 库对比插件 · 设计文档
 
-> 状态：设计已定，未开工。
+> 状态：已实现（插件 v0.0.1，随 v1.0.3 发布）。
 > 日期：2026-10-06。
 > 相关：[README.md](../README.md)、[sdk/ForkPlus.Plugins.Abstractions](../sdk/ForkPlus.Plugins.Abstractions)。
 

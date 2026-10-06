@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- 证书对比视图插件：认领证书容器（DER 单证书 / PKCS#12 链 / PKCS#7 证书袋 / CRL），
+         把两侧证书的身份、有效期、密钥、用途、扩展、指纹与证书链并排对比。
+         公共属性（net10.0 / AvaloniaVersion / 契约引用）见 ../Directory.Build.props。 -->
+    <AssemblyName>ForkPlus.Plugins.Certificate</AssemblyName>
+    <RootNamespace>ForkPlus.Plugins.Certificate</RootNamespace>
+
+    <!-- 插件自身版本（与宿主版本解耦）。 -->
+    <Version>0.0.1</Version>
+
+    <!-- 本插件带私有依赖（System.Security.Cryptography.Pkcs），需随插件产物拷贝出来。
+         类库工程默认不拷 PackageReference 资产，这里显式开启；打包脚本再排除宿主共享程序集
+         （Avalonia / SkiaSharp / NLog / 契约…），私有依赖与插件 DLL 同放 plugins/。 -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+
+    <!-- System.Security.Cryptography.Pkcs：解析 PKCS#7（.p7b / .p7c）证书袋所需的 SignedCms。
+         它不在共享框架内，故按仓库流程登记为私有依赖（third-party.json + licenses/，MIT）。
+         net10.0 目标下无传递依赖。 -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.0" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- 字体对比视图插件：认领 .ttf / .otf / .ttc / .otc / .woff，用 SkiaSharp 并排渲染
+         固定样张，并对 sfnt 表（head / name / OS/2 / maxp / hhea）与 cmap 码位覆盖做结构化 diff。
+         公共属性（net10.0 / AvaloniaVersion / 契约引用）见 ../Directory.Build.props。 -->
+    <AssemblyName>ForkPlus.Plugins.Font</AssemblyName>
+    <RootNamespace>ForkPlus.Plugins.Font</RootNamespace>
+
+    <!-- 插件自身版本（与宿主版本解耦）；偏好设置 → 插件页展示的 Version 与此一致。 -->
+    <Version>0.0.1</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+
+    <!-- SkiaSharp：宿主共享程序集（与 Avalonia / HarfBuzzSharp 同列，见
+         .github/scripts/install-plugin-artifacts.sh 的 is_shared 清单），本插件直接用其
+         SKTypeface / SKFont / SKCanvas 做样张排版绘制，运行期由宿主提供同一程序集，故不设
+         CopyLocalLockFileAssemblies（不随包拷贝）。
+         版本必须与宿主严格一致（3.119.4，即 Avalonia.Skia 12.1.1 所依赖的版本）。 -->
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
+  </ItemGroup>
+</Project>

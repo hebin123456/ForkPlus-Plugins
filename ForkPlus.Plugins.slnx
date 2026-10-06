@@ -6,4 +6,7 @@
   <Project Path="plugins/ForkPlus.Plugins.Pdf/ForkPlus.Plugins.Pdf.csproj" />
   <Project Path="plugins/ForkPlus.Plugins.Office/ForkPlus.Plugins.Office.csproj" />
   <Project Path="plugins/ForkPlus.Plugins.Archive/ForkPlus.Plugins.Archive.csproj" />
+  <Project Path="plugins/ForkPlus.Plugins.Font/ForkPlus.Plugins.Font.csproj" />
+  <Project Path="plugins/ForkPlus.Plugins.Executable/ForkPlus.Plugins.Executable.csproj" />
+  <Project Path="plugins/ForkPlus.Plugins.Certificate/ForkPlus.Plugins.Certificate.csproj" />
 </Solution>

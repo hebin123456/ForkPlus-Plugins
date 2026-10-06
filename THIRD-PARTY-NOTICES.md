@@ -13,6 +13,7 @@
 | PDFium | 随 Docnet.Core 2.6.0 的原生运行时分发 | BSD-3-Clause（PDFium 本体；同文件另含其捆绑组件各自许可） | Copyright 2014 The PDFium Authors | [ForkPlus.Plugins.Pdf](plugins/ForkPlus.Plugins.Pdf) | [LICENSE.txt](licenses/pdfium/LICENSE.txt) |
 | SharpCompress | 1.0.0 | MIT | Copyright (c) 2014 Adam Hathcock | [ForkPlus.Plugins.Archive](plugins/ForkPlus.Plugins.Archive) | [LICENSE.txt](licenses/sharpcompress/LICENSE.txt) |
 | System.IO.Packaging | 8.0.1 | MIT | Copyright (c) .NET Foundation and Contributors | [ForkPlus.Plugins.Office](plugins/ForkPlus.Plugins.Office) | [LICENSE.txt](licenses/dotnet-runtime/LICENSE.txt) |
+| System.Security.Cryptography.Pkcs | 10.0.0 | MIT | Copyright (c) .NET Foundation and Contributors | [ForkPlus.Plugins.Certificate](plugins/ForkPlus.Plugins.Certificate) | [LICENSE.txt](licenses/dotnet-runtime/LICENSE.txt) |
 
 ## 分发形态
 

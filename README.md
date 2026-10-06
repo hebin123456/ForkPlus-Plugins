@@ -70,19 +70,46 @@ ForkPlus-Plugins/
 │   │   │   └── OfficeStrings.cs          # 插件自带译文（8 语言）
 │   │   ├── third-party.json              # Open XML SDK 等（MIT）登记
 │   │   └── ForkPlus.Plugins.Office.csproj # 私有依赖 Open XML SDK（MIT）
-│   └── ForkPlus.Plugins.Archive/         # 压缩包对比插件（zip/7z/rar/tar 条目树左右并排 + MD5）
-│       ├── ArchiveDiffPlugin.cs
-│       ├── ArchiveDiffView.cs            # TreeView 条目树视图 + 整包 / 条目 MD5 + 密码输入
-│       ├── ArchiveContentExtractor.cs    # 用 SharpCompress 把压缩包展开成条目树并算 MD5
-│       ├── ArchiveContent.cs             # 条目节点 / 展开结果模型（含 MD5）
+│   ├── ForkPlus.Plugins.Archive/         # 压缩包对比插件（zip/7z/rar/tar 条目树左右并排 + MD5）
+│   │   ├── ArchiveDiffPlugin.cs
+│   │   ├── ArchiveDiffView.cs            # TreeView 条目树视图 + 整包 / 条目 MD5 + 密码输入
+│   │   ├── ArchiveContentExtractor.cs    # 用 SharpCompress 把压缩包展开成条目树并算 MD5
+│   │   ├── ArchiveContent.cs             # 条目节点 / 展开结果模型（含 MD5）
+│   │   ├── Localization/
+│   │   │   └── ArchiveStrings.cs         # 插件自带译文（8 语言）
+│   │   ├── third-party.json              # SharpCompress（MIT）登记
+│   │   └── ForkPlus.Plugins.Archive.csproj # 私有依赖 SharpCompress（MIT）
+│   ├── ForkPlus.Plugins.Font/            # 字体对比插件（多字号样张 + 元数据 / 码位结构化 diff）
+│   │   ├── FontDiffPlugin.cs
+│   │   ├── FontDiffView.cs               # 三模式视图：样张位图 / 元数据卡片 / 码位占比条
+│   │   ├── FontParser.cs                 # sfnt（ttf/otf/ttc/woff）表解析 + cmap 码位
+│   │   ├── FontModel.cs                  # 容器格式 / 错误分类模型
+│   │   ├── FontFace.cs                   # 单套字体（元数据 / 码位 / 表存在性）
+│   │   ├── UnicodeBlocks.cs              # 码位 → Unicode block 归类
+│   │   ├── Localization/
+│   │   │   └── FontStrings.cs            # 插件自带译文（8 语言）
+│   │   └── ForkPlus.Plugins.Font.csproj  # 零私有依赖（SkiaSharp 由宿主共享）
+│   ├── ForkPlus.Plugins.Executable/      # 可执行文件 / 库对比插件（PE/ELF/Mach-O/wasm/ar 结构 diff）
+│   │   ├── ExecutableDiffPlugin.cs
+│   │   ├── ExecutableDiffView.cs         # 四模式：摘要 / 节段 / 导入导出 / 体积堆叠条
+│   │   ├── ExecutableParser.cs           # PE 走共享框架，ELF / Mach-O / wasm / ar 自解析
+│   │   ├── ExecutableModel.cs            # 字段 / 节 / 依赖 / 程序集引用模型
+│   │   ├── Localization/
+│   │   │   └── ExecutableStrings.cs      # 插件自带译文（8 语言）
+│   │   └── ForkPlus.Plugins.Executable.csproj # 零第三方依赖
+│   └── ForkPlus.Plugins.Certificate/     # 证书对比插件（身份 / 有效期时间轴 / SAN 徽章 / 证书链）
+│       ├── CertificateDiffPlugin.cs
+│       ├── CertificateDiffView.cs        # 详情 / 证书链两模式 + 有效期时间轴 + 彩色徽章
+│       ├── CertificateParser.cs          # DER / PKCS#12 / PKCS#7（SignedCms）/ CRL
+│       ├── CertificateModel.cs           # 证书字段 / SAN / 有效期状态模型
 │       ├── Localization/
-│       │   └── ArchiveStrings.cs         # 插件自带译文（8 语言）
-│       ├── third-party.json              # SharpCompress（MIT）登记
-│       └── ForkPlus.Plugins.Archive.csproj # 私有依赖 SharpCompress（MIT）
+│       │   └── CertificateStrings.cs     # 插件自带译文（8 语言）
+│       ├── third-party.json              # System.Security.Cryptography.Pkcs（MIT）登记
+│       └── ForkPlus.Plugins.Certificate.csproj # 私有依赖 Pkcs（MIT）
 ├── licenses/                             # 第三方许可全文仓库（按组件分目录，集中管理）
 │   ├── docnet-core/LICENSE.txt           # Docnet.Core（MIT）
 │   ├── open-xml-sdk/LICENSE.txt          # Open XML SDK（MIT）
-│   ├── dotnet-runtime/LICENSE.txt        # System.IO.Packaging（MIT）
+│   ├── dotnet-runtime/LICENSE.txt        # System.IO.Packaging / System.Security.Cryptography.Pkcs（MIT）
 │   ├── sharpcompress/LICENSE.txt         # SharpCompress（MIT）
 │   └── pdfium/LICENSE.txt                # PDFium 及其捆绑组件（BSD-3-Clause 等）
 ├── Directory.Build.props                 # 仓库级公共构建属性（net10.0 / AvaloniaVersion）
@@ -229,7 +256,8 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 
 约定：
 
-- 版本号与工程文件的 `<Version>` 保持一致（本仓库示例、PDF、Office 与压缩包插件当前均为 **0.1.0**）。
+- 版本号与工程文件的 `<Version>` 保持一致（本仓库示例、PDF、Office 与压缩包插件当前均为 **0.1.0**；
+  字体、可执行文件、证书三个插件为 **0.0.1**，随首个 v1.0.3 Release 一并分发）。
 - 名称 / 描述一律写成**英文原文**（作为缺省与回退值）；插件把各语言译文按 `语言 code → 文案`
   组织成字典，经 `GetDisplayName` / `GetDescription` 覆写，用 `PluginLocalization.Resolve`
   按宿主下发的 `PluginEnvironment.CurrentLanguage` 取译文，查不到逐级回退（当前语言 → 语言主标签
@@ -359,6 +387,108 @@ zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可�
 
 ---
 
+## 字体对比插件
+
+[plugins/ForkPlus.Plugins.Font](plugins/ForkPlus.Plugins.Font) 认领 `.ttf` / `.otf` / `.ttc` / `.otc` /
+`.woff`：命中后把差异区换成左右两栏，用**同一套固定样张**并排渲染旧 / 新字体，同一字号落在同一行、
+天然对齐；再对 sfnt 表做**结构化 diff**——元数据与 cmap 码位覆盖，逐项按「相同 / 变了 / 仅左 / 仅右」
+四色标注（对比目标不是「打开字体」，而是并排看清字形 + 元数据的变化）。
+
+三种模式（自建工具条 `Sample / Metadata / Codepoints` 切换，共用同一份解析结果）：
+
+- **样张**：固定样张按 `12 / 18 / 28 / 48 px` 四个字号**现渲染成位图**，左右同字号同行并排，
+  最适合看字形、字宽、笔画这类肉眼差异。样张不是设个 `FontFamily` 就行——字体是用户带来的文件，
+  未必已安装、也不能保证按「第几套」精确选取，因此插件在后台线程用宿主共享的 **SkiaSharp**
+  （`SKTypeface.FromStream` + `SKFont` + `SKCanvas`）直接排版绘制，再把 PNG 解码成 `Image`。
+  样张文本刻意全用拉丁字母 / 数字 / 标点，避免无头 runner 缺 CJK 字体画出豆腐块。
+- **元数据**：两栏各自**分组卡片**（Identity / Vertical metrics / Weight & width / Tables），逐行
+  「名 : 值」并四色铺底，看家族名、版本、字重、单位、各表大小与 `head` 时间戳。
+- **码位**：顶部两条**水平占比条**给出覆盖量，下面统计「共有 / 仅左 / 仅右」并给示例码位，再给
+  **Unicode block 归类表**（拉丁 / 希腊 / CJK / 表情…），看「新字体多了哪些字符集」。
+
+`.ttc` / `.otc` 是「一文件多套字体」的集合容器：解析出全部套，只在确有多套时于工具栏右侧显示
+「第几套」下拉，切换即以该套索引重跑渲染。
+
+> 注意：宿主只对**二进制**差异查询插件路由。字体一律含非文本字节、git 判为二进制，因此必然命中本插件。
+> `.woff2` 一期**不认领**——Brotli 解压后还有 glyf / loca 表变换需还原，与其声明一个「画不出」的扩展名，
+> 不如明确不做；`.woff`（zlib 封装）则解封装后照常解析 sfnt。
+
+本插件**零私有依赖**（SkiaSharp 为宿主共享程序集，不随包分发）。插件实现 `IPluginMetadata`，向宿主
+「偏好设置 → 插件」页暴露名称「字体对比」（英文原文 `Font Compare`，8 语言译文见
+`Localization/FontStrings.cs`）、版本 `0.0.1` 与描述。
+
+---
+
+## 可执行文件对比插件
+
+[plugins/ForkPlus.Plugins.Executable](plugins/ForkPlus.Plugins.Executable) 认领 `.exe` / `.dll` /
+`.so` / `.dylib` / `.a` / `.lib` / `.wasm`：面向**发版产物对比**——两次构建出来的可执行文件 / 动态库
+到底哪里变了（依赖换了、导出符号少了、体积涨了、安全位被关了），这些用 Hex 看是看不出来的。命中后把
+两侧二进制各自解析成**结构模型**，左右并排逐行按「相同 / 变了 / 仅左 / 仅右」四色标注。
+
+四种模式（自建工具条切换，两栏各自独立滚动）：
+
+- **结构摘要**：格式徽章 + `Header` 关键字段（架构 / 位数 / 字节序 / 类型 / 子系统 / DllCharacteristics…），
+  安全位展开为 `ASLR` / `DEP` / `CFG` / `No SEH` 等**徽章**；.NET PE 另列 `Assembly references`。
+- **段 · 节表**：逐行列出节 / 段 / ar 成员（名称、字节数、读 / 写 / 执行权限徽章），ar 成员额外给
+  偏移与 Unix 修改时间，ELF 无名节回退为 `[N]`。
+- **导入导出**：分 `Dependencies` / `Imports` / `Exports` 三类，每类内部再按「共有 / 仅左 / 仅右」
+  分组，符号去重后逐个列出。
+- **体积构成**：一条彩色**堆叠条**（12 色循环调色板，按体积为权重）+ WrapPanel 图例，未列入的字节
+  折成「其它」；下面逐节给出体积与 `F1` 百分比。
+
+四种格式的解析：**PE / COFF** 走共享框架内置的 `System.Reflection.PortableExecutable`（`PEReader`
+读节表与 `DllCharacteristics`，`MetadataReader` 读 `AssemblyRef`，导入表解析依赖与符号）；**ELF**、
+**Mach-O**（含 fat / universal 多架构）、**WebAssembly**、**ar** 归档均**自解析**。
+
+> 注意：本插件**零第三方依赖**，随包进 `plugins/` 的只有插件自身主 DLL。已知限制：版本化的
+> `libfoo.so.1.2.3` 扩展名是 `.3`，路由不到本插件——这是宿主按扩展名路由的固有限制。
+
+插件实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「可执行文件对比」（英文原文
+`Executable Compare`，8 语言译文见 `Localization/ExecutableStrings.cs`）、版本 `0.0.1` 与描述。
+
+---
+
+## 证书对比插件
+
+[plugins/ForkPlus.Plugins.Certificate](plugins/ForkPlus.Plugins.Certificate) 认领证书容器
+`.der` / 二进制 `.cer` / `.p12` / `.pfx` / `.p7b` / `.p7c` / `.crl`：证书轮换、续期、换 CA 之后，
+并排看清两版证书到底变了什么——有效期、签发者、SAN 列表、密钥长度、用途，而不是对着 Base64 疙瘩看。
+
+两模式（自建工具条 `Details / Chain` 切换）：
+
+- **详情**：只取容器里**第一张**证书做主对比，按 `Identity`（Subject / Issuer / 序列号 / 自签名）、
+  `Validity`（Not before / Not after + 时间轴）、`Key & Signature`（公钥算法与位数、签名算法与 OID）、
+  `Usage`（KeyUsage / EKU / BasicConstraints）、`Extensions`（SAN、CRL 分发点、OCSP）、
+  `Fingerprints`（SHA-1、SHA-256）分组，每行按四色铺一层低对比底色。
+- **证书链**：逐张列出容器内证书（`.p12` / `.p7b` 常含多张）的卡片，标题带序号与 Subject，两侧用
+  **SHA-1 指纹**判断同一张是否共享，仅左 / 仅右按四色铺底，顶部给出共享 / 仅左 / 仅右数量统计。
+
+呈现上尽量「像证书」而不是一坨纯文字：
+
+- **有效期时间轴**：把 `NotBefore → NotAfter` 画成横向圆角条，按「现在」在区间里的比例落一根竖线；
+  整条颜色随状态变化（**有效绿 / 距到期 ≤30 天橙 / 已过期红**），旁边给状态词与剩余 / 逾期天数。
+- **SAN / 用途彩色徽章**：SAN 按类型配色（`DNS` 蓝 / `IP` 紫 / `URI` 青 / `Email` 橙），每条一个徽章；
+  KeyUsage / EKU 用中性浅底徽章逐项列出。
+- 加密的 `.p12` / `.pfx` 未给密码时提示 `Password required`，视图顶部提供密码输入框 +「应用」按钮。
+
+**安全边界（明确写死）：不导入、不导出私钥，不解密任何内容。** `.p12` / `.pfx` 即使输入了密码，
+也只读**证书链与别名**，完全不碰私钥材料；导入用 `X509KeyStorageFlags.EphemeralKeySet`。
+`.crl` 共享框架无解析 API，降级为只读头部信息并注明 `CRL parsing is not supported`，不假装支持。
+
+依赖基本为零：`X509Certificate2` / `X509Certificate2Collection` 是共享框架内置；仅 PKCS#7
+（`.p7b` / `.p7c`）需要 `SignedCms`，位于独立包 **System.Security.Cryptography.Pkcs**（MIT）——
+按仓库流程登记在插件目录的 `third-party.json`，随包分发并合并进
+`ForkPlus.Plugins.Certificate.THIRD-PARTY-NOTICES.txt`（见「第三方许可管理」）。
+
+> 注意：`.pem` 与一般 `.crt` 是 **PEM 文本**（Base64 包裹），而宿主只对**二进制**差异查询插件路由——
+> 文本差异固定由内置文本编辑器渲染。因此扩展名里故意不列它们，避免「声明了却从不生效」的假象。
+
+插件实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「证书对比」（英文原文
+`Certificate Compare`，8 语言译文见 `Localization/CertificateStrings.cs`）、版本 `0.0.1` 与描述。
+
+---
+
 ## Pages 截图约定
 
 插件对比视图的截图由 CI 在真实 ForkPlus 中现场采集（无头 X + 整屏截图），并随 Pages 一起发布上线；
@@ -375,7 +505,8 @@ zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可�
 
 - 文件命名：`pages/assets/<插件>-<场景>.png`（PDF 插件即 `pdf-modify.png` / `pdf-add.png` / `pdf-remove.png`，
   Office 插件即 `office-modify.png` / `office-add.png` / `office-remove.png`，
-  压缩包插件即 `archive-modify.png` / `archive-add.png` / `archive-remove.png`）；
+  压缩包插件即 `archive-modify.png` / `archive-add.png` / `archive-remove.png`，
+  字体插件即 `font-*.png`，可执行文件插件即 `executable-*.png`，证书插件即 `certificate-*.png`）；
 - 截图规格：整屏 `1920×1280`，完整软件界面，不做局部裁切；
 - 缺任一场景视为截图不完整；插件新增变更形态时，同步补对应场景截图与 `plugins.json` 登记。
 - demo 素材由采集脚本现场构造（PDF 用 `write_demo_pdf`，Office 用 `write_demo_office`，
@@ -383,13 +514,22 @@ zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可�
   python-docx / 7z 等外部工具；Office 与压缩包三张截图各用一种格式
   （Office：modify=`.docx`、add=`.xlsx`、remove=`.pptx`，覆盖 Word / Excel / PowerPoint；
   压缩包：modify=`.zip`、add=`.tar.gz`、remove=`.tar.xz`）。
+- **字体 / 可执行文件 / 证书**三类 demo 素材改用系统工具现场构造：字体用系统字体
+  （`write_demo_font`，dejavu / liberation）复制成 `sample.ttf`，可执行文件用 `cc` 编译 ELF 共享库
+  与 `ar` 打包静态库、`write_demo_pe` 造 PE（`write_demo_elf` / `write_demo_pe` / `write_demo_ar`），
+  证书用 `openssl` 造 DER / PKCS#12 / PKCS#7（`write_demo_certificate`）。三张截图各覆盖一种形态：
+  可执行文件 modify=`.so`(ELF) / add=`.dll`(PE) / remove=`.a`(ar)，证书 modify=`.der` / add=`.p12` /
+  remove=`.p7b`；字体三场景用同一对系统字体（旧 DejaVu Sans → 新 DejaVu Serif）。
+  这些依赖见 [pages.yml](.github/workflows/pages.yml) 的 `Install headless toolchain`
+  （`fonts-dejavu` / `fonts-liberation` / `gcc` / `binutils` / `openssl`）。
 
 ---
 
 ## 第三方许可管理
 
 插件分发的第三方组件（如 PDF 插件的 Docnet.Core / PDFium、Office 插件的 Open XML SDK、
-压缩包插件的 SharpCompress）**统一登记、集中存放、按包合并**，单一事实来源是两处：
+压缩包插件的 SharpCompress、证书插件的 System.Security.Cryptography.Pkcs）**统一登记、集中存放、
+按包合并**，单一事实来源是两处：
 
 1. **`licenses/`** —— 各组件许可全文的中央仓库，按组件分目录（`licenses/<组件>/LICENSE.txt`）。
    全文原样落库（含三方文件自身的编码），不依赖构建时从 NuGet 缓存临时抓取。
@@ -474,6 +614,11 @@ workflow：[.github/workflows/build.yml](.github/workflows/build.yml)
       ├── ForkPlus.Plugins.Archive.dll
       ├── SharpCompress.dll                  # 压缩包插件私有依赖
       ├── ForkPlus.Plugins.Archive.THIRD-PARTY-NOTICES.txt # 三方许可声明（SharpCompress）
+      ├── ForkPlus.Plugins.Font.dll          # 字体插件（零私有依赖）
+      ├── ForkPlus.Plugins.Executable.dll    # 可执行文件插件（零私有依赖）
+      ├── ForkPlus.Plugins.Certificate.dll
+      ├── System.Security.Cryptography.Pkcs.dll # 证书插件私有依赖
+      ├── ForkPlus.Plugins.Certificate.THIRD-PARTY-NOTICES.txt # 三方许可声明（Pkcs）
       └── …（其余插件）
   ```
 
