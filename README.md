@@ -26,10 +26,11 @@ ForkPlus-Plugins/
 │   │   ├── install-plugin-artifacts.sh   # 单插件产物安装（主 DLL + 私有依赖 + 原生库，排除宿主共享程序集）
 │   │   ├── collect-third-party-notices.py# 由插件登记表 + licenses/ 全文生成第三方许可声明
 │   │   ├── capture-screenshots.sh        # Pages 截图采集（装插件 → 无头启动 ForkPlus → 截图）
+│   │   ├── release-notes.py              # 由 conventional commit 生成 Release 版本说明
 │   │   └── build-pages.py                # Pages 站点生成
 │   ├── pages/                            # Pages 模板与插件登记表（template-*.html / style.css / plugins.json）
 │   └── workflows/
-│       ├── build.yml                     # GitHub Actions：四平台构建 + 打包 + Release
+│       ├── build.yml                     # GitHub Actions：四平台构建 + 打包 + Release（附版本说明）
 │       └── pages.yml                     # GitHub Actions：截图 + 生成站点 + 发布 Pages
 ├── sdk/
 │   └── ForkPlus.Plugins.Abstractions/    # 插件契约工程（主仓 src/ForkPlus.Plugins.Abstractions 的源码镜像）
@@ -585,6 +586,11 @@ dotnet build ForkPlus.Plugins.slnx -c Release
 workflow：[.github/workflows/build.yml](.github/workflows/build.yml)
 
 - **触发**：push `v*` 标签 → 构建四平台并发布 Release；`workflow_dispatch` 手动 → 只构建并上传 Artifacts。
+- **版本说明**：Release 的正文由 [release-notes.py](.github/scripts/release-notes.py) 依据
+  **conventional commit** 自动生成——取上一个 `v*` 标签到当前标签之间的提交，按 `feat` / `fix` /
+  `docs` / `ci` … 分组为「新增 / 修复 / 文档 / CI…」，去掉冗余前缀并附 Full Changelog 链接。
+  因此**提交信息请遵循 `type(scope): 描述` 规范**，发版时版本说明即自动带上；如需人工润色，
+  可在 Release 页面直接编辑（自动化生成仅保证「不为空」）。
 - **四平台矩阵**（与 ForkPlus 宿主一致）：
 
   | 平台 | Runner | RID |
