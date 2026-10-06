@@ -44,7 +44,9 @@ def render(template, values):
 
 
 def ext_codes(exts):
-    return "".join(f'<code>{e}</code>' for e in exts)
+    # 用空格分隔：连续 <code> 之间没有空白就没有换行点，手机上会连成一条不可断的
+    # 行把卡片顶宽（压缩包插件有 12 个扩展名）。留出空白让它们能正常折行。
+    return " ".join(f'<code>{e}</code>' for e in exts)
 
 
 def plugin_card(plugin):
