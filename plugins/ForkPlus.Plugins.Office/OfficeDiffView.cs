@@ -201,13 +201,16 @@ namespace ForkPlus.Plugins.Office
 				}
 				ReportMissing(generation, context, srcBytes, dstBytes);
 
-				int srcBlocks = srcBytes == null ? 0 : ExtractSide(generation, 0, context.Src.Path, srcBytes, token);
-				int dstBlocks = dstBytes == null ? 0 : ExtractSide(generation, 1, context.Dst.Path, dstBytes, token);
+				// 提取是纯数据操作，放在后台线程；控件构建必须回到 UI 线程（见 PostBlocks）。
+				OfficeDocumentModel srcModel = ExtractSide(generation, 0, context?.Src?.Path, srcBytes);
+				OfficeDocumentModel dstModel = ExtractSide(generation, 1, context?.Dst?.Path, dstBytes);
 				if (token.IsCancellationRequested)
 				{
 					return;
 				}
-				PostStatus(generation, PluginEnvironment.Format("Office compare: {0} / {1} blocks", srcBlocks, dstBlocks));
+				PostBlocks(generation, 0, srcModel);
+				PostBlocks(generation, 1, dstModel);
+				PostStatus(generation, PluginEnvironment.Format("Office compare: {0} / {1} blocks", srcModel?.Blocks.Count ?? 0, dstModel?.Blocks.Count ?? 0));
 			}
 			catch (OperationCanceledException)
 			{
@@ -219,35 +222,23 @@ namespace ForkPlus.Plugins.Office
 			}
 		}
 
-		/// <summary>提取一侧并渲染；解析失败只影响该侧（栏内给出错误文案，不中断另一侧）。</summary>
-		private int ExtractSide(int generation, int column, string path, byte[] bytes, CancellationToken token)
+		/// <summary>提取一侧内容为纯数据模型（可在后台线程执行）；解析失败只影响该侧（栏内给出错误文案，不中断另一侧）。</summary>
+		private OfficeDocumentModel ExtractSide(int generation, int column, string path, byte[] bytes)
 		{
-			OfficeDocumentModel model;
+			if (bytes == null)
+			{
+				return null;
+			}
 			try
 			{
-				model = OfficeContentExtractor.Extract(path, bytes);
+				return OfficeContentExtractor.Extract(path, bytes);
 			}
 			catch (Exception ex)
 			{
 				PluginLog.Warn("Office: failed to parse '" + path + "'", ex);
 				PostMessage(generation, column, PluginEnvironment.Translate("Failed to read Office document") + Environment.NewLine + ex.Message);
-				return 0;
+				return null;
 			}
-			List<Control> controls = new List<Control>();
-			foreach (OfficeBlock block in model.Blocks)
-			{
-				if (token.IsCancellationRequested)
-				{
-					return 0;
-				}
-				Control control = BuildBlock(block);
-				if (control != null)
-				{
-					controls.Add(control);
-				}
-			}
-			PostBlocks(generation, column, controls);
-			return model.Blocks.Count;
 		}
 
 		/// <summary>取一侧字节：宿主 Hex 预载 &gt; 侧内容懒加载 &gt; LFS 缓存 / smudge。</summary>
@@ -437,8 +428,17 @@ namespace ForkPlus.Plugins.Office
 			return PluginEnvironment.Translate("Office content unavailable") + Environment.NewLine + side.Path;
 		}
 
-		private void PostBlocks(int generation, int column, List<Control> controls)
+		/// <summary>
+		/// 把一侧的提取模型挂到栏内。
+		/// 控件必须在 UI 线程构建（后台线程构建的 Avalonia 控件不会渲染出来），因此这里只投递
+		/// 纯数据模型，在 UI 线程里再 <see cref="BuildBlock"/> 成控件后挂载。
+		/// </summary>
+		private void PostBlocks(int generation, int column, OfficeDocumentModel model)
 		{
+			if (model == null)
+			{
+				return;
+			}
 			StackPanel panel = column == 0 ? _srcPanel : _dstPanel;
 			Dispatcher.UIThread.Post(delegate
 			{
@@ -446,9 +446,13 @@ namespace ForkPlus.Plugins.Office
 				{
 					return;
 				}
-				foreach (Control control in controls)
+				foreach (OfficeBlock block in model.Blocks)
 				{
-					panel.Children.Add(control);
+					Control control = BuildBlock(block);
+					if (control != null)
+					{
+						panel.Children.Add(control);
+					}
 				}
 			});
 		}

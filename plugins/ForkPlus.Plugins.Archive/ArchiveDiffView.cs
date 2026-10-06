@@ -369,6 +369,11 @@ namespace ForkPlus.Plugins.Archive
 
 		// ---- 条目树 → 控件 ----
 
+		/// <summary>
+		/// 把一侧的展开结果挂到栏内。
+		/// 控件必须在 UI 线程构建（后台线程构建的 Avalonia 控件不会渲染出来），因此这里只投递
+		/// 纯数据模型，在 UI 线程里再 <see cref="BuildSummary"/> / <see cref="BuildRow"/> 成控件后挂载。
+		/// </summary>
 		private void PostModel(int generation, int column, ArchiveModel model, string password)
 		{
 			if (model.Error != ArchiveError.None)
@@ -376,17 +381,23 @@ namespace ForkPlus.Plugins.Archive
 				PostMessage(generation, column, DescribeError(model, password));
 				return;
 			}
-			List<Control> controls = new List<Control>();
-			controls.Add(BuildSummary(model));
-			foreach (ArchiveEntryNode entry in model.Entries)
+			StackPanel panel = column == 0 ? _srcPanel : _dstPanel;
+			Dispatcher.UIThread.Post(delegate
 			{
-				controls.Add(BuildRow(entry));
-			}
-			if (model.Truncated)
-			{
-				controls.Add(BuildNote(PluginEnvironment.Format("Showing first {0} entries only.", model.Entries.Count)));
-			}
-			PostControls(generation, column, controls);
+				if (_released || generation != _renderGeneration)
+				{
+					return;
+				}
+				panel.Children.Add(BuildSummary(model));
+				foreach (ArchiveEntryNode entry in model.Entries)
+				{
+					panel.Children.Add(BuildRow(entry));
+				}
+				if (model.Truncated)
+				{
+					panel.Children.Add(BuildNote(PluginEnvironment.Format("Showing first {0} entries only.", model.Entries.Count)));
+				}
+			});
 		}
 
 		private static Control BuildSummary(ArchiveModel model)
@@ -543,22 +554,6 @@ namespace ForkPlus.Plugins.Archive
 		private static string DescribeUnavailable(DiffSideContent side)
 		{
 			return PluginEnvironment.Translate("Archive content unavailable") + Environment.NewLine + side.Path;
-		}
-
-		private void PostControls(int generation, int column, List<Control> controls)
-		{
-			StackPanel panel = column == 0 ? _srcPanel : _dstPanel;
-			Dispatcher.UIThread.Post(delegate
-			{
-				if (_released || generation != _renderGeneration)
-				{
-					return;
-				}
-				foreach (Control control in controls)
-				{
-					panel.Children.Add(control);
-				}
-			});
 		}
 
 		private void PostMessage(int generation, int column, string text)

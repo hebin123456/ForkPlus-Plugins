@@ -1,6 +1,6 @@
 # ForkPlus Plugins
 
-[![build](https://github.com/hebin123456/ForkPlus-Plugins/actions/workflows/build.yml/badge.svg)](https://github.com/hebin123456/ForkPlus-Plugins/actions/workflows/build.yml)
+[![build passing](https://github.com/hebin123456/ForkPlus-Plugins/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/hebin123456/ForkPlus-Plugins/actions/workflows/build.yml)
 [![release](https://img.shields.io/github/v/release/hebin123456/ForkPlus-Plugins?label=release&color=blue)](https://github.com/hebin123456/ForkPlus-Plugins/releases)
 
 ForkPlus 对比视图插件仓库。
