@@ -1,0 +1,72 @@
+{
+  "component": "ffmpeg",
+  "version": "9.0.2",
+  "releaseDate": "2026-09-18",
+  "releaseBranch": "release/9.0",
+  "license": "LGPL-2.1-or-later",
+  "licenseFile": "licenses/ffmpeg/LICENSE.txt",
+  "upstream": "https://ffmpeg.org/",
+  "distributedBy": "ForkPlus.Plugins.Audio / ForkPlus.Plugins.Video",
+  "buildConstraint": [
+    "只解码，不编码。",
+    "构建 / 选用时不得带 --enable-gpl，否则整个插件被迫 GPL。",
+    "不启用任何编码器。"
+  ],
+  "runtimeLibraries": [
+    "avformat",
+    "avcodec",
+    "avutil",
+    "swscale",
+    "swresample"
+  ],
+  "bindings": {
+    "package": "FFmpeg.AutoGen",
+    "version": "9.0.2",
+    "note": "NuGet 版本号与 FFmpeg 发行版同步；原生库大版本必须与绑定一致，版本错配是崩溃级问题。"
+  },
+  "artifacts": [
+    {
+      "rid": "win-x64",
+      "source": "BtbN/FFmpeg-Builds",
+      "variant": "lgpl-shared",
+      "file": null,
+      "sha256": null,
+      "status": "pending"
+    },
+    {
+      "rid": "linux-x64",
+      "source": "BtbN/FFmpeg-Builds",
+      "variant": "lgpl-shared",
+      "file": null,
+      "sha256": null,
+      "status": "pending"
+    },
+    {
+      "rid": "linux-arm64",
+      "source": "BtbN/FFmpeg-Builds",
+      "variant": "lgpl-shared",
+      "file": null,
+      "sha256": null,
+      "status": "pending"
+    },
+    {
+      "rid": "osx-arm64",
+      "source": null,
+      "variant": null,
+      "file": null,
+      "sha256": null,
+      "status": "undecided",
+      "note": "无现成 LGPL 共享构建；计划按锁定 configure 自建，或核实第三方 LGPL 构建后登记。"
+    }
+  ],
+  "vendoring": {
+    "layout": "third_party/ffmpeg/<version>/<rid>/",
+    "steps": [
+      "取对应 RID 的 lgpl-shared 资产，解出运行时库到 third_party/ffmpeg/9.0.2/<rid>/",
+      "回填本表 artifacts 的 file 与 sha256",
+      "在 licenses/ffmpeg/LICENSE.txt 放许可全文",
+      "在插件的 third-party.json 登记，并重新生成 THIRD-PARTY-NOTICES.md"
+    ]
+  },
+  "seeAlso": "design/audio-video-plugins.md §12–§14"
+}

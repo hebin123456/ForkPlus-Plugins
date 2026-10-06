@@ -1,0 +1,44 @@
+{
+  "component": "miniaudio",
+  "version": null,
+  "license": "public domain / MIT-0",
+  "licenseFile": "licenses/miniaudio/LICENSE.txt",
+  "upstream": "https://github.com/mackron/miniaudio",
+  "distributedBy": "ForkPlus.Plugins.Audio / ForkPlus.Plugins.Video",
+  "purpose": "跨平台音频输出后端（替代 WASAPI / CoreAudio / ALSA 三套原生代码）。只作输出，解码由 FFmpeg 负责。",
+  "artifacts": [
+    {
+      "rid": "win-x64",
+      "file": null,
+      "sha256": null,
+      "status": "pending"
+    },
+    {
+      "rid": "linux-x64",
+      "file": null,
+      "sha256": null,
+      "status": "pending"
+    },
+    {
+      "rid": "linux-arm64",
+      "file": null,
+      "sha256": null,
+      "status": "pending"
+    },
+    {
+      "rid": "osx-arm64",
+      "file": null,
+      "sha256": null,
+      "status": "pending"
+    }
+  ],
+  "vendoring": {
+    "layout": "third_party/miniaudio/<version>/<rid>/",
+    "steps": [
+      "锁定上游 tag 后确定 version，并回填各 RID 的 file 与 sha256",
+      "在 licenses/miniaudio/LICENSE.txt 放许可全文",
+      "在插件的 third-party.json 登记，并重新生成 THIRD-PARTY-NOTICES.md"
+    ]
+  },
+  "seeAlso": "design/audio-video-plugins.md §8、§12–§13"
+}
