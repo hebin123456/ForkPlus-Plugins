@@ -3,7 +3,7 @@
     {
       "id": "pdf",
       "name": "PDF 对比插件 · PDF Compare",
-      "version": "0.0.1",
+      "version": "0.1.0",
       "assembly": "ForkPlus.Plugins.Pdf",
       "source": "plugins/ForkPlus.Plugins.Pdf",
       "summary": "PDF 文件对比视图：认领 .pdf，命中后把差异区替换为左右两栏，按页号逐页并排渲染旧版本与新版本 PDF，天然纵向同步滚动；新增 / 删除 / 修改三种变更都有对应形态。",
@@ -55,7 +55,7 @@
     {
       "id": "office",
       "name": "Office 对比插件 · Office Compare",
-      "version": "0.0.1",
+      "version": "0.1.0",
       "assembly": "ForkPlus.Plugins.Office",
       "source": "plugins/ForkPlus.Plugins.Office",
       "summary": "Office 套件对比视图：认领 .docx / .xlsx / .pptx，命中后用 Open XML SDK 提取正文内容，把差异区换成左右两栏并排对比——Word 段落 / 标题 / 表格、Excel 工作表网格、PowerPoint 幻灯片文字。呈现上尽量「像文档」而非纯文字：保留 run 级字符格式（加粗 / 斜体 / 下划线 / 删除线），栏顶文档类型徽章，标题做成强调色条卡片，表格首行表头 + 隔行浅底，Excel 网格补列字母与行号；新增 / 删除 / 修改三种变更都有对应形态。",
@@ -111,7 +111,7 @@
     {
       "id": "archive",
       "name": "压缩包对比插件 · Archive Compare",
-      "version": "0.0.1",
+      "version": "0.1.0",
       "assembly": "ForkPlus.Plugins.Archive",
       "source": "plugins/ForkPlus.Plugins.Archive",
       "summary": "压缩包对比视图：认领 zip / 7z / rar / tar 及 gz / bz2 / xz / zst 等主流压缩包，命中后把两侧压缩包各自展开成「条目树」，用成熟 <code>TreeView</code> 控件左右并排对比——目录 / 文件 / 大小 / 是否加密，并给出整包 MD5 与每个文件的内容 MD5，便于核对两侧是否一致；带密码的压缩包（如头部加密的 7z / rar）可在视图里输入密码。",

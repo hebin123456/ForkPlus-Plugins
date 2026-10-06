@@ -6,8 +6,8 @@
     <AssemblyName>ForkPlus.Plugins.Archive</AssemblyName>
     <RootNamespace>ForkPlus.Plugins.Archive</RootNamespace>
 
-    <!-- 插件自身版本（与宿主版本解耦）；偏好设置 → 插件页展示的 Version 与此一致（暂为 0.0.1）。 -->
-    <Version>0.0.1</Version>
+    <!-- 插件自身版本（与宿主版本解耦）；偏好设置 → 插件页展示的 Version 与此一致（0.1.0 起支持多语言）。 -->
+    <Version>0.1.0</Version>
 
     <!-- 本插件带私有依赖（SharpCompress 及其托管传递依赖），需随插件产物拷贝出来。
          类库工程默认不拷 PackageReference 资产，这里显式开启；打包脚本再排除宿主共享程序集。 -->

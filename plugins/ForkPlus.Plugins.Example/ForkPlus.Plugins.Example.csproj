@@ -6,8 +6,8 @@
     <AssemblyName>ForkPlus.Plugins.Example</AssemblyName>
     <RootNamespace>ForkPlus.Plugins.Example</RootNamespace>
 
-    <!-- 插件自身版本（与宿主版本解耦）；偏好设置 → 插件页展示的 Version 与此一致（暂为 0.0.1）。 -->
-    <Version>0.0.1</Version>
+    <!-- 插件自身版本（与宿主版本解耦）；偏好设置 → 插件页展示的 Version 与此一致（0.1.0 起支持多语言）。 -->
+    <Version>0.1.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <!-- 本示例视图用 Avalonia 控件纯代码构建（未使用 .axaml）。

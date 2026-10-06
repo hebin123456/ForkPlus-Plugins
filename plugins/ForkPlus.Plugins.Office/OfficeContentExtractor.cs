@@ -209,7 +209,7 @@ namespace ForkPlus.Plugins.Office
 						List<IReadOnlyList<string>> rows = ReadSheet(data, sharedStrings, out extracted);
 						if (extracted > rows.Count)
 						{
-							caption += "  (" + rows.Count + "/" + extracted + " rows)";
+							caption += "  " + OfficeStrings.F("({0}/{1} rows)", rows.Count, extracted);
 						}
 						blocks.Add(new OfficeHeadingBlock(caption, 1));
 						blocks.Add(new OfficeTableBlock(null, rows));
@@ -329,7 +329,7 @@ namespace ForkPlus.Plugins.Office
 					foreach (P.SlideId slideId in slideIds.Elements<P.SlideId>())
 					{
 						index++;
-						blocks.Add(new OfficeHeadingBlock("Slide " + index, 1));
+						blocks.Add(new OfficeHeadingBlock(OfficeStrings.F("Slide {0}", index), 1));
 						string relationshipId = slideId.RelationshipId?.Value;
 						SlidePart slidePart = relationshipId == null ? null : presentationPart.GetPartById(relationshipId) as SlidePart;
 						P.ShapeTree tree = slidePart?.Slide?.CommonSlideData?.ShapeTree;

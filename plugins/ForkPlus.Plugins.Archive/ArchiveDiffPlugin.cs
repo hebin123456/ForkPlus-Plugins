@@ -22,14 +22,26 @@ namespace ForkPlus.Plugins.Archive
 		/// <summary>显示名的翻译 key（宿主「扩展名绑定」列表用；未接线时按原文显示）。</summary>
 		public string DisplayNameKey => "Archive";
 
-		/// <summary>插件自身的版本号（与宿主版本解耦；当前暂为 0.0.1）。</summary>
-		public string Version => "0.0.1";
+		/// <summary>插件自身的版本号（与宿主版本解耦；0.1.0 起支持多语言）。</summary>
+		public string Version => "0.1.0";
 
-		/// <summary>插件显示名（宿主「偏好设置 → 插件」页展示；当前固定中文）。</summary>
-		public string DisplayName => "压缩包对比";
+		/// <summary>插件显示名（英文原文，同时作为多语言缺省值）。</summary>
+		public string DisplayName => "Archive Compare";
 
-		/// <summary>一句话描述插件能力（宿主「偏好设置 → 插件」页展示；当前固定中文）。</summary>
-		public string Description => "压缩包对比视图插件：认领 zip / 7z / rar / tar 及 gz / bz2 / xz / zst 等主流压缩包，把压缩包展开成条目树左右并排对比（目录 / 文件 / 大小 / 是否加密），不做解压后内容对比；带密码的压缩包可输入密码。";
+		/// <summary>一句话描述插件能力（英文原文，同时作为多语言缺省值）。</summary>
+		public string Description => "Archive compare view plugin: claims mainstream archives (zip / 7z / rar / tar plus gz / bz2 / xz / zst streams) and expands both sides into an entry tree for side-by-side comparison of folders, files, sizes and encryption, without comparing extracted contents; password-protected archives can be unlocked in the view.";
+
+		/// <summary>v5.0.3：按界面语言取显示名（未覆盖的语言回退英文原文）。</summary>
+		public string GetDisplayName(string language)
+		{
+			return PluginLocalization.Resolve(language, ArchiveStrings.DisplayNames, DisplayName);
+		}
+
+		/// <summary>v5.0.3：按界面语言取描述（未覆盖的语言回退英文原文）。</summary>
+		public string GetDescription(string language)
+		{
+			return PluginLocalization.Resolve(language, ArchiveStrings.Descriptions, Description);
+		}
 
 		/// <summary>高于内置通配兜底（Hex，0）；与示例 / PDF / Office 插件同档。</summary>
 		public int Priority => 100;

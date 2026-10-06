@@ -18,14 +18,26 @@ namespace ForkPlus.Plugins.Example
 		/// <summary>显示名的翻译 key（宿主「扩展名绑定」列表用；本示例直接用英文原文）。</summary>
 		public string DisplayNameKey => "Example";
 
-		/// <summary>插件自身的版本号（与宿主版本解耦；示例插件暂为 0.0.1）。</summary>
-		public string Version => "0.0.1";
+		/// <summary>插件自身的版本号（与宿主版本解耦；0.1.0 起支持多语言）。</summary>
+		public string Version => "0.1.0";
 
-		/// <summary>插件显示名（宿主「偏好设置 → 插件」页展示；当前固定中文）。</summary>
-		public string DisplayName => "示例对比";
+		/// <summary>插件显示名（英文原文，同时作为多语言缺省值）。</summary>
+		public string DisplayName => "Example Compare";
 
-		/// <summary>一句话描述插件能力（宿主「偏好设置 → 插件」页展示；当前固定中文）。</summary>
-		public string Description => "示例插件：认领 .example / .exampletxt，命中后渲染只读的「左旧 / 右新」信息面板，演示 IDiffViewPlugin / IDiffView 的最小实现。";
+		/// <summary>一句话描述插件能力（英文原文，同时作为多语言缺省值）。</summary>
+		public string Description => "Example plugin: claims .example / .exampletxt and renders a read-only old/new information panel — the minimal reference implementation of IDiffViewPlugin / IDiffView.";
+
+		/// <summary>v5.0.3：按界面语言取显示名（未覆盖的语言回退英文原文）。</summary>
+		public string GetDisplayName(string language)
+		{
+			return PluginLocalization.Resolve(language, ExampleStrings.DisplayNames, DisplayName);
+		}
+
+		/// <summary>v5.0.3：按界面语言取描述（未覆盖的语言回退英文原文）。</summary>
+		public string GetDescription(string language)
+		{
+			return PluginLocalization.Resolve(language, ExampleStrings.Descriptions, Description);
+		}
 
 		/// <summary>同扩展名竞争时的优先级，大者优先；通配兜底插件取最低（内置 Hex 为 0）。</summary>
 		public int Priority => 100;

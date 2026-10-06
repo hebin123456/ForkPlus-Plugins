@@ -160,19 +160,31 @@ namespace ForkPlus.Plugins.Office
 
 		public void SetContent(DiffViewContext context, IDiffViewHost host)
 		{
-			CancelRender();
 			_context = context;
 			_host = host;
-			_srcPanel.Children.Clear();
-			_dstPanel.Children.Clear();
 			_srcAccent = context?.SrcTitleBrush ?? AccentFallback;
 			_dstAccent = context?.DstTitleBrush ?? AccentFallback;
 			_srcTitle.Foreground = context?.SrcTitleBrush;
 			_dstTitle.Foreground = context?.DstTitleBrush;
-			UpdateTitles();
-			_status.Text = PluginEnvironment.Translate("Extracting Office content…");
-
 			PluginLog.Info($"OfficeDiffView.SetContent src='{context?.Src?.Path ?? "<none>"}' dst='{context?.Dst?.Path ?? "<none>"}'");
+			StartRender();
+		}
+
+		/// <summary>
+		/// 启动一轮渲染：取消上一轮、清空两栏、按当前语言重排标题与状态行，再投递后台提取。
+		/// <see cref="SetContent"/> 与语言热切换（<see cref="ApplyLocalization"/>）复用本入口，
+		/// 沿用「代次 + CancellationToken」机制，避免把上一轮内容画到本轮。
+		/// </summary>
+		private void StartRender()
+		{
+			CancelRender();
+			_srcPanel.Children.Clear();
+			_dstPanel.Children.Clear();
+			UpdateTitles();
+			_status.Text = OfficeStrings.T("Extracting Office content…");
+
+			DiffViewContext context = _context;
+			IDiffViewHost host = _host;
 			CancellationTokenSource cts = new CancellationTokenSource();
 			_cts = cts;
 			int generation = _renderGeneration;
@@ -191,10 +203,18 @@ namespace ForkPlus.Plugins.Office
 		{
 		}
 
+		/// <summary>
+		/// 应用当前语言（宿主在语言切换时广播）：宿主 key 重刷 + 插件自带文案重算。
+		/// 复用缓存的 context / 宿主重跑同一渲染入口，使内容区的类型徽章、Slide N 小标题、
+		/// (N/M rows) 注记、not present / Office content unavailable 占位即时更新。
+		/// </summary>
 		public void ApplyLocalization()
 		{
-			UpdateTitles();
 			PluginEnvironment.ApplyLocalization(_root);
+			if (_context != null)
+			{
+				StartRender();
+			}
 		}
 
 		public void Release()
@@ -233,7 +253,7 @@ namespace ForkPlus.Plugins.Office
 				}
 				PostBlocks(generation, 0, srcModel, _srcAccent);
 				PostBlocks(generation, 1, dstModel, _dstAccent);
-				PostStatus(generation, PluginEnvironment.Format("Office compare: {0} / {1} blocks", srcModel?.Blocks.Count ?? 0, dstModel?.Blocks.Count ?? 0));
+				PostStatus(generation, OfficeStrings.F("Office compare: {0} / {1} blocks", srcModel?.Blocks.Count ?? 0, dstModel?.Blocks.Count ?? 0));
 			}
 			catch (OperationCanceledException)
 			{
@@ -241,7 +261,7 @@ namespace ForkPlus.Plugins.Office
 			catch (Exception ex)
 			{
 				PluginLog.Error("OfficeDiffView extract failed", ex);
-				PostStatus(generation, PluginEnvironment.Translate("Failed to read Office document") + ": " + ex.Message);
+				PostStatus(generation, OfficeStrings.T("Failed to read Office document") + ": " + ex.Message);
 			}
 		}
 
@@ -259,7 +279,7 @@ namespace ForkPlus.Plugins.Office
 			catch (Exception ex)
 			{
 				PluginLog.Warn("Office: failed to parse '" + path + "'", ex);
-				PostMessage(generation, column, PluginEnvironment.Translate("Failed to read Office document") + Environment.NewLine + ex.Message);
+				PostMessage(generation, column, OfficeStrings.T("Failed to read Office document") + Environment.NewLine + ex.Message);
 				return null;
 			}
 		}
@@ -568,7 +588,7 @@ namespace ForkPlus.Plugins.Office
 			});
 			badge.Children.Add(new TextBlock
 			{
-				Text = PluginEnvironment.Format("{0} blocks · {1} chars", model.Blocks.Count, model.TextLength),
+				Text = OfficeStrings.F("{0} blocks · {1} chars", model.Blocks.Count, model.TextLength),
 				FontSize = 11.5,
 				Opacity = 0.6,
 				VerticalAlignment = VerticalAlignment.Center,
@@ -585,7 +605,7 @@ namespace ForkPlus.Plugins.Office
 			}
 			if (context.Src == null)
 			{
-				PostMessage(generation, 0, PluginEnvironment.Translate("not present"));
+				PostMessage(generation, 0, OfficeStrings.T("not present"));
 			}
 			else if (srcBytes == null)
 			{
@@ -593,7 +613,7 @@ namespace ForkPlus.Plugins.Office
 			}
 			if (context.Dst == null)
 			{
-				PostMessage(generation, 1, PluginEnvironment.Translate("not present"));
+				PostMessage(generation, 1, OfficeStrings.T("not present"));
 			}
 			else if (dstBytes == null)
 			{
@@ -603,7 +623,7 @@ namespace ForkPlus.Plugins.Office
 
 		private static string DescribeUnavailable(DiffSideContent side)
 		{
-			return PluginEnvironment.Translate("Office content unavailable") + Environment.NewLine + side.Path;
+			return OfficeStrings.T("Office content unavailable") + Environment.NewLine + side.Path;
 		}
 
 		/// <summary>
@@ -703,7 +723,7 @@ namespace ForkPlus.Plugins.Office
 			if (side == null)
 			{
 				// 该侧在本次对比里不存在（新增 / 删除），标题也点明，避免空栏看起来像解析失败。
-				return text + "  ·  " + PluginEnvironment.Translate("not present");
+				return text + "  ·  " + OfficeStrings.T("not present");
 			}
 			if (!string.IsNullOrEmpty(side.Path))
 			{

@@ -18,8 +18,12 @@ namespace ForkPlus.Plugins.Example
 	public sealed class ExampleDiffView : IDiffView
 	{
 		private readonly Grid _root;
+		private readonly TextBlock _header;
 		private readonly TextBlock _srcText;
 		private readonly TextBlock _dstText;
+
+		/// <summary>最近一次下发的内容（语言热切换时按它重算文案）。</summary>
+		private DiffViewContext _context;
 
 		public ExampleDiffView()
 		{
@@ -31,16 +35,16 @@ namespace ForkPlus.Plugins.Example
 				RowDefinitions = new RowDefinitions("Auto,*"),
 			};
 
-			// 顶部提示行（经宿主能力桥取当前语言译文；宿主未接线时原样返回 key）
-			TextBlock header = new TextBlock
+			// 顶部提示行（文案走插件自带译文表，随宿主界面语言切换）
+			_header = new TextBlock
 			{
 				Margin = new Thickness(12.0, 8.0),
 				FontWeight = FontWeight.SemiBold,
-				Text = PluginEnvironment.Translate("Example Plugin"),
+				Text = ExampleStrings.T("Example Plugin"),
 			};
-			Grid.SetRow(header, 0);
-			Grid.SetColumnSpan(header, 2);
-			_root.Children.Add(header);
+			Grid.SetRow(_header, 0);
+			Grid.SetColumnSpan(_header, 2);
+			_root.Children.Add(_header);
 
 			Border srcPanel = NewSidePanel(_srcText);
 			Grid.SetRow(srcPanel, 1);
@@ -74,8 +78,8 @@ namespace ForkPlus.Plugins.Example
 		/// <summary>下发内容：两侧数据 + 宿主能力桥。每次刷新对比都会调用（实例会被复用）。</summary>
 		public void SetContent(DiffViewContext context, IDiffViewHost host)
 		{
-			_srcText.Text = Describe(context?.Src, "old");
-			_dstText.Text = Describe(context?.Dst, "new");
+			_context = context;
+			UpdateText();
 			// 日志汇入宿主 NLog 输出（契约不引用宿主类型，只用 PluginLog 门面）。
 			PluginLog.Info($"ExampleDiffView.SetContent src='{context?.Src?.Path ?? "<none>"}' dst='{context?.Dst?.Path ?? "<none>"}'");
 		}
@@ -95,31 +99,44 @@ namespace ForkPlus.Plugins.Example
 		{
 		}
 
-		/// <summary>应用当前语言（宿主在语言切换时广播）。</summary>
+		/// <summary>应用当前语言（宿主在语言切换时广播）：宿主 key 重刷 + 插件自带文案重算。</summary>
 		public void ApplyLocalization()
 		{
 			PluginEnvironment.ApplyLocalization(_root);
+			UpdateText();
 		}
 
 		/// <summary>释放：停后台任务、退订事件、释放位图；之后实例不再复用。</summary>
 		public void Release()
 		{
+			_context = null;
+			_header.Text = string.Empty;
 			_srcText.Text = string.Empty;
 			_dstText.Text = string.Empty;
 		}
 
 		// ---- 内容装配 ----
 
+		/// <summary>按当前语言重算全部插件自带文案（构造后、SetContent、语言切换都会走）。</summary>
+		private void UpdateText()
+		{
+			_header.Text = ExampleStrings.T("Example Plugin");
+			_srcText.Text = Describe(_context?.Src, "old");
+			_dstText.Text = Describe(_context?.Dst, "new");
+		}
+
 		private static string Describe(DiffSideContent side, string role)
 		{
+			// 角色名（old / new / created / removed）是宿主已有 8 语言译文的通用词，继续走宿主翻译。
+			string roleText = PluginEnvironment.Translate(role);
 			if (side == null)
 			{
 				// 一侧不存在：新增文件（只有右侧）/ 删除文件（只有左侧）
-				return role + Environment.NewLine + Environment.NewLine + PluginEnvironment.Translate("(not present)");
+				return roleText + Environment.NewLine + Environment.NewLine + ExampleStrings.T("(not present)");
 			}
 			List<string> lines = new List<string>
 			{
-				role,
+				roleText,
 				string.Empty,
 				side.Path ?? string.Empty,
 			};
@@ -131,11 +148,11 @@ namespace ForkPlus.Plugins.Example
 			MemoryStream data = side.Data;
 			if (data != null)
 			{
-				lines.Add("Loaded bytes: " + data.Length);
+				lines.Add(ExampleStrings.F("Loaded bytes: {0}", data.Length));
 			}
 			if (side.Lfs != null)
 			{
-				lines.Add("LFS: " + side.Lfs.Sha256);
+				lines.Add(ExampleStrings.F("LFS: {0}", side.Lfs.Sha256));
 			}
 			return string.Join(Environment.NewLine, lines);
 		}

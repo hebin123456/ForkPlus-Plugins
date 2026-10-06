@@ -47,7 +47,11 @@ namespace ForkPlus.Plugins.Archive
 
 		private readonly TextBlock _status;
 
+		private readonly TextBlock _passwordLabel;
+
 		private readonly TextBox _passwordBox;
+
+		private readonly Button _applyButton;
 
 		private readonly TextBlock _passwordHint;
 
@@ -93,14 +97,15 @@ namespace ForkPlus.Plugins.Archive
 				Width = 200.0,
 				PasswordChar = '●',
 				VerticalAlignment = VerticalAlignment.Center,
-				PlaceholderText = PluginEnvironment.Translate("archive password (optional)"),
+				PlaceholderText = ArchiveStrings.T("archive password (optional)"),
 			};
-			Button apply = new Button
+			// 「应用」是宿主已有 8 语言译文的通用词，继续走宿主翻译。
+			_applyButton = new Button
 			{
 				Content = PluginEnvironment.Translate("Apply"),
 				VerticalAlignment = VerticalAlignment.Center,
 			};
-			apply.Click += OnApplyPassword;
+			_applyButton.Click += OnApplyPassword;
 			_passwordHint = new TextBlock
 			{
 				FontSize = 12.0,
@@ -114,15 +119,17 @@ namespace ForkPlus.Plugins.Archive
 				Spacing = 8.0,
 				Margin = new Thickness(12.0, 0.0, 12.0, 6.0),
 			};
-			passwordRow.Children.Add(new TextBlock
+			// 「Password」同样为宿主通用词。
+			_passwordLabel = new TextBlock
 			{
 				Text = PluginEnvironment.Translate("Password"),
 				FontSize = 12.0,
 				Opacity = 0.75,
 				VerticalAlignment = VerticalAlignment.Center,
-			});
+			};
+			passwordRow.Children.Add(_passwordLabel);
 			passwordRow.Children.Add(_passwordBox);
-			passwordRow.Children.Add(apply);
+			passwordRow.Children.Add(_applyButton);
 			passwordRow.Children.Add(_passwordHint);
 
 			_srcPane = new ContentControl
@@ -217,10 +224,17 @@ namespace ForkPlus.Plugins.Archive
 		{
 		}
 
+		/// <summary>
+		/// 应用当前语言（宿主在语言切换时广播）：宿主 key 重刷 + 插件自带静态文案重算 +
+		/// 内容区按缓存的 context / 宿主 / 密码重跑渲染。
+		/// </summary>
 		public void ApplyLocalization()
 		{
-			UpdateTitles();
 			PluginEnvironment.ApplyLocalization(_root);
+			UpdateStaticTexts();
+			// 复用同一渲染入口（沿用代次 + CancellationToken 取消上一轮），
+			// 使摘要、加密标注、截断说明、占位提示等内容区文案即时切换语言。
+			StartRender();
 		}
 
 		public void Release()
@@ -246,6 +260,14 @@ namespace ForkPlus.Plugins.Archive
 
 		// ---- 展开管线 ----
 
+		/// <summary>按当前语言重算密码行等静态文案（构造后、语言切换都会走）。</summary>
+		private void UpdateStaticTexts()
+		{
+			_passwordBox.PlaceholderText = ArchiveStrings.T("archive password (optional)");
+			_passwordLabel.Text = PluginEnvironment.Translate("Password");
+			_applyButton.Content = PluginEnvironment.Translate("Apply");
+		}
+
 		private void StartRender()
 		{
 			CancelRender();
@@ -256,7 +278,7 @@ namespace ForkPlus.Plugins.Archive
 			{
 				return;
 			}
-			_status.Text = PluginEnvironment.Translate("Reading archive…");
+			_status.Text = ArchiveStrings.T("Reading archive…");
 			CancellationTokenSource cts = new CancellationTokenSource();
 			_cts = cts;
 			int generation = _renderGeneration;
@@ -296,7 +318,7 @@ namespace ForkPlus.Plugins.Archive
 
 				int srcCount = srcModel?.EntryCount ?? 0;
 				int dstCount = dstModel?.EntryCount ?? 0;
-				PostStatus(generation, PluginEnvironment.Format("Archive compare: {0} / {1} entries", srcCount, dstCount));
+				PostStatus(generation, ArchiveStrings.F("Archive compare: {0} / {1} entries", srcCount, dstCount));
 				PostPasswordHint(generation, DescribePasswordHint(srcModel, dstModel, password));
 			}
 			catch (OperationCanceledException)
@@ -305,7 +327,7 @@ namespace ForkPlus.Plugins.Archive
 			catch (Exception ex)
 			{
 				PluginLog.Error("ArchiveDiffView read failed", ex);
-				PostStatus(generation, PluginEnvironment.Translate("Failed to read archive") + ": " + ex.Message);
+				PostStatus(generation, ArchiveStrings.T("Failed to read archive") + ": " + ex.Message);
 			}
 		}
 
@@ -435,14 +457,14 @@ namespace ForkPlus.Plugins.Archive
 				Margin = new Thickness(0.0, 0.0, 0.0, 5.0),
 			};
 			chips.Children.Add(Chip(Label(model.Format, 11.5, FontWeight.SemiBold, 1.0), ChipTint));
-			chips.Children.Add(Chip(Label(PluginEnvironment.Format("{0} files, {1} folders", model.FileCount, model.DirectoryCount), 11.5, FontWeight.Normal, 0.75), Subtle));
+			chips.Children.Add(Chip(Label(ArchiveStrings.F("{0} files, {1} folders", model.FileCount, model.DirectoryCount), 11.5, FontWeight.Normal, 0.75), Subtle));
 			if (model.TotalFileSize > 0L)
 			{
 				chips.Children.Add(Chip(Label(PluginSizeFormat.ReadableFileSize(model.TotalFileSize, false), 11.5, FontWeight.Normal, 0.75), Subtle));
 			}
 			if (model.HasEncrypted)
 			{
-				chips.Children.Add(Chip(Label(PluginEnvironment.Translate("encrypted"), 11.5, FontWeight.Normal, 0.85), Subtle));
+				chips.Children.Add(Chip(Label(ArchiveStrings.T("encrypted"), 11.5, FontWeight.Normal, 0.85), Subtle));
 			}
 			panel.Children.Add(chips);
 
@@ -467,11 +489,11 @@ namespace ForkPlus.Plugins.Archive
 
 			if (model.Truncated)
 			{
-				panel.Children.Add(Note(PluginEnvironment.Format("Showing first {0} entries only.", model.Entries.Count)));
+				panel.Children.Add(Note(ArchiveStrings.F("Showing first {0} entries only.", model.Entries.Count)));
 			}
 			if (model.HashTruncated)
 			{
-				panel.Children.Add(Note(PluginEnvironment.Format("Entry MD5 computed for {0} / {1} files.", model.HashedEntryCount, model.FileCount)));
+				panel.Children.Add(Note(ArchiveStrings.F("Entry MD5 computed for {0} / {1} files.", model.HashedEntryCount, model.FileCount)));
 			}
 			return panel;
 		}
@@ -483,7 +505,7 @@ namespace ForkPlus.Plugins.Archive
 			{
 				return new TextBlock
 				{
-					Text = PluginEnvironment.Translate("empty archive"),
+					Text = ArchiveStrings.T("empty archive"),
 					FontSize = 12.0,
 					Opacity = 0.7,
 					Margin = new Thickness(0.0, 4.0, 0.0, 0.0),
@@ -553,7 +575,7 @@ namespace ForkPlus.Plugins.Archive
 			}
 			if (entry.IsEncrypted)
 			{
-				Border locked = Chip(Label("[" + PluginEnvironment.Translate("encrypted") + "]", 10.5, FontWeight.Normal, 0.8), Subtle);
+				Border locked = Chip(Label("[" + ArchiveStrings.T("encrypted") + "]", 10.5, FontWeight.Normal, 0.8), Subtle);
 				locked.Margin = new Thickness(10.0, 0.0, 0.0, 0.0);
 				locked.HorizontalAlignment = HorizontalAlignment.Right;
 				Grid.SetColumn(locked, 1);
@@ -626,16 +648,16 @@ namespace ForkPlus.Plugins.Archive
 			switch (model.Error)
 			{
 				case ArchiveError.PasswordRequired:
-					return PluginEnvironment.Translate("Password required") + Environment.NewLine
-						+ PluginEnvironment.Translate("Enter the archive password and press Apply.");
+					return ArchiveStrings.T("Password required") + Environment.NewLine
+						+ ArchiveStrings.T("Enter the archive password and press Apply.");
 				case ArchiveError.PasswordIncorrect:
-					return PluginEnvironment.Translate("Password incorrect") + Environment.NewLine
-						+ PluginEnvironment.Translate("Enter the archive password and press Apply.");
+					return ArchiveStrings.T("Password incorrect") + Environment.NewLine
+						+ ArchiveStrings.T("Enter the archive password and press Apply.");
 				case ArchiveError.Unsupported:
-					return PluginEnvironment.Translate("Unsupported archive format")
+					return ArchiveStrings.T("Unsupported archive format")
 						+ (string.IsNullOrEmpty(model.ErrorDetail) ? string.Empty : Environment.NewLine + model.ErrorDetail);
 				default:
-					return PluginEnvironment.Translate("Failed to read archive")
+					return ArchiveStrings.T("Failed to read archive")
 						+ (string.IsNullOrEmpty(model.ErrorDetail) ? string.Empty : Environment.NewLine + model.ErrorDetail);
 			}
 		}
@@ -646,9 +668,9 @@ namespace ForkPlus.Plugins.Archive
 			switch (error)
 			{
 				case ArchiveError.PasswordRequired:
-					return PluginEnvironment.Translate("This archive is encrypted. Enter the password and press Apply.");
+					return ArchiveStrings.T("This archive is encrypted. Enter the password and press Apply.");
 				case ArchiveError.PasswordIncorrect:
-					return PluginEnvironment.Translate("Incorrect password. Try again.");
+					return ArchiveStrings.T("Incorrect password. Try again.");
 				default:
 					return string.Empty;
 			}
@@ -676,7 +698,7 @@ namespace ForkPlus.Plugins.Archive
 			}
 			if (context.Src == null)
 			{
-				PostMessage(generation, 0, PluginEnvironment.Translate("not present"));
+				PostMessage(generation, 0, ArchiveStrings.T("not present"));
 			}
 			else if (srcBytes == null)
 			{
@@ -684,7 +706,7 @@ namespace ForkPlus.Plugins.Archive
 			}
 			if (context.Dst == null)
 			{
-				PostMessage(generation, 1, PluginEnvironment.Translate("not present"));
+				PostMessage(generation, 1, ArchiveStrings.T("not present"));
 			}
 			else if (dstBytes == null)
 			{
@@ -694,7 +716,7 @@ namespace ForkPlus.Plugins.Archive
 
 		private static string DescribeUnavailable(DiffSideContent side)
 		{
-			return PluginEnvironment.Translate("Archive content unavailable") + Environment.NewLine + side.Path;
+			return ArchiveStrings.T("Archive content unavailable") + Environment.NewLine + side.Path;
 		}
 
 		private void PostMessage(int generation, int column, string text)
@@ -775,7 +797,7 @@ namespace ForkPlus.Plugins.Archive
 			if (side == null)
 			{
 				// 该侧在本次对比里不存在（新增 / 删除），标题也点明，避免空栏看起来像解析失败。
-				return text + "  ·  " + PluginEnvironment.Translate("not present");
+				return text + "  ·  " + ArchiveStrings.T("not present");
 			}
 			if (!string.IsNullOrEmpty(side.Path))
 			{

@@ -19,14 +19,26 @@ namespace ForkPlus.Plugins.Pdf
 		/// <summary>显示名的翻译 key（宿主「扩展名绑定」列表用；未接线时按原文显示）。</summary>
 		public string DisplayNameKey => "PDF";
 
-		/// <summary>插件自身的版本号（与宿主版本解耦；当前暂为 0.0.1）。</summary>
-		public string Version => "0.0.1";
+		/// <summary>插件自身的版本号（与宿主版本解耦；0.1.0 起支持多语言）。</summary>
+		public string Version => "0.1.0";
 
-		/// <summary>插件显示名（宿主「偏好设置 → 插件」页展示；当前固定中文）。</summary>
-		public string DisplayName => "PDF 对比";
+		/// <summary>插件显示名（英文原文，同时作为多语言缺省值）。</summary>
+		public string DisplayName => "PDF Compare";
 
-		/// <summary>一句话描述插件能力（宿主「偏好设置 → 插件」页展示；当前固定中文）。</summary>
-		public string Description => "PDF 对比视图插件：认领 .pdf，把旧 / 新两个 PDF 逐页渲染为左右两栏并排对比（基于 Docnet.Core / PDFium）。";
+		/// <summary>一句话描述插件能力（英文原文，同时作为多语言缺省值）。</summary>
+		public string Description => "PDF compare view plugin: claims .pdf and renders the old/new PDFs side by side, page by page (powered by Docnet.Core / PDFium).";
+
+		/// <summary>v5.0.3：按界面语言取显示名（未覆盖的语言回退英文原文）。</summary>
+		public string GetDisplayName(string language)
+		{
+			return PluginLocalization.Resolve(language, PdfStrings.DisplayNames, DisplayName);
+		}
+
+		/// <summary>v5.0.3：按界面语言取描述（未覆盖的语言回退英文原文）。</summary>
+		public string GetDescription(string language)
+		{
+			return PluginLocalization.Resolve(language, PdfStrings.Descriptions, Description);
+		}
 
 		/// <summary>高于内置通配兜底（Hex，0）；与示例插件同档。</summary>
 		public int Priority => 100;

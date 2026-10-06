@@ -127,7 +127,7 @@ namespace ForkPlus.Plugins.Pdf
 			_srcTitle.Foreground = context?.SrcTitleBrush;
 			_dstTitle.Foreground = context?.DstTitleBrush;
 			UpdateTitles();
-			_status.Text = PluginEnvironment.Translate("Rendering PDF…");
+			_status.Text = PdfStrings.T("Rendering PDF…");
 
 			PdfNativeLibrary.EnsureRegistered();
 			PluginLog.Info($"PdfDiffView.SetContent src='{context?.Src?.Path ?? "<none>"}' dst='{context?.Dst?.Path ?? "<none>"}'");
@@ -149,10 +149,19 @@ namespace ForkPlus.Plugins.Pdf
 		{
 		}
 
+		/// <summary>应用当前语言（宿主在语言切换时广播）：宿主 key 重刷 + 插件自带文案重算 + 内容按缓存 context 重渲染。</summary>
 		public void ApplyLocalization()
 		{
-			UpdateTitles();
 			PluginEnvironment.ApplyLocalization(_root);
+			UpdateTitles();
+			if (_released || _context == null)
+			{
+				return;
+			}
+			// 内容区的「Page N」小标题、缺失 / 不可用占位都取自插件译文表，仅重刷静态文案不够，
+			// 需按缓存的 context / host 复用 SetContent 渲染入口重跑整页；SetContent 内部沿用原有的
+			// 「代次 + CancellationToken」取消机制，先取消上一轮再开新代次，避免把旧语言内容画到本轮。
+			SetContent(_context, _host);
 		}
 
 		public void Release()
@@ -191,7 +200,7 @@ namespace ForkPlus.Plugins.Pdf
 					int total = Math.Max(srcCount, dstCount);
 					if (total == 0)
 					{
-						PostStatus(generation, PluginEnvironment.Translate("No pages to display"));
+						PostStatus(generation, PdfStrings.T("No pages to display"));
 						return;
 					}
 					for (int index = 0; index < total; index++)
@@ -205,9 +214,9 @@ namespace ForkPlus.Plugins.Pdf
 						{
 							RenderPage(dstDoc, index, 1, token, generation);
 						}
-						PostStatus(generation, PluginEnvironment.Format("Rendered {0}/{1} pages", index + 1, total));
+						PostStatus(generation, PdfStrings.F("Rendered {0}/{1} pages", index + 1, total));
 					}
-					PostStatus(generation, PluginEnvironment.Format("PDF compare: {0} / {1} pages", srcCount, dstCount));
+					PostStatus(generation, PdfStrings.F("PDF compare: {0} / {1} pages", srcCount, dstCount));
 				}
 				finally
 				{
@@ -221,7 +230,7 @@ namespace ForkPlus.Plugins.Pdf
 			catch (Exception ex)
 			{
 				PluginLog.Error("PdfDiffView render failed", ex);
-				PostStatus(generation, PluginEnvironment.Translate("Failed to render PDF") + ": " + ex.Message);
+				PostStatus(generation, PdfStrings.T("Failed to render PDF") + ": " + ex.Message);
 			}
 		}
 
@@ -309,7 +318,7 @@ namespace ForkPlus.Plugins.Pdf
 			catch (Exception ex)
 			{
 				PluginLog.Warn("Pdf: failed to open PDF document", ex);
-				PostStatus(generation, PluginEnvironment.Translate("Failed to render PDF") + ": " + ex.Message);
+				PostStatus(generation, PdfStrings.T("Failed to render PDF") + ": " + ex.Message);
 				return null;
 			}
 		}
@@ -360,7 +369,7 @@ namespace ForkPlus.Plugins.Pdf
 				StackPanel stack = new StackPanel();
 				stack.Children.Add(new TextBlock
 				{
-					Text = PluginEnvironment.Format("Page {0}", pageIndex + 1),
+					Text = PdfStrings.F("Page {0}", pageIndex + 1),
 					FontSize = 11.0,
 					Opacity = 0.7,
 					Margin = new Thickness(8.0, 4.0, 8.0, 2.0),
@@ -417,7 +426,7 @@ namespace ForkPlus.Plugins.Pdf
 			// 该侧在本次对比里根本不存在：新增时左（旧）侧缺失，删除时右（新）侧缺失。
 			if (context.Src == null)
 			{
-				PostMessage(generation, 0, PluginEnvironment.Translate("not present"));
+				PostMessage(generation, 0, PdfStrings.T("not present"));
 			}
 			else if (srcBytes == null)
 			{
@@ -425,7 +434,7 @@ namespace ForkPlus.Plugins.Pdf
 			}
 			if (context.Dst == null)
 			{
-				PostMessage(generation, 1, PluginEnvironment.Translate("not present"));
+				PostMessage(generation, 1, PdfStrings.T("not present"));
 			}
 			else if (dstBytes == null)
 			{
@@ -435,7 +444,7 @@ namespace ForkPlus.Plugins.Pdf
 
 		private static string DescribeUnavailable(DiffSideContent side)
 		{
-			return PluginEnvironment.Translate("PDF content unavailable") + Environment.NewLine + side.Path;
+			return PdfStrings.T("PDF content unavailable") + Environment.NewLine + side.Path;
 		}
 
 		private void PostMessage(int generation, int column, string text)
@@ -519,7 +528,7 @@ namespace ForkPlus.Plugins.Pdf
 			if (side == null)
 			{
 				// 该侧在本次对比里不存在（新增 / 删除），标题也点明，避免空栏看起来像渲染失败。
-				return text + "  ·  " + PluginEnvironment.Translate("not present");
+				return text + "  ·  " + PdfStrings.T("not present");
 			}
 			if (!string.IsNullOrEmpty(side.Path))
 			{

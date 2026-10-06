@@ -34,7 +34,8 @@ ForkPlus-Plugins/
 ├── sdk/
 │   └── ForkPlus.Plugins.Abstractions/    # 插件契约工程（主仓 src/ForkPlus.Plugins.Abstractions 的源码镜像）
 │       ├── IDiffViewPlugin.cs            # IDiffViewPlugin / DiffViewRequest
-│       ├── IPluginMetadata.cs            # IPluginMetadata 插件元数据（名称 / 版本 / 描述，可选实现）
+│       ├── IPluginMetadata.cs            # IPluginMetadata 插件元数据（名称 / 版本 / 描述，可选实现；v5.0.3 支持多语言）
+│       ├── PluginLocalization.cs         # v5.0.3 多语言查表助手（插件自带译文的语言回退）
 │       ├── IDiffView.cs                  # IDiffView / DiffViewMode / DiffViewContext
 │       ├── IDiffViewHost.cs              # 宿主能力桥 IDiffViewHost / LfsSmudgeResult
 │       ├── DiffSideContent.cs            # 单侧内容模型（路径 / 大小 / 懒加载字节 / LFS）
@@ -49,11 +50,15 @@ ForkPlus-Plugins/
 │   ├── ForkPlus.Plugins.Example/         # 示例插件（新插件复制本目录即可）
 │   │   ├── ExampleDiffPlugin.cs
 │   │   ├── ExampleDiffView.cs
+│   │   ├── Localization/
+│   │   │   └── ExampleStrings.cs         # 插件自带译文（8 语言；元数据 + 界面文案）
 │   │   └── ForkPlus.Plugins.Example.csproj
 │   ├── ForkPlus.Plugins.Pdf/             # PDF 对比插件（左右两栏逐页并排渲染旧 / 新 PDF）
 │   │   ├── PdfDiffPlugin.cs
 │   │   ├── PdfDiffView.cs
 │   │   ├── PdfNativeLibrary.cs           # PDFium 原生库解析（从插件目录 runtimes/ 加载）
+│   │   ├── Localization/
+│   │   │   └── PdfStrings.cs             # 插件自带译文（8 语言）
 │   │   ├── third-party.json              # 本插件分发的三方组件登记（许可统一管理的单一事实来源）
 │   │   └── ForkPlus.Plugins.Pdf.csproj   # 私有依赖 Docnet.Core（MIT）
 │   ├── ForkPlus.Plugins.Office/          # Office 套件对比插件（.docx/.xlsx/.pptx 正文左右并排）
@@ -61,6 +66,8 @@ ForkPlus-Plugins/
 │   │   ├── OfficeDiffView.cs             # 徽章 / 标题卡片 / 富文本段落 / 表头斑马纹表格
 │   │   ├── OfficeContentExtractor.cs     # 用 Open XML SDK 提取三件套正文（含 run 字符格式）
 │   │   ├── OfficeContent.cs              # 标题 / 段落（带格式 run）/ 表格内容块模型
+│   │   ├── Localization/
+│   │   │   └── OfficeStrings.cs          # 插件自带译文（8 语言）
 │   │   ├── third-party.json              # Open XML SDK 等（MIT）登记
 │   │   └── ForkPlus.Plugins.Office.csproj # 私有依赖 Open XML SDK（MIT）
 │   └── ForkPlus.Plugins.Archive/         # 压缩包对比插件（zip/7z/rar/tar 条目树左右并排 + MD5）
@@ -68,6 +75,8 @@ ForkPlus-Plugins/
 │       ├── ArchiveDiffView.cs            # TreeView 条目树视图 + 整包 / 条目 MD5 + 密码输入
 │       ├── ArchiveContentExtractor.cs    # 用 SharpCompress 把压缩包展开成条目树并算 MD5
 │       ├── ArchiveContent.cs             # 条目节点 / 展开结果模型（含 MD5）
+│       ├── Localization/
+│       │   └── ArchiveStrings.cs         # 插件自带译文（8 语言）
 │       ├── third-party.json              # SharpCompress（MIT）登记
 │       └── ForkPlus.Plugins.Archive.csproj # 私有依赖 SharpCompress（MIT）
 ├── licenses/                             # 第三方许可全文仓库（按组件分目录，集中管理）
@@ -103,9 +112,13 @@ public sealed class MyDiffPlugin : IDiffViewPlugin, IPluginMetadata
     public IReadOnlyList<string> FileExtensions => new[] { ".mine" };
 
     // IPluginMetadata（可选）：宿主「偏好设置 → 插件」页展示的名称 / 版本 / 描述
-    public string Version => "0.0.1";
-    public string DisplayName => "我的对比插件";
-    public string Description => "一句话说明这个插件能对比什么文件、长什么样。";
+    // 名称与描述约定为**英文原文**（缺省语言）；多语言由 GetDisplayName / GetDescription 覆写提供
+    public string Version => "0.1.0";
+    public string DisplayName => "My Compare";
+    public string Description => "One sentence on what this plugin compares.";
+
+    public string GetDisplayName(string language) => PluginLocalization.Resolve(language, MyStrings.DisplayNames, DisplayName);
+    public string GetDescription(string language) => PluginLocalization.Resolve(language, MyStrings.Descriptions, Description);
 
     public bool CanHandle(DiffViewRequest request) => true;      // 扩展名命中后的二次判定
     public IDiffView CreateView() => new MyDiffView();
@@ -137,7 +150,7 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 | `SetContent(context, host)` | 下发两侧内容 + 宿主能力桥；**每次刷新对比都会重新调用**（实例复用） |
 | `SetMode(modeId)` | 切换视图模式；不支持的模式直接忽略 |
 | `Activate()` / `Deactivate()` | 切入显示 / 切走失活（如恢复、暂停动图播放，省电防闪） |
-| `ApplyLocalization()` | 宿主切语言时广播，视图重建文案 |
+| `ApplyLocalization()` | 宿主切语言时广播：先 `PluginEnvironment.ApplyLocalization(root)` 重刷宿主 key，再按自带译文表重算插件文案（含内容区可译部分） |
 | `Release()` | 释放：停后台任务、退订事件、释放位图；之后实例不再复用 |
 | `HighlightPixelsAvailableChanged` | 「高亮差异像素」能力变化事件；无此能力可显式空实现（`add {} remove {}`） |
 
@@ -195,23 +208,34 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 - 日志统一用 `PluginLog`（`Debug/Info/Warn/Error`）。宿主已初始化 NLog，插件日志汇入同一输出。
 - 文案用 `PluginEnvironment.Translate(key)` / `Format(key, args)`；控件子树可在构造期与
   `ApplyLocalization` 时调用 `PluginEnvironment.ApplyLocalization(root)` 完成整体翻译。
+- **插件自带文案**（宿主字典里没有的）由插件自己维护：在 `Localization/<Name>Strings.cs` 里按
+  「英文原文 → 各语言译文」组织字典，视图用 `<Name>Strings.T(...)` / `F(...)` 取译文；
+  `ApplyLocalization()` 里重算一遍静态文案并刷新内容区，宿主切语言即时生效（见「视图生命周期」）。
 - 尺寸展示用 `PluginSizeFormat`，与宿主口径一致。
 
 ### 8. 插件元数据（IPluginMetadata，可选）
 
 实现 `IPluginMetadata` 后，宿主 ForkPlus **5.0.1+** 的「偏好设置 → 插件」页会展示你声明的
-**名称 / 版本号 / 描述**（未实现则回退到 `DisplayNameKey` 翻译 + 程序集版本 + 空描述）：
+**名称 / 版本号 / 描述**（未实现则回退到 `DisplayNameKey` 翻译 + 程序集版本 + 空描述）；
+**5.0.3+** 起名称 / 描述支持多语言：
 
 | 成员 | 说明 |
 | --- | --- |
-| `Version` | 插件**自身**版本号，与宿主版本解耦，建议语义化（如 `"0.0.1"`）；与工程 `<Version>` 保持一致。 |
-| `DisplayName` | 插件显示名，展示在插件列表与扩展名绑定 UI（当前版本固定中文，元数据国际化留待后续）。 |
-| `Description` | 一句话描述插件能力，展示在插件名下方。 |
+| `Version` | 插件**自身**版本号，与宿主版本解耦，建议语义化（如 `"0.1.0"`）；与工程 `<Version>` 保持一致。 |
+| `DisplayName` | 插件显示名，约定为**英文原文**，同时作为多语言的缺省值。 |
+| `Description` | 一句话描述插件能力，约定为**英文原文**，同时作为多语言的缺省值。 |
+| `GetDisplayName(language)` | v5.0.3：按界面语言返回显示名；默认实现返回英文原文，无需多语言的插件不必覆写。 |
+| `GetDescription(language)` | v5.0.3：按界面语言返回描述；默认实现返回英文原文，无需多语言的插件不必覆写。 |
 
 约定：
 
-- 版本号与工程文件的 `<Version>` 保持一致（本仓库示例、PDF、Office 与压缩包插件当前均为 **0.0.1**）。
-- 名称 / 描述在 5.0.1 固定为中文；后续版本才会引入多语言元数据（`DisplayNameKey` 仍用于翻译 key）。
+- 版本号与工程文件的 `<Version>` 保持一致（本仓库示例、PDF、Office 与压缩包插件当前均为 **0.1.0**）。
+- 名称 / 描述一律写成**英文原文**（作为缺省与回退值）；插件把各语言译文按 `语言 code → 文案`
+  组织成字典，经 `GetDisplayName` / `GetDescription` 覆写，用 `PluginLocalization.Resolve`
+  按宿主下发的 `PluginEnvironment.CurrentLanguage` 取译文，查不到逐级回退（当前语言 → 语言主标签
+  → 英文 → 英文原文）。`DisplayNameKey` 仍用于宿主扩展名绑定列表的翻译 key。
+- 语言 code 与宿主界面语言一致：`en` / `zh-Hans` / `zh-Hant` / `ja-JP` / `ko-KR` / `fr-FR` /
+  `de-DE` / `es-ES`；`en` 不写入字典（英文原文即缺省）。
 
 ---
 
@@ -221,7 +245,8 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 的最小完整实现：认领 `.example` / `.exampletxt`，命中后由 `ExampleDiffView` 用纯代码（未用 `.axaml`）
 渲染左右两列只读信息面板（路径 / 声明大小 / 可读字节数 / LFS 引用）。
 
-同时实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「示例对比」、版本 `0.0.1` 与描述。
+同时实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「示例对比」（英文原文
+`Example Compare`，8 语言译文见 `Localization/ExampleStrings.cs`）、版本 `0.1.0` 与描述。
 
 写新插件的最快路径：**复制示例目录 → 改工程名、命名空间、`Id`、扩展名**。
 
@@ -244,7 +269,8 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 > 注意：宿主只对**二进制**差异查询插件路由。PDF 一般含非文本字节、会被判为二进制；demo 截图用的
 > `sample.pdf` 特意夹带 NUL 字节以确保这一点。
 
-插件同样实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「PDF 对比」、版本 `0.0.1` 与描述。
+插件同样实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「PDF 对比」（英文原文
+`PDF Compare`，8 语言译文见 `Localization/PdfStrings.cs`）、版本 `0.1.0` 与描述。
 
 ---
 
@@ -280,7 +306,8 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 > 注意：宿主只对**二进制**差异查询插件路由。Office 文档本质是 ZIP 包（OOXML），git 一律判为二进制，
 > 因此必然命中本插件而非 Hex 兜底。
 
-插件同样实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「Office 对比」、版本 `0.0.1` 与描述。
+插件同样实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「Office 对比」（英文原文
+`Office Compare`，8 语言译文见 `Localization/OfficeStrings.cs`）、版本 `0.1.0` 与描述。
 
 ---
 
@@ -327,7 +354,8 @@ zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可�
 > 注意：宿主只对**二进制**差异查询插件路由。压缩包一律含非文本字节、会被判为二进制，因此必然
 > 命中本插件而非 Hex 兜底。
 
-插件同样实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「压缩包对比」、版本 `0.0.1` 与描述。
+插件同样实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「压缩包对比」（英文原文
+`Archive Compare`，8 语言译文见 `Localization/ArchiveStrings.cs`）、版本 `0.1.0` 与描述。
 
 ---
 
