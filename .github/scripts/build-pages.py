@@ -48,9 +48,12 @@ def ext_codes(exts):
 
 
 def plugin_card(plugin):
+    version = plugin.get("version")
+    version_html = f'  <p class="ver">版本 v{version}</p>\n' if version else ''
     return (
         f'<a class="card plugin-card" href="plugins/{plugin["id"]}.html">\n'
         f'  <h3>{plugin["name"]}</h3>\n'
+        f'{version_html}'
         f'  <p>{plugin["summary"]}</p>\n'
         f'  <p class="exts">{ext_codes(plugin.get("extensions", []))}</p>\n'
         f'  <span class="more">查看对比视图效果 →</span>\n'
@@ -135,6 +138,7 @@ def main():
             "PLUGIN_ID": p["id"],
             "PLUGIN_NAME": p.get("name", p["id"]),
             "PLUGIN_SUMMARY": p.get("summary", ""),
+            "PLUGIN_VERSION": p.get("version", "-"),
             "PLUGIN_ASSEMBLY": p.get("assembly", "-"),
             "PLUGIN_SOURCE": p.get("source", "-"),
             "PLUGIN_EXTENSIONS": ext_codes(p.get("extensions", [])) or "<code>*</code>",

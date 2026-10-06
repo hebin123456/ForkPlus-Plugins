@@ -137,7 +137,7 @@
     <ol class="steps">
       <li>复制 <code>plugins/ForkPlus.Plugins.Example</code>，改掉 <code>AssemblyName</code>、命名空间与 <code>Id</code>。</li>
       <li>在 <code>FileExtensions</code> 里声明要认领的扩展名，必要时用 <code>CanHandle</code> 做二次判定。</li>
-      <li>在 <code>.github/pages/plugins.json</code> 里追加一条登记项：<code>id</code>、名称、说明、扩展名与截图文件名。</li>
+      <li>在 <code>.github/pages/plugins.json</code> 里追加一条登记项：<code>id</code>、名称、版本号、说明、扩展名与截图文件名。</li>
       <li>让 <code>capture-screenshots.sh</code> 产出同名截图（命名约定：<code>assets/&lt;id&gt;-diff.png</code>），推送到 <code>master</code> 后 CI 会自动重建站点。</li>
     </ol>
   </section>

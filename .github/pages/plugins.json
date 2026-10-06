@@ -3,6 +3,7 @@
     {
       "id": "pdf",
       "name": "PDF 对比插件 · PDF Compare",
+      "version": "0.0.1",
       "assembly": "ForkPlus.Plugins.Pdf",
       "source": "plugins/ForkPlus.Plugins.Pdf",
       "summary": "PDF 文件对比视图：认领 .pdf，命中后把差异区替换为左右两栏，按页号逐页并排渲染旧版本与新版本 PDF，天然纵向同步滚动；新增 / 删除 / 修改三种变更都有对应形态。",

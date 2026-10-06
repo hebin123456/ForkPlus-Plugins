@@ -5,6 +5,9 @@
          契约经 ProjectReference 引用，Private=false（不打进插件产物）。 -->
     <AssemblyName>ForkPlus.Plugins.Example</AssemblyName>
     <RootNamespace>ForkPlus.Plugins.Example</RootNamespace>
+
+    <!-- 插件自身版本（与宿主版本解耦）；偏好设置 → 插件页展示的 Version 与此一致（暂为 0.0.1）。 -->
+    <Version>0.0.1</Version>
   </PropertyGroup>
   <ItemGroup>
     <!-- 本示例视图用 Avalonia 控件纯代码构建（未使用 .axaml）。

@@ -31,6 +31,7 @@ ForkPlus-Plugins/
 ├── sdk/
 │   └── ForkPlus.Plugins.Abstractions/    # 插件契约工程（主仓 src/ForkPlus.Plugins.Abstractions 的源码镜像）
 │       ├── IDiffViewPlugin.cs            # IDiffViewPlugin / DiffViewRequest
+│       ├── IPluginMetadata.cs            # IPluginMetadata 插件元数据（名称 / 版本 / 描述，可选实现）
 │       ├── IDiffView.cs                  # IDiffView / DiffViewMode / DiffViewContext
 │       ├── IDiffViewHost.cs              # 宿主能力桥 IDiffViewHost / LfsSmudgeResult
 │       ├── DiffSideContent.cs            # 单侧内容模型（路径 / 大小 / 懒加载字节 / LFS）
@@ -74,12 +75,17 @@ ForkPlus-Plugins/
 一个插件 = **一个无参构造的 public 类** 实现 `IDiffViewPlugin`，并由 `CreateView()` 返回 `IDiffView`。
 
 ```csharp
-public sealed class MyDiffPlugin : IDiffViewPlugin
+public sealed class MyDiffPlugin : IDiffViewPlugin, IPluginMetadata
 {
     public string Id => "com.example.myplugin";                 // 唯一 Id
     public string DisplayNameKey => "My Plugin";                // 显示名（宿主扩展名绑定列表用）
     public int Priority => 100;                                  // 同扩展名竞争，大者优先
     public IReadOnlyList<string> FileExtensions => new[] { ".mine" };
+
+    // IPluginMetadata（可选）：宿主「偏好设置 → 插件」页展示的名称 / 版本 / 描述
+    public string Version => "0.0.1";
+    public string DisplayName => "我的对比插件";
+    public string Description => "一句话说明这个插件能对比什么文件、长什么样。";
 
     public bool CanHandle(DiffViewRequest request) => true;      // 扩展名命中后的二次判定
     public IDiffView CreateView() => new MyDiffView();
@@ -93,6 +99,8 @@ public sealed class MyDiffPlugin : IDiffViewPlugin
 - `FileExtensions` 用小写并含点（如 `".png"`）；`"*"` 表示通配兜底。
 - `CanHandle` 用于扩展名之外的判定（例如校验文件头魔数）；返回 `false` 时宿主继续询问下一个候选插件。
 - 每次对比调用一次 `CreateView()` 创建独立视图实例。
+- `IPluginMetadata` **可选**：实现后宿主「偏好设置 → 插件」页展示你声明的名称 / 版本 / 描述；
+  不实现则回退到 `DisplayNameKey` 的翻译结果 + 程序集版本 + 空描述（见下方「插件元数据」）。
 
 ### 2. 视图生命周期
 
@@ -169,6 +177,22 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
   `ApplyLocalization` 时调用 `PluginEnvironment.ApplyLocalization(root)` 完成整体翻译。
 - 尺寸展示用 `PluginSizeFormat`，与宿主口径一致。
 
+### 8. 插件元数据（IPluginMetadata，可选）
+
+实现 `IPluginMetadata` 后，宿主 ForkPlus **5.0.1+** 的「偏好设置 → 插件」页会展示你声明的
+**名称 / 版本号 / 描述**（未实现则回退到 `DisplayNameKey` 翻译 + 程序集版本 + 空描述）：
+
+| 成员 | 说明 |
+| --- | --- |
+| `Version` | 插件**自身**版本号，与宿主版本解耦，建议语义化（如 `"0.0.1"`）；与工程 `<Version>` 保持一致。 |
+| `DisplayName` | 插件显示名，展示在插件列表与扩展名绑定 UI（当前版本固定中文，元数据国际化留待后续）。 |
+| `Description` | 一句话描述插件能力，展示在插件名下方。 |
+
+约定：
+
+- 版本号与工程文件的 `<Version>` 保持一致（本仓库示例与 PDF 插件当前均为 **0.0.1**）。
+- 名称 / 描述在 5.0.1 固定为中文；后续版本才会引入多语言元数据（`DisplayNameKey` 仍用于翻译 key）。
+
 ---
 
 ## 示例插件
@@ -176,6 +200,8 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 [plugins/ForkPlus.Plugins.Example](plugins/ForkPlus.Plugins.Example) 演示了 `IDiffViewPlugin` / `IDiffView`
 的最小完整实现：认领 `.example` / `.exampletxt`，命中后由 `ExampleDiffView` 用纯代码（未用 `.axaml`）
 渲染左右两列只读信息面板（路径 / 声明大小 / 可读字节数 / LFS 引用）。
+
+同时实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「示例对比」、版本 `0.0.1` 与描述。
 
 写新插件的最快路径：**复制示例目录 → 改工程名、命名空间、`Id`、扩展名**。
 
@@ -197,6 +223,8 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 
 > 注意：宿主只对**二进制**差异查询插件路由。PDF 一般含非文本字节、会被判为二进制；demo 截图用的
 > `sample.pdf` 特意夹带 NUL 字节以确保这一点。
+
+插件同样实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「PDF 对比」、版本 `0.0.1` 与描述。
 
 ---
 

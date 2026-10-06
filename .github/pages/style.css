@@ -107,6 +107,7 @@ code {
   transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
 }
 .plugin-card h3 { color: var(--accent); }
+.plugin-card .ver { margin-bottom: 8px; font-size: 13px; }
 .plugin-card .exts { margin-top: 10px; }
 .plugin-card .more { display: inline-block; margin-top: 12px; font-size: 14px; color: var(--accent); }
 .plugin-card:hover {
