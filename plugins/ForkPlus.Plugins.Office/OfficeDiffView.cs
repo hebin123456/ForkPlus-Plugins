@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -21,6 +24,10 @@ namespace ForkPlus.Plugins.Office
 	/// 独立滚动比强制对齐更好读。内容块见 <see cref="OfficeContentExtractor"/>：Word 段落 / 表格、
 	/// Excel 工作表网格、PPT 幻灯片文字。
 	///
+	/// 呈现上尽量「像文档」而不是一坨纯文字：每栏顶部一个类型徽章（Word / Excel / PowerPoint），
+	/// 标题做成左侧色条卡片，段落保留加粗 / 斜体 / 下划线 / 删除线等 run 格式，表格首行做表头、
+	/// 隔行浅底色，Excel 网格额外补上列字母与行号。
+	///
 	/// 字节来源：非图片二进制由宿主经 <c>HexSrc/HexDst</c> 预载（≤50MB）；LFS 侧走宿主
 	/// <see cref="IDiffViewHost"/> 的缓存 / smudge。提取在后台线程进行，控件构建回到 UI 线程。
 	/// </summary>
@@ -29,7 +36,17 @@ namespace ForkPlus.Plugins.Office
 		/// <summary>表格单元格文字的最大宽度（超出换行，避免超宽单元格把布局撑破）。</summary>
 		private const double CellMaxWidth = 260.0;
 
-		private static readonly IBrush GridLine = Brushes.Gainsboro;
+		/// <summary>中性色都用带透明度的灰，浅色 / 深色主题下都能保持低对比的「纸面」质感。</summary>
+		private static readonly IBrush SubtleBorder = new SolidColorBrush(Color.FromArgb(0x38, 0x80, 0x80, 0x80));
+
+		private static readonly IBrush HeaderTint = new SolidColorBrush(Color.FromArgb(0x1F, 0x80, 0x80, 0x80));
+
+		private static readonly IBrush ZebraTint = new SolidColorBrush(Color.FromArgb(0x0D, 0x80, 0x80, 0x80));
+
+		private static readonly IBrush CardTint = new SolidColorBrush(Color.FromArgb(0x14, 0x80, 0x80, 0x80));
+
+		/// <summary>宿主没给标题画刷时的强调色兜底（左右两栏都用中性蓝）。</summary>
+		private static readonly IBrush AccentFallback = new SolidColorBrush(Color.Parse("#FF3B82F6"));
 
 		private readonly Grid _root;
 
@@ -46,6 +63,10 @@ namespace ForkPlus.Plugins.Office
 		private DiffViewContext _context;
 
 		private IDiffViewHost _host;
+
+		private IBrush _srcAccent = AccentFallback;
+
+		private IBrush _dstAccent = AccentFallback;
 
 		private CancellationTokenSource _cts;
 
@@ -112,7 +133,7 @@ namespace ForkPlus.Plugins.Office
 		{
 			return new Border
 			{
-				BorderBrush = GridLine,
+				BorderBrush = SubtleBorder,
 				BorderThickness = separator,
 				Child = new ScrollViewer
 				{
@@ -144,6 +165,8 @@ namespace ForkPlus.Plugins.Office
 			_host = host;
 			_srcPanel.Children.Clear();
 			_dstPanel.Children.Clear();
+			_srcAccent = context?.SrcTitleBrush ?? AccentFallback;
+			_dstAccent = context?.DstTitleBrush ?? AccentFallback;
 			_srcTitle.Foreground = context?.SrcTitleBrush;
 			_dstTitle.Foreground = context?.DstTitleBrush;
 			UpdateTitles();
@@ -208,8 +231,8 @@ namespace ForkPlus.Plugins.Office
 				{
 					return;
 				}
-				PostBlocks(generation, 0, srcModel);
-				PostBlocks(generation, 1, dstModel);
+				PostBlocks(generation, 0, srcModel, _srcAccent);
+				PostBlocks(generation, 1, dstModel, _dstAccent);
 				PostStatus(generation, PluginEnvironment.Format("Office compare: {0} / {1} blocks", srcModel?.Blocks.Count ?? 0, dstModel?.Blocks.Count ?? 0));
 			}
 			catch (OperationCanceledException)
@@ -314,88 +337,243 @@ namespace ForkPlus.Plugins.Office
 
 		// ---- 内容块 → 控件 ----
 
-		private static Control BuildBlock(OfficeBlock block)
+		private static Control BuildBlock(OfficeBlock block, IBrush accent, string kind)
 		{
 			switch (block)
 			{
 				case OfficeHeadingBlock heading:
-					return new TextBlock
-					{
-						Text = heading.Text,
-						FontWeight = FontWeight.SemiBold,
-						FontSize = heading.Level <= 1 ? 15.0 : 13.0,
-						TextWrapping = TextWrapping.Wrap,
-						Margin = new Thickness(0.0, heading.Level <= 1 ? 10.0 : 8.0, 0.0, 4.0),
-					};
+					return BuildHeading(heading, accent);
 				case OfficeParagraphBlock paragraph:
-					if (paragraph.Text.Length == 0)
-					{
-						return new Border { Height = 6.0 };
-					}
-					return new TextBlock
-					{
-						Text = paragraph.Text,
-						FontSize = 13.0,
-						TextWrapping = TextWrapping.Wrap,
-						Margin = new Thickness(0.0, 0.0, 0.0, 2.0),
-					};
+					return BuildParagraph(paragraph);
 				case OfficeTableBlock table:
-					return BuildTable(table);
+					return BuildTable(table, kind);
 				default:
 					return null;
 			}
 		}
 
-		private static Control BuildTable(OfficeTableBlock table)
+		/// <summary>标题卡片：左缘一道强调色条 + 分级字号；一级标题再垫一层浅底。</summary>
+		private static Control BuildHeading(OfficeHeadingBlock heading, IBrush accent)
 		{
-			IReadOnlyList<IReadOnlyList<string>> rows = table.Rows;
-			int columns = 0;
-			for (int r = 0; r < rows.Count; r++)
-			{
-				columns = Math.Max(columns, rows[r]?.Count ?? 0);
-			}
-			if (columns == 0)
-			{
-				return new Border { Height = 6.0 };
-			}
-			Grid grid = new Grid();
-			for (int c = 0; c < columns; c++)
-			{
-				grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-			}
-			for (int r = 0; r < rows.Count; r++)
-			{
-				grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-				IReadOnlyList<string> row = rows[r];
-				for (int c = 0; c < columns; c++)
-				{
-					string text = (row != null && c < row.Count) ? row[c] : string.Empty;
-					Border cell = new Border
-					{
-						BorderBrush = GridLine,
-						BorderThickness = new Thickness(1.0, 1.0, 0.0, 0.0),
-						Child = new TextBlock
-						{
-							Text = text,
-							FontSize = 12.0,
-							TextWrapping = TextWrapping.Wrap,
-							MaxWidth = CellMaxWidth,
-							Margin = new Thickness(6.0, 3.0, 6.0, 3.0),
-						},
-					};
-					Grid.SetRow(cell, r);
-					Grid.SetColumn(cell, c);
-					grid.Children.Add(cell);
-				}
-			}
+			bool major = heading.Level <= 1;
 			return new Border
 			{
-				BorderBrush = GridLine,
-				BorderThickness = new Thickness(0.0, 0.0, 1.0, 1.0),
-				Margin = new Thickness(0.0, 4.0, 0.0, 10.0),
+				Background = major ? CardTint : null,
+				BorderBrush = accent,
+				BorderThickness = new Thickness(major ? 3.0 : 2.0, 0.0, 0.0, 0.0),
+				Padding = new Thickness(10.0, major ? 7.0 : 4.0, 8.0, major ? 7.0 : 4.0),
+				Margin = new Thickness(0.0, major ? 14.0 : 10.0, 0.0, 6.0),
+				Child = new SelectableTextBlock
+				{
+					Text = heading.Text,
+					FontWeight = FontWeight.Bold,
+					FontSize = major ? 15.5 : 13.5,
+					TextWrapping = TextWrapping.Wrap,
+				},
+			};
+		}
+
+		/// <summary>段落：有 run 格式时走 Inlines 保留加粗 / 斜体 / 下划线 / 删除线，否则直接渲染纯文本。</summary>
+		private static Control BuildParagraph(OfficeParagraphBlock paragraph)
+		{
+			if (paragraph.Text.Length == 0)
+			{
+				return new Border { Height = 9.0 };
+			}
+			SelectableTextBlock text = new SelectableTextBlock
+			{
+				FontSize = 13.0,
+				LineHeight = 19.5,
+				TextWrapping = TextWrapping.Wrap,
+				Margin = new Thickness(0.0, 0.0, 0.0, 4.0),
+			};
+			if (paragraph.HasFormatting)
+			{
+				foreach (OfficeInline inline in paragraph.Runs)
+				{
+					text.Inlines.Add(ToRun(inline));
+				}
+			}
+			else
+			{
+				text.Text = paragraph.Text;
+			}
+			return text;
+		}
+
+		private static Run ToRun(OfficeInline inline)
+		{
+			Run run = new Run
+			{
+				Text = inline.Text,
+				FontWeight = inline.Bold ? FontWeight.Bold : FontWeight.Normal,
+				FontStyle = inline.Italic ? FontStyle.Italic : FontStyle.Normal,
+			};
+			TextDecorationCollection decorations = null;
+			if (inline.Underline)
+			{
+				decorations = new TextDecorationCollection
+				{
+					new TextDecoration { Location = TextDecorationLocation.Underline },
+				};
+			}
+			if (inline.Strike)
+			{
+				decorations ??= new TextDecorationCollection();
+				decorations.Add(new TextDecoration { Location = TextDecorationLocation.Strikethrough });
+			}
+			if (decorations != null)
+			{
+				run.TextDecorations = decorations;
+			}
+			return run;
+		}
+
+		/// <summary>
+		/// 表格：首行做表头（加粗 + 浅底），其余行隔行浅底，单元格只画右 / 下细线。
+		/// Excel 网格额外补一行列字母与一列行号，读起来更像表格软件。
+		/// </summary>
+		private static Control BuildTable(OfficeTableBlock table, string kind)
+		{
+			IReadOnlyList<IReadOnlyList<string>> rows = table.Rows;
+			int dataColumns = 0;
+			for (int r = 0; r < rows.Count; r++)
+			{
+				dataColumns = Math.Max(dataColumns, rows[r]?.Count ?? 0);
+			}
+			if (dataColumns == 0)
+			{
+				return new Border { Height = 9.0 };
+			}
+
+			bool spreadsheet = string.Equals(kind, "Excel", StringComparison.Ordinal);
+			int columnOffset = spreadsheet ? 1 : 0;
+			int rowOffset = spreadsheet ? 1 : 0;
+			int totalColumns = dataColumns + columnOffset;
+			int totalRows = rows.Count + rowOffset;
+
+			Grid grid = new Grid();
+			for (int c = 0; c < totalColumns; c++)
+			{
+				ColumnDefinition definition = new ColumnDefinition(GridLength.Auto);
+				if (spreadsheet)
+				{
+					definition.MinWidth = c == 0 ? 34.0 : 56.0;
+				}
+				grid.ColumnDefinitions.Add(definition);
+			}
+			for (int r = 0; r < totalRows; r++)
+			{
+				grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+			}
+
+			if (spreadsheet)
+			{
+				AddCell(grid, string.Empty, 0, 0, header: true, gutter: true, bold: false, zebra: false);
+				for (int c = 0; c < dataColumns; c++)
+				{
+					AddCell(grid, ColumnLetter(c), 0, c + 1, header: true, gutter: true, bold: true, zebra: false);
+				}
+			}
+
+			for (int r = 0; r < rows.Count; r++)
+			{
+				// Excel 首行是数据（当表头加粗）；Word 首行本就是表头。
+				bool headerRow = spreadsheet ? r == 0 : r == 0;
+				bool zebra = !headerRow && r % 2 == 1;
+				if (spreadsheet)
+				{
+					AddCell(grid, (r + 1).ToString(CultureInfo.InvariantCulture), r + rowOffset, 0, header: false, gutter: true, bold: false, zebra: false);
+				}
+				IReadOnlyList<string> row = rows[r];
+				for (int c = 0; c < dataColumns; c++)
+				{
+					string text = (row != null && c < row.Count) ? row[c] : string.Empty;
+					AddCell(grid, text, r + rowOffset, c + columnOffset, header: headerRow, gutter: false, bold: headerRow, zebra: zebra);
+				}
+			}
+
+			return new Border
+			{
+				Margin = new Thickness(0.0, 6.0, 0.0, 12.0),
 				HorizontalAlignment = HorizontalAlignment.Left,
 				Child = grid,
 			};
+		}
+
+		private static void AddCell(Grid grid, string text, int row, int column, bool header, bool gutter, bool bold, bool zebra)
+		{
+			IBrush background = header ? HeaderTint : (zebra ? ZebraTint : null);
+			SelectableTextBlock label = new SelectableTextBlock
+			{
+				Text = text,
+				FontSize = gutter ? 11.0 : 12.5,
+				FontWeight = bold ? FontWeight.SemiBold : FontWeight.Normal,
+				TextWrapping = TextWrapping.Wrap,
+				TextAlignment = gutter ? TextAlignment.Center : TextAlignment.Left,
+				Margin = new Thickness(7.0, 4.0, 7.0, 4.0),
+				Opacity = gutter ? 0.6 : 1.0,
+			};
+			if (!gutter)
+			{
+				label.MaxWidth = CellMaxWidth;
+			}
+			Border cell = new Border
+			{
+				Background = background,
+				BorderBrush = SubtleBorder,
+				BorderThickness = new Thickness(column == 0 ? 1.0 : 0.0, row == 0 ? 1.0 : 0.0, 1.0, 1.0),
+				Child = label,
+			};
+			Grid.SetRow(cell, row);
+			Grid.SetColumn(cell, column);
+			grid.Children.Add(cell);
+		}
+
+		/// <summary>0 基列号 → 电子表列字母（0→A、25→Z、26→AA）。</summary>
+		private static string ColumnLetter(int index)
+		{
+			StringBuilder builder = new StringBuilder(3);
+			int value = index + 1;
+			while (value > 0)
+			{
+				int remainder = (value - 1) % 26;
+				builder.Insert(0, (char)('A' + remainder));
+				value = (value - 1) / 26;
+			}
+			return builder.ToString();
+		}
+
+		/// <summary>栏顶徽章：文档类型 + 块数 / 字数，让「这是 Word 还是 Excel」一眼可辨。</summary>
+		private static Control BuildKindBadge(OfficeDocumentModel model, IBrush accent)
+		{
+			StackPanel badge = new StackPanel
+			{
+				Orientation = Orientation.Horizontal,
+				Spacing = 8.0,
+				Margin = new Thickness(0.0, 2.0, 0.0, 12.0),
+			};
+			badge.Children.Add(new Border
+			{
+				Background = CardTint,
+				BorderBrush = accent,
+				BorderThickness = new Thickness(2.0, 0.0, 0.0, 0.0),
+				Padding = new Thickness(8.0, 3.0, 8.0, 3.0),
+				Child = new TextBlock
+				{
+					Text = model.Kind,
+					FontSize = 11.5,
+					FontWeight = FontWeight.SemiBold,
+				},
+			});
+			badge.Children.Add(new TextBlock
+			{
+				Text = PluginEnvironment.Format("{0} blocks · {1} chars", model.Blocks.Count, model.TextLength),
+				FontSize = 11.5,
+				Opacity = 0.6,
+				VerticalAlignment = VerticalAlignment.Center,
+			});
+			return badge;
 		}
 
 		/// <summary>某侧没有内容时给出可读提示：整侧缺失（新增 / 删除）或拿不到字节（超阈值 / LFS 不可用）。</summary>
@@ -433,7 +611,7 @@ namespace ForkPlus.Plugins.Office
 		/// 控件必须在 UI 线程构建（后台线程构建的 Avalonia 控件不会渲染出来），因此这里只投递
 		/// 纯数据模型，在 UI 线程里再 <see cref="BuildBlock"/> 成控件后挂载。
 		/// </summary>
-		private void PostBlocks(int generation, int column, OfficeDocumentModel model)
+		private void PostBlocks(int generation, int column, OfficeDocumentModel model, IBrush accent)
 		{
 			if (model == null)
 			{
@@ -446,9 +624,10 @@ namespace ForkPlus.Plugins.Office
 				{
 					return;
 				}
+				panel.Children.Add(BuildKindBadge(model, accent));
 				foreach (OfficeBlock block in model.Blocks)
 				{
-					Control control = BuildBlock(block);
+					Control control = BuildBlock(block, accent, model.Kind);
 					if (control != null)
 					{
 						panel.Children.Add(control);

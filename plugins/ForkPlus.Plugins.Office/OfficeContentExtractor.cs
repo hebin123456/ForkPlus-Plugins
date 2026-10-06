@@ -85,14 +85,59 @@ namespace ForkPlus.Plugins.Office
 				blocks.Add(new OfficeParagraphBlock(string.Empty));
 				return;
 			}
-			if (IsHeadingStyle(paragraph.ParagraphProperties?.ParagraphStyleId?.Val?.Value))
+			int level = HeadingLevel(paragraph.ParagraphProperties?.ParagraphStyleId?.Val?.Value);
+			if (level > 0)
 			{
-				blocks.Add(new OfficeHeadingBlock(text, 2));
+				blocks.Add(new OfficeHeadingBlock(text, level));
+				return;
 			}
-			else
+			blocks.Add(new OfficeParagraphBlock(text, ExtractWordRuns(paragraph)));
+		}
+
+		/// <summary>把 Word 段落的直接 <c>w:r</c> 抽成带字符格式的 run；无格式或空段落返回 null。</summary>
+		private static IReadOnlyList<OfficeInline> ExtractWordRuns(W.Paragraph paragraph)
+		{
+			List<OfficeInline> runs = new List<OfficeInline>();
+			foreach (W.Run run in paragraph.Elements<W.Run>())
 			{
-				blocks.Add(new OfficeParagraphBlock(text));
+				string text = Clean(run.InnerText);
+				if (text.Length == 0)
+				{
+					continue;
+				}
+				W.RunProperties props = run.RunProperties;
+				bool bold = On(props?.Bold);
+				bool italic = On(props?.Italic);
+				bool underline = props?.Underline != null && props.Underline.Val != null
+					&& props.Underline.Val.Value != W.UnderlineValues.None;
+				bool strike = On(props?.Strike) || On(props?.DoubleStrike);
+				AppendRun(runs, text, bold, italic, underline, strike);
 			}
+			return runs.Count == 0 ? null : runs;
+		}
+
+		/// <summary><c>w:b</c> / <c>w:i</c> 为开关：元素存在即生效，显式 val="0/false" 表示关闭。</summary>
+		private static bool On(OnOffType value)
+		{
+			if (value == null)
+			{
+				return false;
+			}
+			return value.Val == null || value.Val.Value;
+		}
+
+		private static void AppendRun(List<OfficeInline> runs, string text, bool bold, bool italic, bool underline, bool strike)
+		{
+			if (runs.Count > 0)
+			{
+				OfficeInline last = runs[runs.Count - 1];
+				if (last.Bold == bold && last.Italic == italic && last.Underline == underline && last.Strike == strike)
+				{
+					runs[runs.Count - 1] = new OfficeInline(last.Text + text, bold, italic, underline, strike);
+					return;
+				}
+			}
+			runs.Add(new OfficeInline(text, bold, italic, underline, strike));
 		}
 
 		private static OfficeTableBlock ToTableBlock(W.Table table)
@@ -110,20 +155,36 @@ namespace ForkPlus.Plugins.Office
 			return new OfficeTableBlock(null, rows);
 		}
 
-		/// <summary>是否为标题样式：样式 id 含 heading/标题，或内置标题的纯数字样式 id（1-9）。</summary>
-		private static bool IsHeadingStyle(string styleId)
+		/// <summary>
+		/// 把标题样式 id 映射到标题级别（1-9）；非标题返回 0。样式 id 含 heading / 标题时取其末尾的
+		/// 数字（如 <c>Heading1</c> / <c>标题 2</c>）；内置标题的纯数字样式 id（<c>1</c>-<c>9</c>）即级别；
+		/// 命中标题但无数字（如 <c>Heading</c>）按 1 级处理。
+		/// </summary>
+		private static int HeadingLevel(string styleId)
 		{
 			if (string.IsNullOrEmpty(styleId))
 			{
-				return false;
+				return 0;
 			}
 			string id = styleId.Trim();
 			if (id.Length == 1 && id[0] >= '1' && id[0] <= '9')
 			{
-				return true;
+				return id[0] - '0';
 			}
-			return id.IndexOf("heading", StringComparison.OrdinalIgnoreCase) >= 0
+			bool heading = id.IndexOf("heading", StringComparison.OrdinalIgnoreCase) >= 0
 				|| id.IndexOf("标题", StringComparison.Ordinal) >= 0;
+			if (!heading)
+			{
+				return 0;
+			}
+			for (int i = id.Length - 1; i >= 0; i--)
+			{
+				if (id[i] >= '1' && id[i] <= '9')
+				{
+					return id[i] - '0';
+				}
+			}
+			return 1;
 		}
 
 		// ---- Excel (.xlsx) ----
@@ -285,7 +346,7 @@ namespace ForkPlus.Plugins.Office
 							}
 							foreach (D.Paragraph paragraph in textBody.Elements<D.Paragraph>())
 							{
-								AddSlideText(blocks, paragraph.InnerText);
+								AddSlideParagraph(blocks, paragraph);
 							}
 						}
 					}
@@ -294,20 +355,29 @@ namespace ForkPlus.Plugins.Office
 			return new OfficeDocumentModel("PowerPoint", blocks);
 		}
 
-		private static void AddSlideText(List<OfficeBlock> blocks, string raw)
+		private static void AddSlideParagraph(List<OfficeBlock> blocks, D.Paragraph paragraph)
 		{
-			if (string.IsNullOrEmpty(raw))
+			string text = Clean(paragraph.InnerText);
+			if (text.Length == 0)
 			{
 				return;
 			}
-			foreach (string line in raw.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))
+			List<OfficeInline> runs = new List<OfficeInline>();
+			foreach (D.Run run in paragraph.Elements<D.Run>())
 			{
-				string text = Clean(line);
-				if (text.Length > 0)
+				string runText = Clean(run.Text?.Text ?? run.InnerText);
+				if (runText.Length == 0)
 				{
-					blocks.Add(new OfficeParagraphBlock(text));
+					continue;
 				}
+				D.RunProperties props = run.RunProperties;
+				bool bold = props?.Bold?.Value ?? false;
+				bool italic = props?.Italic?.Value ?? false;
+				bool underline = props?.Underline != null && props.Underline.Value != D.TextUnderlineValues.None;
+				bool strike = props?.Strike != null && props.Strike.Value != D.TextStrikeValues.NoStrike;
+				AppendRun(runs, runText, bold, italic, underline, strike);
 			}
+			blocks.Add(new OfficeParagraphBlock(text, runs.Count == 0 ? null : runs));
 		}
 
 		// ---- 通用 ----

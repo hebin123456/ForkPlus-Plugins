@@ -24,15 +24,63 @@ namespace ForkPlus.Plugins.Office
 		public int Level { get; }
 	}
 
-	/// <summary>段落块：Word 正文段落、PPT 文本框里的一行文字。空文本用于保留段间距。</summary>
-	internal sealed class OfficeParagraphBlock : OfficeBlock
+	/// <summary>段落内的一段文字及基础字符格式（Word / PowerPoint 的 run 投影）。</summary>
+	internal sealed class OfficeInline
 	{
-		public OfficeParagraphBlock(string text)
+		public OfficeInline(string text, bool bold, bool italic, bool underline, bool strike)
 		{
 			Text = text ?? string.Empty;
+			Bold = bold;
+			Italic = italic;
+			Underline = underline;
+			Strike = strike;
 		}
 
 		public string Text { get; }
+
+		public bool Bold { get; }
+
+		public bool Italic { get; }
+
+		public bool Underline { get; }
+
+		public bool Strike { get; }
+
+		/// <summary>是否带任何可见字符格式（全 false 时可省掉 Inlines，直接渲染纯文本）。</summary>
+		public bool HasFormat => Bold || Italic || Underline || Strike;
+	}
+
+	/// <summary>段落块：Word 正文段落、PPT 文本框里的一行文字。空文本用于保留段间距。</summary>
+	internal sealed class OfficeParagraphBlock : OfficeBlock
+	{
+		public OfficeParagraphBlock(string text, IReadOnlyList<OfficeInline> runs = null)
+		{
+			Text = text ?? string.Empty;
+			Runs = runs;
+		}
+
+		public string Text { get; }
+
+		/// <summary>带字符格式的 run 序列；为 null 表示整段无特殊格式（按 <see cref="Text"/> 渲染）。</summary>
+		public IReadOnlyList<OfficeInline> Runs { get; }
+
+		/// <summary>是否值得走 Inlines 渲染（至少一段带格式，或含多段不同格式）。</summary>
+		public bool HasFormatting
+		{
+			get
+			{
+				IReadOnlyList<OfficeInline> runs = Runs;
+				if (runs == null || runs.Count == 0)
+				{
+					return false;
+				}
+				if (runs.Count > 1)
+				{
+					return true;
+				}
+				return runs[0].HasFormat;
+			}
+		}
 	}
 
 	/// <summary>表格块：Word 表格、Excel 工作表数据区。行长度可能不一致（右侧按空单元格补齐）。</summary>
@@ -61,5 +109,36 @@ namespace ForkPlus.Plugins.Office
 		public string Kind { get; }
 
 		public IReadOnlyList<OfficeBlock> Blocks { get; }
+
+		/// <summary>粗略的字数统计（所有可见文本字符数），用于视图顶部的摘要徽章。</summary>
+		public int TextLength
+		{
+			get
+			{
+				int total = 0;
+				foreach (OfficeBlock block in Blocks)
+				{
+					if (block is OfficeHeadingBlock heading)
+					{
+						total += heading.Text.Length;
+					}
+					else if (block is OfficeParagraphBlock paragraph)
+					{
+						total += paragraph.Text.Length;
+					}
+					else if (block is OfficeTableBlock table)
+					{
+						foreach (IReadOnlyList<string> row in table.Rows)
+						{
+							foreach (string cell in row)
+							{
+								total += cell?.Length ?? 0;
+							}
+						}
+					}
+				}
+				return total;
+			}
+		}
 	}
 }

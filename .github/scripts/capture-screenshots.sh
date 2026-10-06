@@ -224,6 +224,24 @@ def w_para(text):
 def w_heading(text):
     return '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>%s</w:t></w:r></w:p>' % e(text)
 
+def w_runs(parts):
+    """一段里混排多个 run（text, bold, italic, underline, strike），用于演示内联字符格式。"""
+    out = []
+    for text, bold, italic, underline, strike in parts:
+        rpr = ""
+        if bold:
+            rpr += "<w:b/>"
+        if italic:
+            rpr += "<w:i/>"
+        if underline:
+            rpr += '<w:u w:val="single"/>'
+        if strike:
+            rpr += "<w:strike/>"
+        if rpr:
+            rpr = "<w:rPr>" + rpr + "</w:rPr>"
+        out.append('<w:r>%s<w:t xml:space="preserve">%s</w:t></w:r>' % (rpr, e(text)))
+    return "<w:p>" + "".join(out) + "</w:p>"
+
 def w_table(rows):
     out = ["<w:tbl>"]
     for row in rows:
@@ -237,7 +255,18 @@ def w_table(rows):
 def build_docx():
     blocks = [
         w_heading("ForkPlus Manual"),
-        w_para("Revision: %s" % version),
+        # 版本行：值加粗——演示 Word run 的粗体投影。
+        w_runs([("Revision: ", False, False, False, False), (version, True, False, False, False)]),
+        # 一行覆盖四种内联格式，截图里能直接看到加粗 / 斜体 / 下划线 / 删除线。
+        w_runs([
+            ("Bold", True, False, False, False),
+            (" · ", False, False, False, False),
+            ("Italic", False, True, False, False),
+            (" · ", False, False, False, False),
+            ("Underline", False, False, True, False),
+            (" · ", False, False, False, False),
+            ("Strike", False, False, False, True),
+        ]),
         w_para("This paragraph is identical on both sides."),
         w_para("New: export to SVG." if is_new else "Old: export to PNG only."),
         w_table([["Component", "Status"], ["Compare", "GA"], ["Sync", "GA" if is_new else "beta"]]),
@@ -294,8 +323,10 @@ def p_slide(lines):
     y = 838200
     for i, line in enumerate(lines):
         sid = i + 2
-        body = ('<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" dirty="0"/>'
-                "<a:t>%s</a:t></a:r></a:p></p:txBody>" % e(line))
+        # 每张幻灯片的首行加粗（标题行），演示 PowerPoint run 的粗体投影。
+        bold = ' b="1"' if i == 0 else ""
+        body = ('<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" dirty="0"%s/>'
+                "<a:t>%s</a:t></a:r></a:p></p:txBody>" % (bold, e(line)))
         shapes.append(
             '<p:sp><p:nvSpPr><p:cNvPr id="%d" name="TextBox %d"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>'
             '<p:spPr><a:xfrm><a:off x="838200" y="%d"/><a:ext cx="8229600" cy="457200"/></a:xfrm>'

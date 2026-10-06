@@ -58,16 +58,16 @@ ForkPlus-Plugins/
 │   │   └── ForkPlus.Plugins.Pdf.csproj   # 私有依赖 Docnet.Core（MIT）
 │   ├── ForkPlus.Plugins.Office/          # Office 套件对比插件（.docx/.xlsx/.pptx 正文左右并排）
 │   │   ├── OfficeDiffPlugin.cs
-│   │   ├── OfficeDiffView.cs
-│   │   ├── OfficeContentExtractor.cs     # 用 Open XML SDK 提取三件套正文
-│   │   ├── OfficeContent.cs              # 标题 / 段落 / 表格内容块模型
+│   │   ├── OfficeDiffView.cs             # 徽章 / 标题卡片 / 富文本段落 / 表头斑马纹表格
+│   │   ├── OfficeContentExtractor.cs     # 用 Open XML SDK 提取三件套正文（含 run 字符格式）
+│   │   ├── OfficeContent.cs              # 标题 / 段落（带格式 run）/ 表格内容块模型
 │   │   ├── third-party.json              # Open XML SDK 等（MIT）登记
 │   │   └── ForkPlus.Plugins.Office.csproj # 私有依赖 Open XML SDK（MIT）
-│   └── ForkPlus.Plugins.Archive/         # 压缩包对比插件（zip/7z/rar/tar 条目树左右并排）
+│   └── ForkPlus.Plugins.Archive/         # 压缩包对比插件（zip/7z/rar/tar 条目树左右并排 + MD5）
 │       ├── ArchiveDiffPlugin.cs
-│       ├── ArchiveDiffView.cs            # 条目树视图 + 密码输入
-│       ├── ArchiveContentExtractor.cs    # 用 SharpCompress 把压缩包列表化成条目树
-│       ├── ArchiveContent.cs             # 条目节点 / 展开结果模型
+│       ├── ArchiveDiffView.cs            # TreeView 条目树视图 + 整包 / 条目 MD5 + 密码输入
+│       ├── ArchiveContentExtractor.cs    # 用 SharpCompress 把压缩包展开成条目树并算 MD5
+│       ├── ArchiveContent.cs             # 条目节点 / 展开结果模型（含 MD5）
 │       ├── third-party.json              # SharpCompress（MIT）登记
 │       └── ForkPlus.Plugins.Archive.csproj # 私有依赖 SharpCompress（MIT）
 ├── licenses/                             # 第三方许可全文仓库（按组件分目录，集中管理）
@@ -254,9 +254,15 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 `.docx` / `.xlsx` / `.pptx`：命中后用 **Open XML SDK** 提取正文内容，把差异区替换为左右两栏，
 各自渲染旧 / 新文档的**提取结果**（不是把文件当压缩包看字节，而是显示 Office 的内容）：
 
-- **Word（.docx）**：按文档顺序抽段落与表格，标题样式段落升级为标题块；
-- **Excel（.xlsx）**：每张工作表一个标题块 + 一张单元格网格表（单表最多 400 行 × 64 列）；
+- **Word（.docx）**：按文档顺序抽段落与表格，标题样式段落升级为标题块（级别取样式名末尾数字）；
+  段落里保留 run 级的加粗 / 斜体 / 下划线 / 删除线；
+- **Excel（.xlsx）**：每张工作表一个标题块 + 一张单元格网格表（单表最多 400 行 × 64 列），
+  网格补上列字母与行号，读起来更像表格软件；
 - **PowerPoint（.pptx）**：每张幻灯片一个 `Slide N` 标题块 + 幻灯片内各文本框的文字。
+
+呈现上尽量「像文档」而不是一坨纯文字：每栏顶部一个类型徽章（Word / Excel / PowerPoint）与
+块数 / 字数，标题做成左缘强调色条的卡片（一级标题再垫浅底），表格首行做表头、其余行隔行浅底、
+单元格只画右 / 下细线。
 
 两栏内容长度往往不同，因此各自独立滚动（与 PDF 插件按页号强制顶对齐不同）。
 
@@ -281,8 +287,10 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 ## 压缩包对比插件
 
 [plugins/ForkPlus.Plugins.Archive](plugins/ForkPlus.Plugins.Archive) 认领主流压缩包，命中后把两侧
-压缩包各自**展开成条目树**左右并排对比——只看压缩包里有什么（目录 / 文件 / 大小 / 是否加密），
-**不读取解压后的文件内容**。带密码的压缩包（如做了头部加密的 7z / rar）可在视图里输入密码。
+压缩包各自**展开成条目树**左右并排对比——用成熟的 `TreeView` 呈现层级（自带展开 / 折叠、缩进与
+滚动），每条给出目录 / 文件 / 大小 / 是否加密，并计算**整包 MD5** 与**每个文件条目的内容 MD5**
+（等宽字体展示），便于核对两侧内容是否一致。带密码的压缩包（如做了头部加密的 7z / rar）可在视图里
+输入密码。
 
 认领的扩展名（19 种）：
 
@@ -300,6 +308,11 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
   就整体解压后按 tar 建树；否则视为「单文件压缩流」给出唯一一条条目。
 
 条目数超过 20000 条会截断并在视图里说明；流式解压总量超过 512 MB 直接判失败，防压缩炸弹。
+
+**MD5**：整包 MD5 直接对压缩包原始字节计算，稳定且无需解压；条目内容 MD5 需要逐条解压，故设额度
+控制——最多 `2000` 条、单条不超过 `16 MB`、累计不超过 `64 MB`，超出即停止计算其余条目并在视图里
+注明 `Entry MD5 computed for N / M files.`。加密条目不解密算哈希，其内容 MD5 留空；
+zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可给出。
 
 密码：视图顶部有密码输入框 +「应用」按钮。未给密码但压缩包已加密（头部加密的 7z / rar）提示
 「需要密码」，密码错误提示「密码不正确」，点「应用」重新展开。zip 是例外——中央目录未加密，

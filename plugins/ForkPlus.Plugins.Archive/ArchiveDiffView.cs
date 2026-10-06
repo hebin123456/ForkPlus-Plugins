@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -16,10 +15,12 @@ namespace ForkPlus.Plugins.Archive
 {
 	/// <summary>
 	/// 压缩包条目树对比视图：左右两栏并排，各自把旧（左）/ 新（右）压缩包展开成条目树
-	/// （目录 + 文件 + 大小，加密条目标注），只对比「压缩包里有什么」，不读取解压后的内容。
+	/// （目录 + 文件 + 大小 + 内容 MD5，加密条目标注），并给出整包 MD5，便于核对两侧是否一致。
 	///
 	/// 布局：顶部两栏标题（角色 + 文件名 + 大小，取宿主注入的主题画刷着色），其下状态行、
-	/// 一行密码输入（<see cref="TextBox"/> + 「应用」按钮），再下是两列各自独立滚动的条目树。
+	/// 一行密码输入（<see cref="TextBox"/> + 「应用」按钮），再下是两列各自独立的
+	/// <see cref="TreeView"/>——成熟树控件自带展开 / 折叠、缩进与滚动。每栏顶部先给一行摘要徽章
+	/// （格式 / 条目数 / 体积 / 加密）与整包 MD5，树里每个文件再给出内容 MD5（等宽字体）。
 	/// 带密码的压缩包（如做了头部加密的 7z / rar）解不动时，状态行提示需要 / 密码错误，
 	/// 用户在密码框输入后点「应用」即可重新展开。
 	///
@@ -29,6 +30,14 @@ namespace ForkPlus.Plugins.Archive
 	public sealed class ArchiveDiffView : IDiffView
 	{
 		private static readonly IBrush GridLine = Brushes.Gainsboro;
+
+		/// <summary>中性色都用带透明度的灰，浅色 / 深色主题下都保持低对比。</summary>
+		private static readonly IBrush Subtle = new SolidColorBrush(Color.FromArgb(0x14, 0x80, 0x80, 0x80));
+
+		private static readonly IBrush ChipTint = new SolidColorBrush(Color.FromArgb(0x1F, 0x80, 0x80, 0x80));
+
+		/// <summary>MD5 等定宽文本用等宽字体，跨行对齐更好读；按可用性回退。</summary>
+		private static readonly FontFamily MonoFont = new FontFamily("Consolas, Menlo, DejaVu Sans Mono, Courier New, monospace");
 
 		private readonly Grid _root;
 
@@ -42,9 +51,9 @@ namespace ForkPlus.Plugins.Archive
 
 		private readonly TextBlock _passwordHint;
 
-		private readonly StackPanel _srcPanel;
+		private readonly ContentControl _srcPane;
 
-		private readonly StackPanel _dstPanel;
+		private readonly ContentControl _dstPane;
 
 		private DiffViewContext _context;
 
@@ -116,23 +125,28 @@ namespace ForkPlus.Plugins.Archive
 			passwordRow.Children.Add(apply);
 			passwordRow.Children.Add(_passwordHint);
 
-			_srcPanel = new StackPanel
+			_srcPane = new ContentControl
 			{
 				Margin = new Thickness(12.0, 0.0, 10.0, 12.0),
+				// 内容铺满栏位：TreeView 需要被约束高度才会启用自身滚动条。
+				HorizontalContentAlignment = HorizontalAlignment.Stretch,
+				VerticalContentAlignment = VerticalAlignment.Stretch,
 			};
-			_dstPanel = new StackPanel
+			_dstPane = new ContentControl
 			{
 				Margin = new Thickness(10.0, 0.0, 12.0, 12.0),
+				HorizontalContentAlignment = HorizontalAlignment.Stretch,
+				VerticalContentAlignment = VerticalAlignment.Stretch,
 			};
 
 			Grid columns = new Grid
 			{
 				ColumnDefinitions = new ColumnDefinitions("*,*"),
 			};
-			Border srcScroll = WrapPane(_srcPanel, new Thickness(0.0));
+			Border srcScroll = WrapPane(_srcPane, new Thickness(0.0));
 			Grid.SetColumn(srcScroll, 0);
 			columns.Children.Add(srcScroll);
-			Border dstScroll = WrapPane(_dstPanel, new Thickness(1.0, 0.0, 0.0, 0.0));
+			Border dstScroll = WrapPane(_dstPane, new Thickness(1.0, 0.0, 0.0, 0.0));
 			Grid.SetColumn(dstScroll, 1);
 			columns.Children.Add(dstScroll);
 
@@ -152,18 +166,17 @@ namespace ForkPlus.Plugins.Archive
 			PluginEnvironment.ApplyLocalization(_root);
 		}
 
+		/// <summary>
+		/// 栏容器：一道分隔线 + 内容占位。内容自身负责滚动（<see cref="TreeView"/> 自带滚动），
+		/// 因此不再外套外层滚动容器，避免嵌套滚动把树撑成无穷高。
+		/// </summary>
 		private static Border WrapPane(Control content, Thickness separator)
 		{
 			return new Border
 			{
 				BorderBrush = GridLine,
 				BorderThickness = separator,
-				Child = new ScrollViewer
-				{
-					Content = content,
-					HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-					VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-				},
+				Child = content,
 			};
 		}
 
@@ -216,8 +229,8 @@ namespace ForkPlus.Plugins.Archive
 			CancelRender();
 			_context = null;
 			_host = null;
-			_srcPanel.Children.Clear();
-			_dstPanel.Children.Clear();
+			_srcPane.Content = null;
+			_dstPane.Content = null;
 			_srcTitle.Text = string.Empty;
 			_dstTitle.Text = string.Empty;
 			_status.Text = string.Empty;
@@ -236,8 +249,8 @@ namespace ForkPlus.Plugins.Archive
 		private void StartRender()
 		{
 			CancelRender();
-			_srcPanel.Children.Clear();
-			_dstPanel.Children.Clear();
+			_srcPane.Content = null;
+			_dstPane.Content = null;
 			UpdateTitles();
 			if (_context == null)
 			{
@@ -372,7 +385,7 @@ namespace ForkPlus.Plugins.Archive
 		/// <summary>
 		/// 把一侧的展开结果挂到栏内。
 		/// 控件必须在 UI 线程构建（后台线程构建的 Avalonia 控件不会渲染出来），因此这里只投递
-		/// 纯数据模型，在 UI 线程里再 <see cref="BuildSummary"/> / <see cref="BuildRow"/> 成控件后挂载。
+		/// 纯数据模型，在 UI 线程里再 <see cref="BuildPane"/> 成控件后挂载。
 		/// </summary>
 		private void PostModel(int generation, int column, ArchiveModel model, string password)
 		{
@@ -381,102 +394,230 @@ namespace ForkPlus.Plugins.Archive
 				PostMessage(generation, column, DescribeError(model, password));
 				return;
 			}
-			StackPanel panel = column == 0 ? _srcPanel : _dstPanel;
+			ContentControl pane = column == 0 ? _srcPane : _dstPane;
 			Dispatcher.UIThread.Post(delegate
 			{
 				if (_released || generation != _renderGeneration)
 				{
 					return;
 				}
-				panel.Children.Add(BuildSummary(model));
-				foreach (ArchiveEntryNode entry in model.Entries)
-				{
-					panel.Children.Add(BuildRow(entry));
-				}
-				if (model.Truncated)
-				{
-					panel.Children.Add(BuildNote(PluginEnvironment.Format("Showing first {0} entries only.", model.Entries.Count)));
-				}
+				pane.Content = BuildPane(model);
 			});
 		}
 
+		/// <summary>栏内容 = 顶部摘要（徽章 + 整包 MD5）+ 其下条目树。</summary>
+		private static Control BuildPane(ArchiveModel model)
+		{
+			Grid grid = new Grid
+			{
+				RowDefinitions = new RowDefinitions("Auto,*"),
+			};
+			Control summary = BuildSummary(model);
+			Grid.SetRow(summary, 0);
+			grid.Children.Add(summary);
+			Control tree = BuildTree(model);
+			Grid.SetRow(tree, 1);
+			grid.Children.Add(tree);
+			return grid;
+		}
+
+		/// <summary>摘要：格式 / 条目数 / 体积 / 加密做成小徽章，下面是整包 MD5（等宽）与截断说明。</summary>
 		private static Control BuildSummary(ArchiveModel model)
 		{
-			string line = model.Format;
-			line = line + "  ·  " + PluginEnvironment.Format("{0} files, {1} folders", model.FileCount, model.DirectoryCount);
+			StackPanel panel = new StackPanel
+			{
+				Margin = new Thickness(0.0, 2.0, 0.0, 8.0),
+			};
+			StackPanel chips = new StackPanel
+			{
+				Orientation = Orientation.Horizontal,
+				Spacing = 6.0,
+				Margin = new Thickness(0.0, 0.0, 0.0, 5.0),
+			};
+			chips.Children.Add(Chip(Label(model.Format, 11.5, FontWeight.SemiBold, 1.0), ChipTint));
+			chips.Children.Add(Chip(Label(PluginEnvironment.Format("{0} files, {1} folders", model.FileCount, model.DirectoryCount), 11.5, FontWeight.Normal, 0.75), Subtle));
 			if (model.TotalFileSize > 0L)
 			{
-				line = line + "  ·  " + PluginSizeFormat.ReadableFileSize(model.TotalFileSize, false);
+				chips.Children.Add(Chip(Label(PluginSizeFormat.ReadableFileSize(model.TotalFileSize, false), 11.5, FontWeight.Normal, 0.75), Subtle));
 			}
 			if (model.HasEncrypted)
 			{
-				line = line + "  ·  " + PluginEnvironment.Translate("encrypted");
+				chips.Children.Add(Chip(Label(PluginEnvironment.Translate("encrypted"), 11.5, FontWeight.Normal, 0.85), Subtle));
 			}
-			return new TextBlock
+			panel.Children.Add(chips);
+
+			if (!string.IsNullOrEmpty(model.Md5))
 			{
-				Text = line,
-				FontSize = 12.0,
-				Opacity = 0.7,
-				TextWrapping = TextWrapping.Wrap,
-				Margin = new Thickness(0.0, 2.0, 0.0, 6.0),
-			};
+				StackPanel line = new StackPanel
+				{
+					Orientation = Orientation.Horizontal,
+					Spacing = 6.0,
+				};
+				line.Children.Add(Label("MD5", 11.0, FontWeight.SemiBold, 0.55));
+				line.Children.Add(new SelectableTextBlock
+				{
+					Text = model.Md5,
+					FontFamily = MonoFont,
+					FontSize = 11.5,
+					Opacity = 0.8,
+					VerticalAlignment = VerticalAlignment.Center,
+				});
+				panel.Children.Add(line);
+			}
+
+			if (model.Truncated)
+			{
+				panel.Children.Add(Note(PluginEnvironment.Format("Showing first {0} entries only.", model.Entries.Count)));
+			}
+			if (model.HashTruncated)
+			{
+				panel.Children.Add(Note(PluginEnvironment.Format("Entry MD5 computed for {0} / {1} files.", model.HashedEntryCount, model.FileCount)));
+			}
+			return panel;
 		}
 
-		private static Control BuildRow(ArchiveEntryNode entry)
+		/// <summary>条目树：用成熟 <see cref="TreeView"/> 呈现层级（自带展开 / 折叠、缩进与滚动）。</summary>
+		private static Control BuildTree(ArchiveModel model)
 		{
+			if (model.Entries.Count == 0)
+			{
+				return new TextBlock
+				{
+					Text = PluginEnvironment.Translate("empty archive"),
+					FontSize = 12.0,
+					Opacity = 0.7,
+					Margin = new Thickness(0.0, 4.0, 0.0, 0.0),
+				};
+			}
+			TreeView tree = new TreeView
+			{
+				Background = null,
+				BorderThickness = new Thickness(0.0),
+				Padding = new Thickness(0.0),
+			};
+			// 展平序列是树序遍历，靠每个条目的 Depth 还原父子：ancestors[i] 为当前深度 i 的最近祖先。
+			List<TreeViewItem> ancestors = new List<TreeViewItem>();
+			foreach (ArchiveEntryNode entry in model.Entries)
+			{
+				TreeViewItem item = new TreeViewItem
+				{
+					Header = BuildNodeHeader(entry),
+					IsExpanded = true,
+				};
+				int depth = entry.Depth;
+				if (depth > ancestors.Count)
+				{
+					depth = ancestors.Count;
+				}
+				if (depth == 0)
+				{
+					tree.Items.Add(item);
+				}
+				else
+				{
+					ancestors[depth - 1].Items.Add(item);
+				}
+				while (ancestors.Count > depth)
+				{
+					ancestors.RemoveAt(ancestors.Count - 1);
+				}
+				ancestors.Add(item);
+			}
+			return tree;
+		}
+
+		/// <summary>树节点行：目录名加粗带 / 后缀；文件右侧跟体积徽章 + 内容 MD5（等宽）。</summary>
+		private static Control BuildNodeHeader(ArchiveEntryNode entry)
+		{
+			bool directory = entry.IsDirectory;
 			Grid row = new Grid
 			{
-				ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-				Margin = new Thickness(2.0 + entry.Depth * 14.0, 1.0, 4.0, 1.0),
+				ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"),
+				HorizontalAlignment = HorizontalAlignment.Stretch,
+				Margin = new Thickness(0.0, 1.0, 6.0, 1.0),
 			};
-			string label = entry.IsDirectory ? entry.Name + "/" : entry.Name;
 			TextBlock name = new TextBlock
 			{
-				Text = label,
+				Text = directory ? entry.Name + "/" : entry.Name,
 				FontSize = 12.5,
-				FontWeight = entry.IsDirectory ? FontWeight.SemiBold : FontWeight.Normal,
+				FontWeight = directory ? FontWeight.SemiBold : FontWeight.Normal,
 				TextWrapping = TextWrapping.NoWrap,
 				TextTrimming = TextTrimming.CharacterEllipsis,
+				VerticalAlignment = VerticalAlignment.Center,
 			};
 			Grid.SetColumn(name, 0);
 			row.Children.Add(name);
+			if (directory)
+			{
+				return row;
+			}
 			if (entry.IsEncrypted)
 			{
-				TextBlock locked = new TextBlock
-				{
-					Text = "[" + PluginEnvironment.Translate("encrypted") + "]",
-					FontSize = 11.0,
-					Opacity = 0.7,
-					Margin = new Thickness(8.0, 0.0, 0.0, 0.0),
-				};
+				Border locked = Chip(Label("[" + PluginEnvironment.Translate("encrypted") + "]", 10.5, FontWeight.Normal, 0.8), Subtle);
+				locked.Margin = new Thickness(10.0, 0.0, 0.0, 0.0);
+				locked.HorizontalAlignment = HorizontalAlignment.Right;
 				Grid.SetColumn(locked, 1);
 				row.Children.Add(locked);
+				return row;
 			}
-			else if (!entry.IsDirectory)
+			Border size = Chip(Label(entry.Size.HasValue ? PluginSizeFormat.ReadableFileSize(entry.Size.Value, false) : "-", 10.5, FontWeight.Normal, 0.8), Subtle);
+			size.Margin = new Thickness(10.0, 0.0, 0.0, 0.0);
+			size.HorizontalAlignment = HorizontalAlignment.Right;
+			Grid.SetColumn(size, 1);
+			row.Children.Add(size);
+			if (!string.IsNullOrEmpty(entry.Md5))
 			{
-				TextBlock size = new TextBlock
+				TextBlock md5 = new TextBlock
 				{
-					Text = entry.Size.HasValue ? PluginSizeFormat.ReadableFileSize(entry.Size.Value, false) : string.Empty,
-					FontSize = 12.0,
+					Text = entry.Md5,
+					FontFamily = MonoFont,
+					FontSize = 11.0,
 					Opacity = 0.6,
-					HorizontalAlignment = HorizontalAlignment.Right,
-					Margin = new Thickness(12.0, 0.0, 0.0, 0.0),
+					TextWrapping = TextWrapping.NoWrap,
+					VerticalAlignment = VerticalAlignment.Center,
+					Margin = new Thickness(10.0, 0.0, 0.0, 0.0),
 				};
-				Grid.SetColumn(size, 1);
-				row.Children.Add(size);
+				Grid.SetColumn(md5, 2);
+				row.Children.Add(md5);
 			}
 			return row;
 		}
 
-		private static Control BuildNote(string text)
+		/// <summary>小徽章：浅底 + 圆角，承载格式名 / 体积这类短标签。</summary>
+		private static Border Chip(Control child, IBrush background)
+		{
+			return new Border
+			{
+				Background = background,
+				CornerRadius = new CornerRadius(4.0),
+				Padding = new Thickness(7.0, 2.0, 7.0, 2.0),
+				VerticalAlignment = VerticalAlignment.Center,
+				Child = child,
+			};
+		}
+
+		private static TextBlock Label(string text, double size, FontWeight weight, double opacity)
 		{
 			return new TextBlock
 			{
 				Text = text,
-				FontSize = 12.0,
-				Opacity = 0.7,
+				FontSize = size,
+				FontWeight = weight,
+				Opacity = opacity,
+				TextWrapping = TextWrapping.NoWrap,
+				VerticalAlignment = VerticalAlignment.Center,
+			};
+		}
+
+		private static TextBlock Note(string text)
+		{
+			return new TextBlock
+			{
+				Text = text,
+				FontSize = 11.0,
+				Opacity = 0.6,
 				TextWrapping = TextWrapping.Wrap,
-				Margin = new Thickness(0.0, 6.0, 0.0, 0.0),
+				Margin = new Thickness(0.0, 3.0, 0.0, 0.0),
 			};
 		}
 
@@ -558,20 +699,20 @@ namespace ForkPlus.Plugins.Archive
 
 		private void PostMessage(int generation, int column, string text)
 		{
-			StackPanel panel = column == 0 ? _srcPanel : _dstPanel;
+			ContentControl pane = column == 0 ? _srcPane : _dstPane;
 			Dispatcher.UIThread.Post(delegate
 			{
 				if (_released || generation != _renderGeneration)
 				{
 					return;
 				}
-				panel.Children.Add(new TextBlock
+				pane.Content = new TextBlock
 				{
 					Text = text,
 					TextWrapping = TextWrapping.Wrap,
 					Margin = new Thickness(0.0, 4.0, 0.0, 8.0),
 					Opacity = 0.7,
-				});
+				};
 			});
 		}
 

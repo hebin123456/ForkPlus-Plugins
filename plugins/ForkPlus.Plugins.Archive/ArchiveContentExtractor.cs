@@ -15,8 +15,9 @@ using SC = SharpCompress.Compressors;
 namespace ForkPlus.Plugins.Archive
 {
 	/// <summary>
-	/// 用 SharpCompress（MIT）把压缩包「列表化」成条目树——只读条目标（路径 / 目录 / 大小 /
-	/// 是否加密），不读取解压后的文件内容，因此对比视图只看压缩包里有什么。
+	/// 用 SharpCompress（MIT）把压缩包「列表化」成条目树——逐个条目标取路径 / 目录 / 大小 /
+	/// 是否加密，并按额度为文件条目计算内容 MD5；对比视图据此呈现「压缩包里有什么、各部分是否一致」。
+	/// 整包 MD5 直接对压缩包原始字节计算；条目内容 MD5 走有界解压，受条目数 / 字节额度限制。
 	///
 	/// 处理分两路：
 	/// <list type="bullet">
@@ -38,6 +39,9 @@ namespace ForkPlus.Plugins.Archive
 		/// <summary>sniff 解压流的字节数（够判定 tar 头即可）。</summary>
 		private const int SniffBytes = 512;
 
+		/// <summary>单条内容参与 MD5 计算的最大字节数，超出即放弃该条（不让单个大文件吃掉全部额度）。</summary>
+		private const long MaxEntryHashBytes = 16L * 1024 * 1024;
+
 		/// <summary>按扩展名 + 内容把一侧压缩包展开成条目树。永不抛异常，失败归类到 <see cref="ArchiveModel.Error"/>。</summary>
 		public static ArchiveModel Extract(string path, byte[] bytes, string password)
 		{
@@ -45,6 +49,8 @@ namespace ForkPlus.Plugins.Archive
 			{
 				return ArchiveModel.Failed(ArchiveError.Corrupt, "no bytes");
 			}
+			// 整包 MD5 直接对压缩包原始字节算，稳定且无需解压。
+			string archiveMd5 = Md5Hex(bytes);
 			string pw = string.IsNullOrEmpty(password) ? null : password;
 			string fileName = Path.GetFileName(path) ?? string.Empty;
 			string ext = Extension(path);
@@ -72,17 +78,17 @@ namespace ForkPlus.Plugins.Archive
 					{
 						return ArchiveModel.Failed(ArchiveError.Corrupt, ex.Message);
 					}
-					return FromArchive(inner, pw, "TAR · " + CompressionName(ext));
+					return FromArchive(inner, pw, "TAR · " + CompressionName(ext), archiveMd5);
 				}
-				return SingleStream(fileName, ext, bytes);
+				return SingleStream(fileName, ext, bytes, archiveMd5);
 			}
 
-			return FromArchive(bytes, pw, FormatForExtension(ext));
+			return FromArchive(bytes, pw, FormatForExtension(ext), archiveMd5);
 		}
 
 		// ---- 压缩包本体 ----
 
-		private static ArchiveModel FromArchive(byte[] bytes, string password, string formatOverride)
+		private static ArchiveModel FromArchive(byte[] bytes, string password, string formatOverride, string archiveMd5)
 		{
 			try
 			{
@@ -91,11 +97,18 @@ namespace ForkPlus.Plugins.Archive
 				{
 					string format = formatOverride ?? FormatForArchiveType(archive.Type);
 					List<RawEntry> raw = new List<RawEntry>();
+					HashBudget budget = new HashBudget();
 					foreach (IArchiveEntry entry in archive.Entries)
 					{
-						raw.Add(RawEntry.From(entry));
+						RawEntry item = RawEntry.From(entry);
+						// 加密条目不尝试解密算哈希（可能抛错），其内容 MD5 留空。
+						if (!item.IsDirectory && !item.IsEncrypted)
+						{
+							item.Md5 = HashEntry(entry, budget);
+						}
+						raw.Add(item);
 					}
-					return Build(format, raw);
+					return Build(format, raw, archiveMd5, budget);
 				}
 			}
 			catch (Exception ex)
@@ -139,6 +152,7 @@ namespace ForkPlus.Plugins.Archive
 			public long? Size;
 			public long? CompressedSize;
 			public bool IsEncrypted;
+			public string Md5;
 
 			public static RawEntry From(IArchiveEntry entry)
 			{
@@ -181,8 +195,120 @@ namespace ForkPlus.Plugins.Archive
 			}
 		}
 
+		// ---- 内容 MD5 ----
+
+		/// <summary>
+		/// 条目内容 MD5 的额度控制：对「条目数」与「解压总字节」双上限，超出即停止计算其余条目，
+		/// 避免对超大 / 超多条目压缩包做全量解压（既慢又可能触发压缩炸弹）。整包 MD5 不受此限。
+		/// </summary>
+		private sealed class HashBudget
+		{
+			/// <summary>最多计算多少个条目的内容 MD5。</summary>
+			private const int MaxEntries = 2000;
+
+			/// <summary>参与计算的内容总字节上限（按未压缩大小累计）。</summary>
+			private const long MaxTotalBytes = 64L * 1024 * 1024;
+
+			private int _entries;
+
+			private long _bytes;
+
+			/// <summary>额度用尽（或遇到无法读取的条目）后为 true，其余条目不再计算 MD5。</summary>
+			public bool Truncated { get; private set; }
+
+			/// <summary>仍有额度时返回 true；否则标记截断并返回 false。</summary>
+			public bool TryReserve()
+			{
+				if (Truncated || _entries >= MaxEntries || _bytes >= MaxTotalBytes)
+				{
+					Truncated = true;
+					return false;
+				}
+				return true;
+			}
+
+			/// <summary>一条内容计算完成，计入额度。</summary>
+			public void Account(long bytes)
+			{
+				_entries++;
+				_bytes += bytes;
+			}
+
+			/// <summary>遇到超限 / 读取失败，停止后续计算。</summary>
+			public void Stop()
+			{
+				Truncated = true;
+			}
+		}
+
+		/// <summary>读取一条目的解压内容并算 MD5；无额度 / 超单条上限 / 读取失败都返回 null（并停止后续）。</summary>
+		private static string HashEntry(IArchiveEntry entry, HashBudget budget)
+		{
+			if (!budget.TryReserve())
+			{
+				return null;
+			}
+			try
+			{
+				using (Stream source = entry.OpenEntryStream())
+				{
+					byte[] content = ReadBounded(source, MaxEntryHashBytes);
+					if (content == null)
+					{
+						budget.Stop();
+						return null;
+					}
+					budget.Account(content.Length);
+					return Md5Hex(content);
+				}
+			}
+			catch (Exception)
+			{
+				// 单个条目读不出来（格式怪癖 / 加密）就放弃后续计算，不让整包失败。
+				budget.Stop();
+				return null;
+			}
+		}
+
+		/// <summary>把流读到内存（上限 <paramref name="maxBytes"/>）；超过上限返回 null，避免为哈希整包解压。</summary>
+		private static byte[] ReadBounded(Stream source, long maxBytes)
+		{
+			using (MemoryStream output = new MemoryStream())
+			{
+				byte[] buffer = new byte[81920];
+				long total = 0L;
+				int read;
+				while ((read = source.Read(buffer, 0, buffer.Length)) > 0)
+				{
+					total += read;
+					if (total > maxBytes)
+					{
+						return null;
+					}
+					output.Write(buffer, 0, read);
+				}
+				return output.ToArray();
+			}
+		}
+
+		/// <summary>MD5 → 32 位小写十六进制。</summary>
+		private static string Md5Hex(byte[] bytes)
+		{
+			// 全限定：SharpCompress.Common 里也有同名 CryptographicException，避免 using 冲突。
+			using (System.Security.Cryptography.MD5 md5 = System.Security.Cryptography.MD5.Create())
+			{
+				byte[] hash = md5.ComputeHash(bytes);
+				StringBuilder builder = new StringBuilder(hash.Length * 2);
+				for (int i = 0; i < hash.Length; i++)
+				{
+					builder.Append(hash[i].ToString("x2"));
+				}
+				return builder.ToString();
+			}
+		}
+
 		/// <summary>把扁平条目列表还原成目录树，再按「目录在前、同名按名排序」的树序遍历展平。</summary>
-		private static ArchiveModel Build(string format, List<RawEntry> raw)
+		private static ArchiveModel Build(string format, List<RawEntry> raw, string archiveMd5, HashBudget budget)
 		{
 			TreeNode root = new TreeNode(string.Empty, string.Empty, true);
 			foreach (RawEntry entry in raw)
@@ -219,18 +345,20 @@ namespace ForkPlus.Plugins.Archive
 						child.Size = entry.IsDirectory ? (long?)null : entry.Size;
 						child.CompressedSize = entry.IsDirectory ? (long?)null : entry.CompressedSize;
 						child.IsEncrypted = entry.IsEncrypted;
+						child.Md5 = entry.IsDirectory ? null : entry.Md5;
 					}
 					current = child;
 				}
 			}
 
 			List<ArchiveEntryNode> flat = new List<ArchiveEntryNode>();
-			int[] counters = new int[2];
+			// counters: [0]=目录数, [1]=文件数, [2]=已算内容 MD5 的文件数
+			int[] counters = new int[3];
 			long[] total = new long[1];
 			bool[] encrypted = new bool[1];
 			bool[] truncated = new bool[1];
 			Walk(root, 0, flat, counters, total, encrypted, truncated);
-			return new ArchiveModel(format, flat, counters[1], counters[0], total[0], encrypted[0], truncated[0], ArchiveError.None, null);
+			return new ArchiveModel(format, flat, counters[1], counters[0], total[0], encrypted[0], truncated[0], ArchiveError.None, null, archiveMd5, counters[2], budget != null && budget.Truncated);
 		}
 
 		private static void Walk(TreeNode node, int depth, List<ArchiveEntryNode> flat, int[] counters, long[] total, bool[] encrypted, bool[] truncated)
@@ -242,7 +370,7 @@ namespace ForkPlus.Plugins.Archive
 					truncated[0] = true;
 					return;
 				}
-				flat.Add(new ArchiveEntryNode(child.Path, child.Name, child.IsDirectory, child.Size, child.CompressedSize, child.IsEncrypted, depth));
+				flat.Add(new ArchiveEntryNode(child.Path, child.Name, child.IsDirectory, child.Size, child.CompressedSize, child.IsEncrypted, depth, child.Md5));
 				if (child.IsDirectory)
 				{
 					counters[0]++;
@@ -251,6 +379,10 @@ namespace ForkPlus.Plugins.Archive
 				{
 					counters[1]++;
 					total[0] += child.Size ?? 0L;
+					if (!string.IsNullOrEmpty(child.Md5))
+					{
+						counters[2]++;
+					}
 				}
 				if (child.IsEncrypted)
 				{
@@ -286,6 +418,8 @@ namespace ForkPlus.Plugins.Archive
 
 			public bool IsEncrypted { get; set; }
 
+			public string Md5 { get; set; }
+
 			public List<TreeNode> Children { get; } = new List<TreeNode>();
 
 			public TreeNode Find(string name)
@@ -317,18 +451,42 @@ namespace ForkPlus.Plugins.Archive
 
 		// ---- 单文件压缩流 ----
 
-		private static ArchiveModel SingleStream(string fileName, string ext, byte[] bytes)
+		private static ArchiveModel SingleStream(string fileName, string ext, byte[] bytes, string archiveMd5)
 		{
 			string name = StripCompressionExt(fileName, ext);
 			long? size = TryUncompressedSize(ext, bytes);
+			string md5 = null;
+			bool hashTruncated = false;
+			// 单文件压缩流只有一条条目；为之算内容 MD5 需要解压一次（有单条上限，超限即放弃）。
+			try
+			{
+				using (MemoryStream source = new MemoryStream(bytes))
+				using (Stream inner = Wrap(ext, source))
+				{
+					byte[] content = ReadBounded(inner, MaxEntryHashBytes);
+					if (content != null)
+					{
+						md5 = Md5Hex(content);
+						size = size ?? content.LongLength;
+					}
+					else
+					{
+						hashTruncated = true;
+					}
+				}
+			}
+			catch (Exception)
+			{
+				hashTruncated = true;
+			}
 			List<ArchiveEntryNode> flat = new List<ArchiveEntryNode>
 			{
-				new ArchiveEntryNode(name, name, false, size, bytes.Length, false, 0)
+				new ArchiveEntryNode(name, name, false, size, bytes.Length, false, 0, md5)
 			};
-			return new ArchiveModel(CompressionName(ext), flat, 1, 0, size ?? 0L, false, false, ArchiveError.None, null);
+			return new ArchiveModel(CompressionName(ext), flat, 1, 0, size ?? 0L, false, false, ArchiveError.None, null, archiveMd5, md5 == null ? 0 : 1, hashTruncated);
 		}
 
-		/// <summary>gzip 的未压缩大小可由末尾 4 字节 ISIZE 直接读出，避免为列表而整包解压。</summary>
+		/// <summary>gzip 的未压缩大小可由末尾 4 字节 ISIZE 直接读出，无需为「大小」整包解压（内容 MD5 另走一次有界解压）。</summary>
 		private static long? TryUncompressedSize(string ext, byte[] bytes)
 		{
 			if ((ext == "gz" || ext == "gzip") && bytes.Length >= 4)

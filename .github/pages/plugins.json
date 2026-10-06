@@ -58,23 +58,23 @@
       "version": "0.0.1",
       "assembly": "ForkPlus.Plugins.Office",
       "source": "plugins/ForkPlus.Plugins.Office",
-      "summary": "Office 套件对比视图：认领 .docx / .xlsx / .pptx，命中后用 Open XML SDK 提取正文内容，把差异区换成左右两栏并排对比——Word 段落 / 标题 / 表格、Excel 工作表网格、PowerPoint 幻灯片文字；新增 / 删除 / 修改三种变更都有对应形态。",
+      "summary": "Office 套件对比视图：认领 .docx / .xlsx / .pptx，命中后用 Open XML SDK 提取正文内容，把差异区换成左右两栏并排对比——Word 段落 / 标题 / 表格、Excel 工作表网格、PowerPoint 幻灯片文字。呈现上尽量「像文档」而非纯文字：保留 run 级字符格式（加粗 / 斜体 / 下划线 / 删除线），栏顶文档类型徽章，标题做成强调色条卡片，表格首行表头 + 隔行浅底，Excel 网格补列字母与行号；新增 / 删除 / 修改三种变更都有对应形态。",
       "extensions": [".docx", ".xlsx", ".pptx"],
       "screenshots": [
         {
           "file": "office-modify.png",
           "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.docx，差异区由 Office 插件渲染成左右两栏，左 old、右 new 各是提取出的 Word 段落与表格",
-          "caption": "「修改」对比（Word · .docx，1920×1280 完整界面，未裁切）：左栏标题形如 <code>旧 · sample.docx · …</code>（提交前版本），右栏 <code>新 · sample.docx · …</code>（提交后版本）。标题 <code>ForkPlus Manual</code> 以标题块加粗显示，正文里 <code>Revision: v1</code> / <code>Revision: v2</code>、<code>Old: export to PNG only.</code> / <code>New: export to SVG.</code> 左右对照，底部表格 <code>Sync</code> 行由 <code>beta</code> 变为 <code>GA</code>；状态行给出 <code>Office compare: 5 / 5 blocks</code>。"
+          "caption": "「修改」对比（Word · .docx，1920×1280 完整界面，未裁切）：左右栏顶部各是一个 <code>Word</code> 类型徽章（含块数 / 字数），标题 <code>ForkPlus Manual</code> 渲染成左缘强调色条的一级标题卡片；正文里 <code>Revision: v1</code> / <code>Revision: v2</code>（版本值加粗）、<code>Old: export to PNG only.</code> / <code>New: export to SVG.</code> 左右对照，并有一行演示内联字符格式的 <code>Bold · Italic · Underline · Strike</code>（四种 run 格式一屏可辨）；底部表格首行 <code>Component / Status</code> 做表头、隔行浅底，<code>Sync</code> 行由 <code>beta</code> 变为 <code>GA</code>；状态行给出 <code>Office compare: 6 / 6 blocks</code>。"
         },
         {
           "file": "office-add.png",
           "alt": "ForkPlus 完整软件界面：提交视图选中 add: sample.xlsx，差异区右栏渲染新增工作表的单元格网格，左栏显示 old · not present 占位",
-          "caption": "「新增」对比（Excel · .xlsx）：提交给仓库新增了 sample.xlsx，旧侧不存在。插件在左栏给出标题 <code>旧 · not present</code> 与栏内 <code>not present</code> 占位，右栏标题 <code>已创建 · sample.xlsx · …</code> 并渲染提取出的 <code>Budget</code> 工作表标题与单元格网格（<code>Item / Q1 / Q2</code>、<code>Licenses 1200 1500</code>、<code>Hardware 800 1200</code>…）——一眼看出这是纯新增，而非渲染失败。"
+          "caption": "「新增」对比（Excel · .xlsx）：提交给仓库新增了 sample.xlsx，旧侧不存在。插件在左栏给出标题 <code>旧 · not present</code> 与栏内 <code>not present</code> 占位，右栏顶部是 <code>Excel</code> 类型徽章，标题 <code>已创建 · sample.xlsx · …</code> 下渲染提取出的 <code>Budget</code> 工作表标题与单元格网格——网格带列字母（<code>A B C</code>）与行号、首行当表头加粗、隔行浅底，内容如 <code>Item / Q1 / Q2</code>、<code>Licenses 1200 1500</code>、<code>Hardware 800 1200</code>…——一眼看出这是纯新增，而非渲染失败。"
         },
         {
           "file": "office-remove.png",
           "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.pptx，差异区左栏渲染被删除的幻灯片文字，右栏显示 new · not present 占位",
-          "caption": "「删除」对比（PowerPoint · .pptx）：提交删除了 sample.pptx，新侧不存在。插件在左栏标题 <code>已删除 · sample.pptx · …</code> 下渲染被删文件的幻灯片文字——<code>Slide 1</code>（<code>ForkPlus</code> / <code>Release v1</code>）与 <code>Slide 2</code>（<code>Roadmap</code> / <code>PNG export</code> / <code>PDF compare</code>），每张幻灯片前有一行加粗的 <code>Slide N</code> 小标题；右栏给出 <code>新 · not present</code> 与占位——删除场景同样可见完整内容。"
+          "caption": "「删除」对比（PowerPoint · .pptx）：提交删除了 sample.pptx，新侧不存在。插件在左栏标题 <code>已删除 · sample.pptx · …</code> 下渲染被删文件的幻灯片文字——<code>Slide 1</code>（<code>ForkPlus</code> / <code>Release v1</code>）与 <code>Slide 2</code>（<code>Roadmap</code> / <code>PNG export</code> / <code>PDF compare</code>），每张幻灯片前有一行加粗的 <code>Slide N</code> 小标题，幻灯片内首行文字加粗（保留 run 级粗体投影）；右栏给出 <code>新 · not present</code> 与占位——删除场景同样可见完整内容。"
         }
       ],
       "sections": [
@@ -84,11 +84,11 @@
         },
         {
           "heading": "内容区：两栏各自独立滚动",
-          "html": "<p>内容区是两列 <code>Grid</code>（<code>ColumnDefinitions=\"*,*\"</code>），每列一个 <code>ScrollViewer</code> 包着 <code>StackPanel</code>。与 PDF 插件按页号强制顶对齐不同，Office 两栏内容长度往往不同（一个文档多一段、一张表多几行），因此两栏<strong>各自独立滚动</strong>更好读。提取在后台线程进行，控件构建回到 UI 线程；<code>CancelRender</code> 用「代次 + <code>CancellationToken</code>」保证切换文件后旧任务立即作废。</p><p>内容块见「三件套各怎么提取」；解析失败只影响该侧——栏内给出错误文案，不中断另一侧。</p>"
+          "html": "<p>内容区是两列 <code>Grid</code>（<code>ColumnDefinitions=\"*,*\"</code>），每列一个 <code>ScrollViewer</code> 包着 <code>StackPanel</code>。与 PDF 插件按页号强制顶对齐不同，Office 两栏内容长度往往不同（一个文档多一段、一张表多几行），因此两栏<strong>各自独立滚动</strong>更好读。提取在后台线程进行，控件构建回到 UI 线程；<code>CancelRender</code> 用「代次 + <code>CancellationToken</code>」保证切换文件后旧任务立即作废。</p><p>每栏最上方先落一个<strong>文档类型徽章</strong>（<code>Word</code> / <code>Excel</code> / <code>PowerPoint</code>，左缘强调色条）与 <code>N blocks · M chars</code> 统计，让人一眼分清这是哪种文档。内容块的呈现尽量「像文档」：标题是左缘强调色条的卡片（一级标题字号更大、再垫一层浅底），段落保留 run 级<strong>加粗 / 斜体 / 下划线 / 删除线</strong>（走 <code>SelectableTextBlock.Inlines</code> 的 <code>Run</code>，可选中复制），表格首行当表头（加粗 + 浅底）、其余行隔行浅底、单元格只画右 / 下细线。</p><p>内容块见「三件套各怎么提取」；解析失败只影响该侧——栏内给出错误文案，不中断另一侧。</p>"
         },
         {
           "heading": "三件套各怎么提取",
-          "html": "<p>三件套共用一套块模型（标题 / 段落 / 表格），各由一个解析器产出：</p><div class=\"grid grid-2\"><div class=\"card\"><h3>Word（.docx）</h3><p>按 <code>Body</code> 的文档顺序遍历，<code>w:p</code> 取 <code>InnerText</code>，样式 id 含 <code>heading</code> / <code>标题</code>（或内置 <code>1</code>–<code>9</code>）的段落升级为标题块；<code>w:tbl</code> 逐行逐格抽成表格块，段落与表格的交错顺序原样保留。</p></div><div class=\"card\"><h3>Excel（.xlsx）</h3><p>遍历 <code>Sheets</code>，每张表先落一个工作表名标题块，再落一张网格表格块。单元格按 <code>CellReference</code>（如 <code>B3</code>）还原列位置，共享字符串 / 内联字符串 / 数值都还原为文本；单表最多取 400 行 × 64 列，超出部分截断并在标题注明 <code>(N/M rows)</code>。</p></div></div><p>PowerPoint（.pptx）遍历 <code>SlideIdList</code>，每张幻灯片先落一个 <code>Slide N</code> 标题块，再抽 <code>ShapeTree</code> 中每个带 <code>TextBody</code> 的形状里的段落文字。</p>"
+          "html": "<p>三件套共用一套块模型（标题 / 段落 / 表格），各由一个解析器产出，段落还能携带带格式的 run：</p><div class=\"grid grid-2\"><div class=\"card\"><h3>Word（.docx）</h3><p>按 <code>Body</code> 的文档顺序遍历，<code>w:p</code> 取 <code>InnerText</code>，样式 id 含 <code>heading</code> / <code>标题</code>（或内置 <code>1</code>–<code>9</code>）的段落升级为标题块、级别取样式名末尾的数字（<code>Heading1</code> → 1 级）；普通段落把 <code>w:r</code> 逐个投影成带格式 run（<code>w:b</code> / <code>w:i</code> / <code>w:u</code> / <code>w:strike</code> → 加粗 / 斜体 / 下划线 / 删除线）；<code>w:tbl</code> 逐行逐格抽成表格块，段落与表格的交错顺序原样保留。</p></div><div class=\"card\"><h3>Excel（.xlsx）</h3><p>遍历 <code>Sheets</code>，每张表先落一个工作表名标题块，再落一张网格表格块。单元格按 <code>CellReference</code>（如 <code>B3</code>）还原列位置，共享字符串 / 内联字符串 / 数值都还原为文本；视图侧再给网格补上列字母与行号。单表最多取 400 行 × 64 列，超出部分截断并在标题注明 <code>(N/M rows)</code>。</p></div></div><p>PowerPoint（.pptx）遍历 <code>SlideIdList</code>，每张幻灯片先落一个 <code>Slide N</code> 标题块，再抽 <code>ShapeTree</code> 中每个带 <code>TextBody</code> 的形状里的段落文字，各段落同样保留 run 级粗体等格式。</p>"
         },
         {
           "heading": "新增 / 删除 / 修改三种场景",
@@ -114,41 +114,45 @@
       "version": "0.0.1",
       "assembly": "ForkPlus.Plugins.Archive",
       "source": "plugins/ForkPlus.Plugins.Archive",
-      "summary": "压缩包对比视图：认领 zip / 7z / rar / tar 及 gz / bz2 / xz / zst 等主流压缩包，命中后把两侧压缩包各自展开成「条目树」左右并排对比——只看压缩包里有什么（目录 / 文件 / 大小 / 是否加密），不读取解压后的文件内容；带密码的压缩包（如头部加密的 7z / rar）可在视图里输入密码。",
+      "summary": "压缩包对比视图：认领 zip / 7z / rar / tar 及 gz / bz2 / xz / zst 等主流压缩包，命中后把两侧压缩包各自展开成「条目树」，用成熟 <code>TreeView</code> 控件左右并排对比——目录 / 文件 / 大小 / 是否加密，并给出整包 MD5 与每个文件的内容 MD5，便于核对两侧是否一致；带密码的压缩包（如头部加密的 7z / rar）可在视图里输入密码。",
       "extensions": [".zip", ".7z", ".rar", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".zst", ".jar", ".apk", ".nupkg"],
       "screenshots": [
         {
           "file": "archive-modify.png",
           "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.zip，差异区由压缩包插件渲染成左右两栏，左 old、右 new 各是 sample.zip 展开后的条目树",
-          "caption": "「修改」对比（ZIP · .zip，1920×1280 完整界面，未裁切）：左栏标题为 <code>旧 · sample.zip · …</code>（提交前版本），右栏 <code>新 · sample.zip · …</code>（提交后版本），两栏各列出包内条目树 <code>assets/</code>、<code>docs/</code>、<code>README.md</code> 与文件体积；旧侧 <code>docs/</code> 下是 <code>changelog.md</code> / <code>guide.md</code>，新侧多出 <code>release-notes.md</code>，状态行给出 <code>Archive compare: 6 / 7 entries</code>。"
+          "caption": "「修改」对比（ZIP · .zip，1920×1280 完整界面，未裁切）：左栏标题为 <code>旧 · sample.zip · …</code>（提交前版本），右栏 <code>新 · sample.zip · …</code>（提交后版本）。每栏顶部是一行摘要徽章（格式 <code>ZIP</code> / 条目数 / 体积）加整包 MD5（等宽），其下用 <code>TreeView</code> 列出条目树 <code>assets/</code>、<code>docs/</code>、<code>README.md</code>——目录带 <code>/</code> 且可展开 / 折叠，文件右侧是体积徽章与内容 MD5；旧侧 <code>docs/</code> 下是 <code>changelog.md</code> / <code>guide.md</code>，新侧多出 <code>release-notes.md</code>（两侧整包 MD5 不同，一眼看出有改动），状态行给出 <code>Archive compare: 6 / 7 entries</code>。"
         },
         {
           "file": "archive-add.png",
           "alt": "ForkPlus 完整软件界面：提交视图选中 add: sample.tar.gz，差异区右栏渲染新增压缩包展开后的条目树，左栏显示 old · not present 占位",
-          "caption": "「新增」对比（TAR · GZIP · .tar.gz）：提交给仓库新增了 sample.tar.gz，旧侧不存在。插件在左栏给出标题 <code>旧 · not present</code> 与栏内 <code>not present</code> 占位，右栏标题 <code>已创建 · sample.tar.gz · …</code> 并把 gzip 解开、按 tar 展开成条目树（<code>assets/logo.bin</code>、<code>docs/guide.md</code>、<code>docs/changelog.md</code>、<code>docs/release-notes.md</code>、<code>README.md</code>）——一眼看出这是纯新增，而非解析失败。"
+          "caption": "「新增」对比（TAR · GZIP · .tar.gz）：提交给仓库新增了 sample.tar.gz，旧侧不存在。插件在左栏给出标题 <code>旧 · not present</code> 与栏内 <code>not present</code> 占位，右栏标题 <code>已创建 · sample.tar.gz · …</code> 并把 gzip 解开、按 tar 展开成 <code>TreeView</code> 条目树（<code>assets/logo.bin</code>、<code>docs/guide.md</code>、<code>docs/changelog.md</code>、<code>docs/release-notes.md</code>、<code>README.md</code>），栏顶给出格式 <code>TAR · GZIP</code> 徽章与整包 MD5、每个文件带体积徽章与内容 MD5——一眼看出这是纯新增，而非解析失败。"
         },
         {
           "file": "archive-remove.png",
           "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.tar.xz，差异区左栏渲染被删除压缩包展开后的条目树，右栏显示 new · not present 占位",
-          "caption": "「删除」对比（TAR · XZ · .tar.xz）：提交删除了 sample.tar.xz，新侧不存在。插件在左栏标题 <code>已删除 · sample.tar.xz · …</code> 下渲染被删包展开的条目树（xz 解压后按 tar 展开），右栏给出标题 <code>新 · not present</code> 与占位（状态行 <code>Archive compare: 6 / 0 entries</code>）——删除场景同样可见完整条目。"
+          "caption": "「删除」对比（TAR · XZ · .tar.xz）：提交删除了 sample.tar.xz，新侧不存在。插件在左栏标题 <code>已删除 · sample.tar.xz · …</code> 下渲染被删包展开的 <code>TreeView</code> 条目树（xz 解压后按 tar 展开），栏顶给出格式 <code>TAR · XZ</code> 徽章与整包 MD5、每个文件带内容 MD5；右栏给出标题 <code>新 · not present</code> 与占位（状态行 <code>Archive compare: 6 / 0 entries</code>）——删除场景同样可见完整条目。"
         }
       ],
       "sections": [
         {
           "heading": "对比视图长什么样",
-          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>密码输入行</strong>、<strong>条目树区</strong>。标题行本身也是两列 <code>Grid</code>，左旧右新各一个 <code>TextBlock</code>，文字形如 <code>old  ·  sample.zip  ·  1.09 KB</code>（角色名取 <code>PluginEnvironment.Translate</code>，文件名取 <code>Path.GetFileName</code>，体积取 <code>PluginSizeFormat.ReadableFileSize</code>），并直接采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>DstTitleBrush</code> 着色，跟随主题。</p><p>状态行显示 <code>Reading archive…</code>，随后落到 <code>Archive compare: 源条目数 / 目标条目数</code>；解析失败或密码问题则在状态行与密码行给出提示。</p>"
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>密码输入行</strong>、<strong>条目树区</strong>。标题行本身也是两列 <code>Grid</code>，左旧右新各一个 <code>TextBlock</code>，文字形如 <code>old  ·  sample.zip  ·  1.09 KB</code>（角色名取 <code>PluginEnvironment.Translate</code>，文件名取 <code>Path.GetFileName</code>，体积取 <code>PluginSizeFormat.ReadableFileSize</code>），并直接采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>DstTitleBrush</code> 着色，跟随主题。</p><p>条目树区两列各是一个栏容器 <code>Grid</code>（<code>RowDefinitions=\"Auto,*\"</code>）：栏顶先落一行<strong>摘要</strong>——格式 / 条目数 / 体积 / 加密做成小徽章，下面一行是<strong>整包 MD5</strong>（等宽字体、可选中），若条目被截断或 MD5 未算全也会在此注明；其下才是条目树。</p><p>状态行显示 <code>Reading archive…</code>，随后落到 <code>Archive compare: 源条目数 / 目标条目数</code>；解析失败或密码问题则在状态行与密码行给出提示。</p>"
         },
         {
-          "heading": "条目树：只看有什么，不读内容",
-          "html": "<p>这是本插件与 PDF / Office 插件的根本区别：它<strong>不读取解压后的文件内容</strong>，只把压缩包「列表化」成条目树——每条一行 <code>名称</code>（目录带 <code>/</code> 后缀、加粗）与 <code>体积</code>，加密条目额外标注 <code>[encrypted]</code>。两栏各自一个 <code>ScrollViewer</code> 包着 <code>StackPanel</code>，独立滚动。</p><p>条目树由包内路径还原：<code>Build</code> 按 <code>/</code> 拆段建树（压缩包常常只登记文件、不登记目录，插件会自动补出中间目录节点），再以「目录在前，其后按名排序（忽略大小写优先、序数兜底）」的树序遍历展平；渲染时按 <code>Depth</code> 缩进。<code>Path</code> 里的 <code>\\</code> 会归一成 <code>/</code>，开头的 <code>./</code> 与多余分隔符一并去掉。条目数超过 <strong>20000</strong> 时只保留前 20000 条并标记截断，用一行 <code>Showing first N entries only.</code> 说明，防止超大包卡死 UI。</p>"
+          "heading": "条目树：成熟 TreeView 承载层级",
+          "html": "<p>这是本插件与 PDF / Office 插件的根本区别：它把压缩包「列表化」成条目树并核对完整性，而不是把解压后的正文逐段渲染出来。条目树用 Avalonia 成熟的 <code>TreeView</code> 控件承载——自带展开 / 折叠、缩进与滚动，不再手写缩进；栏内每个文件节点右侧跟一个体积徽章与<strong>内容 MD5</strong>（等宽字体），目录节点加粗并带 <code>/</code> 后缀，加密条目标注 <code>[encrypted]</code>。</p><p>条目树由包内路径还原：<code>Build</code> 按 <code>/</code> 拆段建树（压缩包常常只登记文件、不登记目录，插件会自动补出中间目录节点），再以「目录在前，其后按名排序（忽略大小写优先、序数兜底）」的树序遍历展平；渲染时按每个条目的 <code>Depth</code> 还原父子关系挂进 <code>TreeViewItem</code>（默认展开）。<code>Path</code> 里的 <code>\\</code> 会归一成 <code>/</code>，开头的 <code>./</code> 与多余分隔符一并去掉。条目数超过 <strong>20000</strong> 时只保留前 20000 条并标记截断，用一行 <code>Showing first N entries only.</code> 说明，防止超大包卡死 UI。</p>"
+        },
+        {
+          "heading": "整包与条目 MD5",
+          "html": "<p><strong>整包 MD5</strong> 直接对压缩包原始字节计算，稳定且无需解压，落在每栏摘要里——两侧一比对就知道「包本身是否一致」，比逐个条目比大小更直接。</p><p><strong>条目内容 MD5</strong> 需要逐条解压内容才能算，因此设了额度控制，避免对超大 / 超多条目压缩包做全量解压（既慢又可能触发压缩炸弹）：最多 <code>2000</code> 条、单条不超过 <code>16 MB</code>、累计未压缩字节不超过 <code>64 MB</code>，超出即停止计算其余条目，并在摘要里注明 <code>Entry MD5 computed for N / M files.</code>。加密条目不解密算哈希，其内容 MD5 留空。</p><p>zip 是例外：其中央目录未加密，条目名 / 大小与整包 MD5 无需密码即可给出，加密条目标注 <code>[encrypted]</code>。</p>"
         },
         {
           "heading": "各格式怎么展开",
-          "html": "<p>展开用 <strong>SharpCompress</strong>，分两路：</p><div class=\"grid grid-2\"><div class=\"card\"><h3>压缩包本体</h3><p><code>zip</code> / <code>7z</code> / <code>rar</code> / <code>tar</code> 交给 <code>ArchiveFactory.Open</code> 按类型识别，逐个 <code>IArchiveEntry</code> 取 <code>Key</code> / <code>IsDirectory</code> / <code>Size</code> / <code>CompressedSize</code> / <code>IsEncrypted</code> 建树。<code>jar</code> / <code>war</code> / <code>apk</code> / <code>nupkg</code> / <code>whl</code> 本质是 zip 系容器，按内容识别后格式名按扩展名细分展示。</p></div><div class=\"card\"><h3>流式压缩</h3><p><code>gz</code> / <code>bz2</code> / <code>xz</code> / <code>zst</code>（含 <code>.tar.gz</code> / <code>.tgz</code> / <code>.tar.xz</code> 等组合）先解压 512 字节嗅探：命中 tar 的 <code>ustar</code> 魔数、或文件名形如 <code>.tar.gz</code> / <code>.tgz</code>，就整体解压后按 tar 建树，格式名记为 <code>TAR · GZIP</code> 这类；否则视为「单文件压缩流」，给出唯一一条条目。解压总量超过 <strong>512 MB</strong> 直接判失败，防压缩炸弹。</p></div></div><p>单文件压缩流里 <code>gzip</code> 的未压缩大小可由末尾 4 字节 <code>ISIZE</code> 直接读出，无需为列表整包解压；<code>bz2</code> / <code>xz</code> / <code>zst</code> 无此捷径，体积显示为未知（<code>-</code>）——符合「只列表、不解压内容」的取舍。</p>"
+          "html": "<p>展开用 <strong>SharpCompress</strong>，分两路：</p><div class=\"grid grid-2\"><div class=\"card\"><h3>压缩包本体</h3><p><code>zip</code> / <code>7z</code> / <code>rar</code> / <code>tar</code> 交给 <code>ArchiveFactory.Open</code> 按类型识别，逐个 <code>IArchiveEntry</code> 取 <code>Key</code> / <code>IsDirectory</code> / <code>Size</code> / <code>CompressedSize</code> / <code>IsEncrypted</code> 建树。<code>jar</code> / <code>war</code> / <code>apk</code> / <code>nupkg</code> / <code>whl</code> 本质是 zip 系容器，按内容识别后格式名按扩展名细分展示。</p></div><div class=\"card\"><h3>流式压缩</h3><p><code>gz</code> / <code>bz2</code> / <code>xz</code> / <code>zst</code>（含 <code>.tar.gz</code> / <code>.tgz</code> / <code>.tar.xz</code> 等组合）先解压 512 字节嗅探：命中 tar 的 <code>ustar</code> 魔数、或文件名形如 <code>.tar.gz</code> / <code>.tgz</code>，就整体解压后按 tar 建树，格式名记为 <code>TAR · GZIP</code> 这类；否则视为「单文件压缩流」，给出唯一一条条目。解压总量超过 <strong>512 MB</strong> 直接判失败，防压缩炸弹。</p></div></div><p>单文件压缩流里 <code>gzip</code> 的未压缩大小可由末尾 4 字节 <code>ISIZE</code> 直接读出，无需为「列表大小」整包解压；<code>bz2</code> / <code>xz</code> / <code>zst</code> 无此捷径，体积显示为未知（<code>-</code>）。内容 MD5 另走一次有界解压（受单条 <code>16 MB</code> 上限），拿不到就留空。</p>"
         },
         {
           "heading": "密码与加密",
-          "html": "<p>密码行是一个 <code>TextBox</code>（<code>PasswordChar = '●'</code>）+「应用」按钮。压缩包做了<strong>头部加密</strong>（如 7z / rar）时，未给密码会抛 <code>CryptographicException</code>，插件归类为 <code>PasswordRequired</code>，视图提示 <code>This archive is encrypted. Enter the password and press Apply.</code>；输入密码后点「应用」即重新展开。</p><p>7z 密码错误时 SharpCompress 抛的是内部类型 <code>DataErrorException</code>（无法按类型捕获，插件按异常类型名识别），归类为 <code>PasswordIncorrect</code>，提示 <code>Incorrect password. Try again.</code>。<strong>zip 是个例外</strong>：其中央目录未加密，条目名与大小在不开锁的情况下就可见，插件据此把加密条目标注 <code>[encrypted]</code>（<code>ArchiveModel.HasEncrypted</code> 汇总到摘要行），此时输不输密码都能列出条目——这与「不读内容」的定位一致。</p>"
+          "html": "<p>密码行是一个 <code>TextBox</code>（<code>PasswordChar = '●'</code>）+「应用」按钮。压缩包做了<strong>头部加密</strong>（如 7z / rar）时，未给密码会抛 <code>CryptographicException</code>，插件归类为 <code>PasswordRequired</code>，视图提示 <code>This archive is encrypted. Enter the password and press Apply.</code>；输入密码后点「应用」即重新展开。</p><p>7z 密码错误时 SharpCompress 抛的是内部类型 <code>DataErrorException</code>（无法按类型捕获，插件按异常类型名识别），归类为 <code>PasswordIncorrect</code>，提示 <code>Incorrect password. Try again.</code>。<strong>zip 是个例外</strong>：其中央目录未加密，条目名与大小在不开锁的情况下就可见，插件据此把加密条目标注 <code>[encrypted]</code>（<code>ArchiveModel.HasEncrypted</code> 汇总到摘要行），此时输不输密码都能列出条目名 / 大小与整包 MD5——加密条目的内容 MD5 则因不解密而留空。</p>"
         },
         {
           "heading": "新增 / 删除 / 修改三种场景",

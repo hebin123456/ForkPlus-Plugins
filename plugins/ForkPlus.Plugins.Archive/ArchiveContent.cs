@@ -23,11 +23,11 @@ namespace ForkPlus.Plugins.Archive
 
 	/// <summary>
 	/// 压缩包里的一条条目（展开成树后的一行）：相对路径、目录标记、未压缩 / 压缩后大小、
-	/// 是否加密，以及缩进深度（渲染时用）。
+	/// 是否加密、内容 MD5，以及缩进深度（渲染时用）。
 	/// </summary>
 	internal sealed class ArchiveEntryNode
 	{
-		public ArchiveEntryNode(string path, string name, bool isDirectory, long? size, long? compressedSize, bool isEncrypted, int depth)
+		public ArchiveEntryNode(string path, string name, bool isDirectory, long? size, long? compressedSize, bool isEncrypted, int depth, string md5 = null)
 		{
 			Path = path ?? string.Empty;
 			Name = name ?? string.Empty;
@@ -36,6 +36,7 @@ namespace ForkPlus.Plugins.Archive
 			CompressedSize = compressedSize;
 			IsEncrypted = isEncrypted;
 			Depth = depth;
+			Md5 = md5;
 		}
 
 		/// <summary>压缩包内的完整相对路径（/ 分隔）。</summary>
@@ -56,11 +57,16 @@ namespace ForkPlus.Plugins.Archive
 
 		/// <summary>树深度，根下第一层为 0（渲染缩进用）。</summary>
 		public int Depth { get; }
+
+		/// <summary>
+		/// 条目内容的 MD5（32 位小写十六进制）；目录、加密条目，以及超出哈希额度未计算的部分为 null。
+		/// </summary>
+		public string Md5 { get; }
 	}
 
 	/// <summary>
-	/// 一侧压缩包展开后的结果：格式名、按树序遍历的条目序列（已展平）、各类计数，
-	/// 以及错误分类（成功为 <see cref="ArchiveError.None"/>）。
+	/// 一侧压缩包展开后的结果：格式名、按树序遍历的条目序列（已展平）、各类计数、
+	/// 整包与条目内容的 MD5，以及错误分类（成功为 <see cref="ArchiveError.None"/>）。
 	/// </summary>
 	internal sealed class ArchiveModel
 	{
@@ -75,7 +81,10 @@ namespace ForkPlus.Plugins.Archive
 			bool hasEncrypted,
 			bool truncated,
 			ArchiveError error,
-			string errorDetail)
+			string errorDetail,
+			string md5,
+			int hashedEntryCount,
+			bool hashTruncated)
 		{
 			Format = format ?? string.Empty;
 			Entries = entries ?? Empty;
@@ -86,6 +95,9 @@ namespace ForkPlus.Plugins.Archive
 			Truncated = truncated;
 			Error = error;
 			ErrorDetail = errorDetail;
+			Md5 = md5;
+			HashedEntryCount = hashedEntryCount;
+			HashTruncated = hashTruncated;
 		}
 
 		/// <summary>格式名（如 "ZIP" / "7-Zip" / "TAR · GZIP"）。</summary>
@@ -111,12 +123,21 @@ namespace ForkPlus.Plugins.Archive
 		/// <summary>错误详情（原始异常消息等；成功为 null）。</summary>
 		public string ErrorDetail { get; }
 
+		/// <summary>整包 MD5（对压缩包原始字节做 MD5，32 位小写十六进制）。</summary>
+		public string Md5 { get; }
+
+		/// <summary>已算出内容 MD5 的文件条目数（加密 / 超额度未算的不计）。</summary>
+		public int HashedEntryCount { get; }
+
+		/// <summary>因额度（条目数 / 解压总字节）用尽而未能算全条目 MD5 时为 true（视图会注明）。</summary>
+		public bool HashTruncated { get; }
+
 		/// <summary>条目总数（目录 + 文件）。</summary>
 		public int EntryCount => DirectoryCount + FileCount;
 
 		public static ArchiveModel Failed(ArchiveError error, string detail)
 		{
-			return new ArchiveModel(string.Empty, Empty, 0, 0, 0L, false, false, error, detail);
+			return new ArchiveModel(string.Empty, Empty, 0, 0, 0L, false, false, error, detail, null, 0, false);
 		}
 	}
 }
