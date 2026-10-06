@@ -8,8 +8,8 @@
 #   ① 构建仓库内插件（plugins/*/*.csproj）
 #   ② 下载最新的 ForkPlus（linux-x64 发行包）
 #   ③ 把插件产物（主 DLL + 私有依赖 + 原生库）装入 ForkPlus 的 plugins/ 目录
-#   ④ 准备三种 diff 场景（修改 / 新增 / 删除）的 demo 仓库，各自只涉及 sample.pdf
-#   ⑤ 无头 X 环境（Xvfb + openbox）启动 ForkPlus，逐场景触发 PDF 插件对比视图，
+#   ④ 准备 demo 仓库：PDF 与 Office 各三种 diff 场景（修改 / 新增 / 删除）
+#   ⑤ 无头 X 环境（Xvfb + openbox）启动 ForkPlus，逐场景触发对应插件对比视图，
 #      截取完整软件界面（整屏 1920x1280，不做局部裁切）
 #   ⑥ 产物落到 <repo>/pages/assets/，交由 build-pages.py 生成站点
 #
@@ -173,6 +173,175 @@ print("  demo PDF ->", os.path.join(repo, "sample.pdf"), "(" + version + ")")
 PY
 }
 
+# 生成一份最小合法 OOXML 文档作为 Office 对比样本（.docx/.xlsx/.pptx，v1 旧 / v2 新）。
+# 纯标准库（zipfile + 手写 XML）构造，不依赖 python-docx/openpyxl/python-pptx；
+# 包内关系与正文均最小但合法，可被 Open XML SDK 正常打开（已在本地用 SDK 校验）。
+# Office 文档是 ZIP 包，git 一律判为二进制，因此命中 Office 插件而非文本 / Hex 兜底。
+write_demo_office() {
+	local repo="$1" version="$2" ext="$3"
+	python3 - "$repo" "$version" "$ext" <<'PY'
+import os, sys, zipfile
+from xml.sax.saxutils import escape as xesc
+
+repo, version, ext = sys.argv[1], sys.argv[2], sys.argv[3]
+is_new = version == "v2"
+
+NSPKG = "http://schemas.openxmlformats.org/package/2006/relationships"
+CT = "http://schemas.openxmlformats.org/package/2006/content-types"
+REL_OFFICE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
+DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+
+def e(text):
+    return xesc(str(text))
+
+def write_zip(path, files):
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        for name, data in files:
+            z.writestr(name, data)
+    print("  demo Office ->", path, "(" + version + ")")
+
+def content_types(overrides, defaults=None):
+    parts = [DECL, '<Types xmlns="%s">' % CT]
+    for ext_name, ct in (defaults or {"rels": "application/vnd.openxmlformats-package.relationships+xml",
+                                      "xml": "application/xml"}).items():
+        parts.append('<Default Extension="%s" ContentType="%s"/>' % (ext_name, ct))
+    for part, ct in overrides.items():
+        parts.append('<Override PartName="%s" ContentType="%s"/>' % (part, ct))
+    parts.append('</Types>')
+    return "".join(parts)
+
+def rels(items):
+    parts = [DECL, '<Relationships xmlns="%s">' % NSPKG]
+    for rid, rtype, target in items:
+        parts.append('<Relationship Id="%s" Type="%s" Target="%s"/>' % (rid, rtype, target))
+    parts.append('</Relationships>')
+    return "".join(parts)
+
+# ── Word (.docx) ─────────────────────────────────────────────────────────────
+def w_para(text):
+    return '<w:p><w:r><w:t xml:space="preserve">%s</w:t></w:r></w:p>' % e(text)
+
+def w_heading(text):
+    return '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>%s</w:t></w:r></w:p>' % e(text)
+
+def w_table(rows):
+    out = ["<w:tbl>"]
+    for row in rows:
+        out.append("<w:tr>")
+        for cell in row:
+            out.append("<w:tc>" + w_para(cell) + "</w:tc>")
+        out.append("</w:tr>")
+    out.append("</w:tbl>")
+    return "".join(out)
+
+def build_docx():
+    blocks = [
+        w_heading("ForkPlus Manual"),
+        w_para("Revision: %s" % version),
+        w_para("This paragraph is identical on both sides."),
+        w_para("New: export to SVG." if is_new else "Old: export to PNG only."),
+        w_table([["Component", "Status"], ["Compare", "GA"], ["Sync", "GA" if is_new else "beta"]]),
+    ]
+    document = (DECL + '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+                "<w:body>" + "".join(blocks) + "</w:body></w:document>")
+    write_zip(os.path.join(repo, "sample.docx"), [
+        ("[Content_Types].xml", content_types({
+            "/word/document.xml":
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"})),
+        ("_rels/.rels", rels([("rId1", REL_OFFICE, "word/document.xml")])),
+        ("word/document.xml", document),
+    ])
+
+# ── Excel (.xlsx) ────────────────────────────────────────────────────────────
+def x_cell(ref, value):
+    if isinstance(value, (int, float)):
+        return '<c r="%s"><v>%s</v></c>' % (ref, value)
+    return '<c r="%s" t="inlineStr"><is><t xml:space="preserve">%s</t></is></c>' % (ref, e(value))
+
+def x_row(index, values):
+    cells = "".join(x_cell(chr(ord("A") + i) + str(index), v) for i, v in enumerate(values))
+    return '<row r="%d">%s</row>' % (index, cells)
+
+def build_xlsx():
+    rows = [
+        ["Item", "Q1", "Q2"],
+        ["Licenses", 1200, 1500],
+        ["Hardware", 800, 1200 if is_new else 900],
+        ["Support", "included", "included" if is_new else "trial"],
+    ]
+    sheet = (DECL + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+             "<sheetData>" + "".join(x_row(i + 1, r) for i, r in enumerate(rows)) + "</sheetData></worksheet>")
+    workbook = (DECL + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+                'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+                '<sheets><sheet name="Budget" sheetId="1" r:id="rId1"/></sheets></workbook>')
+    write_zip(os.path.join(repo, "sample.xlsx"), [
+        ("[Content_Types].xml", content_types({
+            "/xl/workbook.xml":
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml",
+            "/xl/worksheets/sheet1.xml":
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"})),
+        ("_rels/.rels", rels([("rId1", REL_OFFICE, "xl/workbook.xml")])),
+        ("xl/workbook.xml", workbook),
+        ("xl/_rels/workbook.xml.rels", rels([
+            ("rId1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet",
+             "worksheets/sheet1.xml")])),
+        ("xl/worksheets/sheet1.xml", sheet),
+    ])
+
+# ── PowerPoint (.pptx) ───────────────────────────────────────────────────────
+def p_slide(lines):
+    shapes = []
+    y = 838200
+    for i, line in enumerate(lines):
+        sid = i + 2
+        body = ('<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" dirty="0"/>'
+                "<a:t>%s</a:t></a:r></a:p></p:txBody>" % e(line))
+        shapes.append(
+            '<p:sp><p:nvSpPr><p:cNvPr id="%d" name="TextBox %d"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>'
+            '<p:spPr><a:xfrm><a:off x="838200" y="%d"/><a:ext cx="8229600" cy="457200"/></a:xfrm>'
+            '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>%s</p:sp>' % (sid, sid, y, body))
+        y += 457200
+    return (DECL + '<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+            'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">'
+            "<p:cSld><p:spTree>"
+            '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>'
+            + "".join(shapes) + "</p:spTree></p:cSld></p:sld>")
+
+def build_pptx():
+    slides = [
+        ["ForkPlus", "Release %s" % version],
+        ["Roadmap", "SVG export" if is_new else "PNG export", "PDF compare"],
+    ]
+    slide_ct = "application/vnd.openxmlformats-officedocument.presentationml.slide+xml"
+    presentation = (DECL + '<p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+                    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+                    'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">'
+                    '<p:sldIdLst><p:sldId id="256" r:id="rId1"/><p:sldId id="257" r:id="rId2"/></p:sldIdLst>'
+                    '<p:sldSz cx="9144000" cy="6858000" type="screen4x3"/><p:notesSz cx="6858000" cy="9144000"/>'
+                    "</p:presentation>")
+    files = [
+        ("[Content_Types].xml", content_types({
+            "/ppt/presentation.xml":
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml",
+            "/ppt/slides/slide1.xml": slide_ct,
+            "/ppt/slides/slide2.xml": slide_ct})),
+        ("_rels/.rels", rels([("rId1", REL_OFFICE, "ppt/presentation.xml")])),
+        ("ppt/presentation.xml", presentation),
+        ("ppt/_rels/presentation.xml.rels", rels([
+            ("rId1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide",
+             "slides/slide1.xml"),
+            ("rId2", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide",
+             "slides/slide2.xml")])),
+    ]
+    for i, lines in enumerate(slides):
+        files.append(("ppt/slides/slide%d.xml" % (i + 1), p_slide(lines)))
+    write_zip(os.path.join(repo, "sample.pptx"), files)
+
+{"docx": build_docx, "xlsx": build_xlsx, "pptx": build_pptx}[ext]()
+PY
+}
+
 # 三种 diff 类型的 demo 仓库：modify（修改）/ add（新增）/ remove（删除）。
 # 每个仓库只涉及 sample.pdf 一个文件，命中插件后其对比视图紧贴差异区顶部，
 # 不会被别的文件差异区顶下去（PDF 一页很高，尤其需要这一点），截图即可完整呈现。
@@ -221,6 +390,43 @@ prepare_repo_pdf() {
 		;;
 	esac
 	echo "  $repo ($mode)"
+}
+
+# Office demo 仓库：三种 diff 场景各用一种现代 OOXML 格式（扩大覆盖面，三张截图正好演示
+# Word / Excel / PowerPoint 三件套）——modify 用 .docx（段落 + 标题 + 表格）、add 用 .xlsx
+# （工作表网格）、remove 用 .pptx（幻灯片文字）。Office 文档是 ZIP 包，git 判为二进制，
+# 命中 Office 插件而非文本 / Hex 兜底。
+prepare_repo_office() {
+	local mode="$1" ext="$2"
+	local repo="$WORK/repo-office-$mode"
+	init_demo_repo "$repo"
+	case "$mode" in
+	add)
+		printf 'baseline\n' >"$repo/readme.txt"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: baseline"
+		write_demo_office "$repo" v2 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "add: sample.$ext"
+		;;
+	remove)
+		printf 'baseline\n' >"$repo/readme.txt"
+		write_demo_office "$repo" v1 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: add sample.$ext"
+		git -C "$repo" rm -q "sample.$ext"
+		git -C "$repo" commit -q -m "remove: delete sample.$ext"
+		;;
+	*)
+		write_demo_office "$repo" v1 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: add sample.$ext"
+		write_demo_office "$repo" v2 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "update: modify sample.$ext"
+		;;
+	esac
+	echo "  $repo ($mode · .$ext)"
 }
 
 seed_settings() {
@@ -385,11 +591,20 @@ install_plugins
 prepare_repo_pdf modify
 prepare_repo_pdf add
 prepare_repo_pdf remove
+# Office demo：三场景各用一种格式（modify=docx / add=xlsx / remove=pptx）
+prepare_repo_office modify docx
+prepare_repo_office add xlsx
+prepare_repo_office remove pptx
 start_x
 # PDF 插件三种场景各截一张：修改 / 新增 / 删除
 for mode in modify add remove; do
 	seed_settings
 	capture_one "$WORK/repo-pdf-$mode" "PdfDiffView.SetContent" "pdf-$mode.png" 4 "PDF 插件 · $mode"
+done
+# Office 插件三种场景各截一张（Word / Excel / PowerPoint 各覆盖一种）
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-office-$mode" "OfficeDiffView.SetContent" "office-$mode.png" 4 "Office 插件 · $mode"
 done
 write_metadata
 log "完成：截图已输出到 $OUT"

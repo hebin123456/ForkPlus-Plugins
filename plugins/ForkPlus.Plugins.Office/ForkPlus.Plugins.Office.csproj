@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Office 套件对比视图插件：认领 Word / Excel / PowerPoint 现代格式
+         （.docx/.xlsx/.pptx），提取正文内容左右并排对比。
+         公共属性（net10.0 / AvaloniaVersion / 契约引用）见 ../Directory.Build.props。 -->
+    <AssemblyName>ForkPlus.Plugins.Office</AssemblyName>
+    <RootNamespace>ForkPlus.Plugins.Office</RootNamespace>
+
+    <!-- 插件自身版本（与宿主版本解耦）；偏好设置 → 插件页展示的 Version 与此一致（暂为 0.0.1）。 -->
+    <Version>0.0.1</Version>
+
+    <!-- 本插件带私有依赖（DocumentFormat.OpenXml 及其托管传递依赖），需随插件产物拷贝出来。
+         类库工程默认不拷 PackageReference 资产，这里显式开启；打包脚本再排除宿主共享程序集
+         （Avalonia / SkiaSharp / NLog / 契约…），私有依赖与插件 DLL 同放 plugins/。 -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+
+    <!-- Open XML SDK：微软官方、MIT 许可，读写 Word/Excel/PowerPoint 的 OOXML（.docx/.xlsx/.pptx）。
+         选它是因为：许可为 MIT（符合首选），依赖极少（无重量级原生依赖），且三件套统一一套 API。
+         老格式 .doc/.ppt 无宽松许可的 .NET 解析库（NPOI 仅覆盖 xls/xlsx/docx，其余为商业库），
+         故本插件不认领 .doc/.ppt/.xls。随包分发的依赖与许可全文见本目录 third-party.json 与 licenses/。 -->
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.3.0" />
+  </ItemGroup>
+</Project>

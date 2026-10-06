@@ -51,6 +51,62 @@
           "html": "<p>本插件声明 <code>Priority = 100</code>，认领 <code>.pdf</code>。<strong>宿主只对二进制差异查询插件路由</strong>，纯文本差异固定由内置文本编辑器差异渲染——所以 demo 里的 <code>sample.pdf</code> 特意在流对象里夹带 NUL 字节，确保 git 把它判为二进制，从而命中本插件而不是 Hex 兜底。新增 / 删除的 PDF 同样是二进制差异，路由规则一致。</p><p>若某个 PDF 未被判为二进制、或用户已在设置里把 <code>.pdf</code> 绑定到别的插件，则走对应的路由结果：后者用户绑定优先级最高，前者回落到内置 Hex 视图（<code>Priority = 0</code>，认领 <code>*</code>）。</p>"
         }
       ]
+    },
+    {
+      "id": "office",
+      "name": "Office 对比插件 · Office Compare",
+      "version": "0.0.1",
+      "assembly": "ForkPlus.Plugins.Office",
+      "source": "plugins/ForkPlus.Plugins.Office",
+      "summary": "Office 套件对比视图：认领 .docx / .xlsx / .pptx，命中后用 Open XML SDK 提取正文内容，把差异区换成左右两栏并排对比——Word 段落 / 标题 / 表格、Excel 工作表网格、PowerPoint 幻灯片文字；新增 / 删除 / 修改三种变更都有对应形态。",
+      "extensions": [".docx", ".xlsx", ".pptx"],
+      "screenshots": [
+        {
+          "file": "office-modify.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.docx，差异区由 Office 插件渲染成左右两栏，左 old、右 new 各是提取出的 Word 段落与表格",
+          "caption": "「修改」对比（Word · .docx，1920×1280 完整界面，未裁切）：左栏标题形如 <code>旧 · sample.docx · …</code>（提交前版本），右栏 <code>新 · sample.docx · …</code>（提交后版本）。标题 <code>ForkPlus Manual</code> 以标题块加粗显示，正文里 <code>Revision: v1</code> / <code>Revision: v2</code>、<code>Old: export to PNG only.</code> / <code>New: export to SVG.</code> 左右对照，底部表格 <code>Sync</code> 行由 <code>beta</code> 变为 <code>GA</code>；状态行给出 <code>Office compare: 5 / 5 blocks</code>。"
+        },
+        {
+          "file": "office-add.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 add: sample.xlsx，差异区右栏渲染新增工作表的单元格网格，左栏显示 old · not present 占位",
+          "caption": "「新增」对比（Excel · .xlsx）：提交给仓库新增了 sample.xlsx，旧侧不存在。插件在左栏给出标题 <code>旧 · not present</code> 与栏内 <code>not present</code> 占位，右栏标题 <code>已创建 · sample.xlsx · …</code> 并渲染提取出的 <code>Budget</code> 工作表标题与单元格网格（<code>Item / Q1 / Q2</code>、<code>Licenses 1200 1500</code>、<code>Hardware 800 1200</code>…）——一眼看出这是纯新增，而非渲染失败。"
+        },
+        {
+          "file": "office-remove.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.pptx，差异区左栏渲染被删除的幻灯片文字，右栏显示 new · not present 占位",
+          "caption": "「删除」对比（PowerPoint · .pptx）：提交删除了 sample.pptx，新侧不存在。插件在左栏标题 <code>已删除 · sample.pptx · …</code> 下渲染被删文件的幻灯片文字——<code>Slide 1</code>（<code>ForkPlus</code> / <code>Release v1</code>）与 <code>Slide 2</code>（<code>Roadmap</code> / <code>PNG export</code> / <code>PDF compare</code>），每张幻灯片前有一行加粗的 <code>Slide N</code> 小标题；右栏给出 <code>新 · not present</code> 与占位——删除场景同样可见完整内容。"
+        }
+      ],
+      "sections": [
+        {
+          "heading": "对比视图长什么样",
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>内容区</strong>。标题行本身也是两列 <code>Grid</code>，左旧右新各一个 <code>TextBlock</code>，文字形如 <code>old  ·  sample.docx  ·  1.06 KB</code>（角色名取 <code>PluginEnvironment.Translate</code>，文件名取 <code>Path.GetFileName</code>，体积取 <code>PluginSizeFormat.ReadableFileSize</code>），并直接采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>DstTitleBrush</code> 着色，跟随主题。</p><p>状态行显示 <code>Extracting Office content…</code>，随后落到 <code>Office compare: 源块数 / 目标块数</code>；解析失败则显示 <code>Failed to read Office document: …</code>。</p>"
+        },
+        {
+          "heading": "内容区：两栏各自独立滚动",
+          "html": "<p>内容区是两列 <code>Grid</code>（<code>ColumnDefinitions=\"*,*\"</code>），每列一个 <code>ScrollViewer</code> 包着 <code>StackPanel</code>。与 PDF 插件按页号强制顶对齐不同，Office 两栏内容长度往往不同（一个文档多一段、一张表多几行），因此两栏<strong>各自独立滚动</strong>更好读。提取在后台线程进行，控件构建回到 UI 线程；<code>CancelRender</code> 用「代次 + <code>CancellationToken</code>」保证切换文件后旧任务立即作废。</p><p>内容块见「三件套各怎么提取」；解析失败只影响该侧——栏内给出错误文案，不中断另一侧。</p>"
+        },
+        {
+          "heading": "三件套各怎么提取",
+          "html": "<p>三件套共用一套块模型（标题 / 段落 / 表格），各由一个解析器产出：</p><div class=\"grid grid-2\"><div class=\"card\"><h3>Word（.docx）</h3><p>按 <code>Body</code> 的文档顺序遍历，<code>w:p</code> 取 <code>InnerText</code>，样式 id 含 <code>heading</code> / <code>标题</code>（或内置 <code>1</code>–<code>9</code>）的段落升级为标题块；<code>w:tbl</code> 逐行逐格抽成表格块，段落与表格的交错顺序原样保留。</p></div><div class=\"card\"><h3>Excel（.xlsx）</h3><p>遍历 <code>Sheets</code>，每张表先落一个工作表名标题块，再落一张网格表格块。单元格按 <code>CellReference</code>（如 <code>B3</code>）还原列位置，共享字符串 / 内联字符串 / 数值都还原为文本；单表最多取 400 行 × 64 列，超出部分截断并在标题注明 <code>(N/M rows)</code>。</p></div></div><p>PowerPoint（.pptx）遍历 <code>SlideIdList</code>，每张幻灯片先落一个 <code>Slide N</code> 标题块，再抽 <code>ShapeTree</code> 中每个带 <code>TextBody</code> 的形状里的段落文字。</p>"
+        },
+        {
+          "heading": "新增 / 删除 / 修改三种场景",
+          "html": "<p>插件按异构的 <code>DiffViewContext</code> 适配三种变更，本页三张截图分别对应（同时正好覆盖 Word / Excel / PowerPoint 三件套）：</p><div class=\"grid grid-2\"><div class=\"card\"><h3>修改（两侧都在）</h3><p><code>Src</code> 与 <code>Dst</code> 均非空，角色为 <code>old</code> / <code>new</code>，两栏各渲染各自提取结果，段落 / 表格逐块对照。</p></div><div class=\"card\"><h3>新增（只有新侧）</h3><p>宿主令 <code>Src == null</code>、<code>DstRole = Created</code>。插件左栏标题写 <code>old · not present</code> 并在栏内落一块 <code>not present</code> 占位，右栏标 <code>created</code> 渲染全部内容。</p></div></div><p>删除是新增的镜像：<code>Dst == null</code>、<code>SrcRole = Removed</code>，左栏标 <code>removed</code> 渲染被删内容，右栏写 <code>new · not present</code> 占位。与其让缺文件的一侧留白（容易被误读成渲染失败），不如显式说明——这是 <code>ReportMissing</code> / <code>DescribeSide</code> 对 <code>null</code> 侧的统一处理。</p>"
+        },
+        {
+          "heading": "Office 字节从哪里来",
+          "html": "<p>宿主对每个差异区调用 <code>SetContent(context, host)</code>，视图按同一套优先级取每一侧的原始字节：<strong>宿主 Hex 预载</strong>（<code>context.HexSrc</code> / <code>HexDst</code>，二进制差异 ≤50MB 时由宿主直接给到）→ <strong>侧内容懒加载</strong>（<code>DiffSideContent.Data</code>）→ <strong>LFS 缓存 / smudge</strong>（<code>host.GetCachedLfsData</code>，未命中再用 <code>host.RunLfsSmudge</code> 触发下载）。<code>Src</code> / <code>Dst</code> 为 <code>null</code> 的整侧直接跳过，不取字节；有侧但拿不到字节时，该栏显示 <code>Office content unavailable</code> 加路径，而不是空白。</p>"
+        },
+        {
+          "heading": "用的哪个 MIT 三方件",
+          "html": "<p>解析用微软官方的 <strong>Open XML SDK（DocumentFormat.OpenXml 3.3.0）</strong>，MIT 许可、纯托管、三件套统一一套 API；随包分发的还有其依赖 <code>DocumentFormat.OpenXml.Framework</code> 与 <code>System.IO.Packaging</code>（均为 MIT）。三者与许可全文登记在插件目录的 <code>third-party.json</code>，打包时合并成 <code>ForkPlus.Plugins.Office.THIRD-PARTY-NOTICES.txt</code>。</p><p><strong>为什么只做现代格式</strong>：老格式 <code>.doc</code> / <code>.ppt</code> 在宽松许可下没有可用的 .NET 解析库（NPOI 仅覆盖 xls/xlsx/docx，其余可选项均为商业库或引入二进制维护费 EULA），因此本插件只认领 OOXML 三件套 <code>.docx</code> / <code>.xlsx</code> / <code>.pptx</code>，不认领 <code>.doc</code> / <code>.ppt</code> / <code>.xls</code>。</p>"
+        },
+        {
+          "heading": "为什么 Office 一定会走这个插件",
+          "html": "<p>本插件声明 <code>Priority = 100</code>，认领 <code>.docx</code> / <code>.xlsx</code> / <code>.pptx</code>。<strong>宿主只对二进制差异查询插件路由</strong>，纯文本差异固定由内置文本编辑器差异渲染——Office 文档本质是 ZIP 包（OOXML），git 一律判为二进制，因此必然命中本插件而非 Hex 兜底。新增 / 删除的 Office 文档同样是二进制差异，路由规则一致。</p><p>若用户已在设置里把对应扩展名绑定到别的插件，则以用户绑定为准（优先级最高）。</p>"
+        }
+      ]
     }
   ]
 }

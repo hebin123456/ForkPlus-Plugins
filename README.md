@@ -47,14 +47,23 @@ ForkPlus-Plugins/
 │   │   ├── ExampleDiffPlugin.cs
 │   │   ├── ExampleDiffView.cs
 │   │   └── ForkPlus.Plugins.Example.csproj
-│   └── ForkPlus.Plugins.Pdf/             # PDF 对比插件（左右两栏逐页并排渲染旧 / 新 PDF）
-│       ├── PdfDiffPlugin.cs
-│       ├── PdfDiffView.cs
-│       ├── PdfNativeLibrary.cs           # PDFium 原生库解析（从插件目录 runtimes/ 加载）
-│       ├── third-party.json              # 本插件分发的三方组件登记（许可统一管理的单一事实来源）
-│       └── ForkPlus.Plugins.Pdf.csproj   # 私有依赖 Docnet.Core（MIT）
+│   ├── ForkPlus.Plugins.Pdf/             # PDF 对比插件（左右两栏逐页并排渲染旧 / 新 PDF）
+│   │   ├── PdfDiffPlugin.cs
+│   │   ├── PdfDiffView.cs
+│   │   ├── PdfNativeLibrary.cs           # PDFium 原生库解析（从插件目录 runtimes/ 加载）
+│   │   ├── third-party.json              # 本插件分发的三方组件登记（许可统一管理的单一事实来源）
+│   │   └── ForkPlus.Plugins.Pdf.csproj   # 私有依赖 Docnet.Core（MIT）
+│   └── ForkPlus.Plugins.Office/          # Office 套件对比插件（.docx/.xlsx/.pptx 正文左右并排）
+│       ├── OfficeDiffPlugin.cs
+│       ├── OfficeDiffView.cs
+│       ├── OfficeContentExtractor.cs     # 用 Open XML SDK 提取三件套正文
+│       ├── OfficeContent.cs              # 标题 / 段落 / 表格内容块模型
+│       ├── third-party.json              # Open XML SDK 等（MIT）登记
+│       └── ForkPlus.Plugins.Office.csproj # 私有依赖 Open XML SDK（MIT）
 ├── licenses/                             # 第三方许可全文仓库（按组件分目录，集中管理）
 │   ├── docnet-core/LICENSE.txt           # Docnet.Core（MIT）
+│   ├── open-xml-sdk/LICENSE.txt          # Open XML SDK（MIT）
+│   ├── dotnet-runtime/LICENSE.txt        # System.IO.Packaging（MIT）
 │   └── pdfium/LICENSE.txt                # PDFium 及其捆绑组件（BSD-3-Clause 等）
 ├── Directory.Build.props                 # 仓库级公共构建属性（net10.0 / AvaloniaVersion）
 ├── ForkPlus.Plugins.slnx                 # 解决方案（新增插件在此登记）
@@ -190,7 +199,7 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 
 约定：
 
-- 版本号与工程文件的 `<Version>` 保持一致（本仓库示例与 PDF 插件当前均为 **0.0.1**）。
+- 版本号与工程文件的 `<Version>` 保持一致（本仓库示例、PDF 与 Office 插件当前均为 **0.0.1**）。
 - 名称 / 描述在 5.0.1 固定为中文；后续版本才会引入多语言元数据（`DisplayNameKey` 仍用于翻译 key）。
 
 ---
@@ -228,6 +237,36 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 
 ---
 
+## Office 对比插件
+
+[plugins/ForkPlus.Plugins.Office](plugins/ForkPlus.Plugins.Office) 认领 Office 现代三件套
+`.docx` / `.xlsx` / `.pptx`：命中后用 **Open XML SDK** 提取正文内容，把差异区替换为左右两栏，
+各自渲染旧 / 新文档的**提取结果**（不是把文件当压缩包看字节，而是显示 Office 的内容）：
+
+- **Word（.docx）**：按文档顺序抽段落与表格，标题样式段落升级为标题块；
+- **Excel（.xlsx）**：每张工作表一个标题块 + 一张单元格网格表（单表最多 400 行 × 64 列）；
+- **PowerPoint（.pptx）**：每张幻灯片一个 `Slide N` 标题块 + 幻灯片内各文本框的文字。
+
+两栏内容长度往往不同，因此各自独立滚动（与 PDF 插件按页号强制顶对齐不同）。
+
+解析用 MIT 许可的 **Open XML SDK**（`DocumentFormat.OpenXml`，微软官方、纯托管）：
+
+- `DocumentFormat.OpenXml` / `DocumentFormat.OpenXml.Framework` / `System.IO.Packaging`
+  均为私有托管依赖，与插件 DLL 同放 `plugins/`；
+- 第三方许可登记在插件目录的 `third-party.json`，打包时合并成
+  `ForkPlus.Plugins.Office.THIRD-PARTY-NOTICES.txt`（见「第三方许可管理」）。
+
+> **为什么只做现代格式**：老格式 `.doc` / `.ppt` / `.xls` 在宽松许可下没有可用的 .NET 解析库
+> （NPOI 仅覆盖 xls/xlsx/docx，其余可选项为商业库或引入二进制维护费 EULA），故本插件只认领 OOXML
+> 三件套，不认领 `.doc` / `.ppt` / `.xls`。
+
+> 注意：宿主只对**二进制**差异查询插件路由。Office 文档本质是 ZIP 包（OOXML），git 一律判为二进制，
+> 因此必然命中本插件而非 Hex 兜底。
+
+插件同样实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「Office 对比」、版本 `0.0.1` 与描述。
+
+---
+
 ## Pages 截图约定
 
 插件对比视图的截图由 CI 在真实 ForkPlus 中现场采集（无头 X + 整屏截图），并随 Pages 一起发布上线；
@@ -242,16 +281,20 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 | 新增 | 只有新侧（`Src == null`） | 旧侧显式标注 missing，新侧渲染全部内容 |
 | 删除 | 只有旧侧（`Dst == null`） | 旧侧渲染被删内容，新侧显式标注 missing |
 
-- 文件命名：`pages/assets/<插件>-<场景>.png`（PDF 插件即 `pdf-modify.png` / `pdf-add.png` / `pdf-remove.png`）；
+- 文件命名：`pages/assets/<插件>-<场景>.png`（PDF 插件即 `pdf-modify.png` / `pdf-add.png` / `pdf-remove.png`，
+  Office 插件即 `office-modify.png` / `office-add.png` / `office-remove.png`）；
 - 截图规格：整屏 `1920×1280`，完整软件界面，不做局部裁切；
 - 缺任一场景视为截图不完整；插件新增变更形态时，同步补对应场景截图与 `plugins.json` 登记。
+- demo 素材由采集脚本现场构造（PDF 用 `write_demo_pdf`，Office 用 `write_demo_office`），纯 Python 标准库
+  生成最小合法样本，不依赖 ghostscript / python-docx 等外部工具；Office 三张截图各用一种格式
+  （modify=`.docx`、add=`.xlsx`、remove=`.pptx`），三张正好覆盖 Word / Excel / PowerPoint 三件套。
 
 ---
 
 ## 第三方许可管理
 
-插件分发的第三方组件（如 PDF 插件的 Docnet.Core / PDFium）**统一登记、集中存放、按包合并**，
-单一事实来源是两处：
+插件分发的第三方组件（如 PDF 插件的 Docnet.Core / PDFium、Office 插件的 Open XML SDK）
+**统一登记、集中存放、按包合并**，单一事实来源是两处：
 
 1. **`licenses/`** —— 各组件许可全文的中央仓库，按组件分目录（`licenses/<组件>/LICENSE.txt`）。
    全文原样落库（含三方文件自身的编码），不依赖构建时从 NuGet 缓存临时抓取。
@@ -328,6 +371,11 @@ workflow：[.github/workflows/build.yml](.github/workflows/build.yml)
       ├── Docnet.Core.dll                    # PDF 插件私有依赖
       ├── pdfium.so                          # PDF 插件私有原生库（按平台）
       ├── ForkPlus.Plugins.Pdf.THIRD-PARTY-NOTICES.txt   # 三方许可声明（Docnet.Core / PDFium）
+      ├── ForkPlus.Plugins.Office.dll
+      ├── DocumentFormat.OpenXml.dll         # Office 插件私有依赖
+      ├── DocumentFormat.OpenXml.Framework.dll
+      ├── System.IO.Packaging.dll
+      ├── ForkPlus.Plugins.Office.THIRD-PARTY-NOTICES.txt # 三方许可声明（Open XML SDK 等）
       └── …（其余插件）
   ```
 

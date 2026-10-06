@@ -4,4 +4,5 @@
   <!-- 插件（plugins/），新增插件在此登记 -->
   <Project Path="plugins/ForkPlus.Plugins.Example/ForkPlus.Plugins.Example.csproj" />
   <Project Path="plugins/ForkPlus.Plugins.Pdf/ForkPlus.Plugins.Pdf.csproj" />
+  <Project Path="plugins/ForkPlus.Plugins.Office/ForkPlus.Plugins.Office.csproj" />
 </Solution>
