@@ -41,6 +41,8 @@ command -v python3 >/dev/null 2>&1 || die "需要 python3 解析 index.json"
 # 组件清单：third_party/<dir>/manifest.json 里登记的 component 字段（缺省用目录名）。
 # 一个组件一个目录，与三方件仓一致；新增三方件只需在此加目录，无需改本脚本。
 # 不用 mapfile：macOS runner 的 /bin/bash 是 3.2，没有这个内建。
+# tr -d '\r'：Windows（Git-Bash / MSYS）上 python 把 stdout 的 \n 写成 \r\n，read 会把
+# 行尾的 \r 一起读进变量，组件名对不上 index.json（表现为「未收录 → 跳过」，Windows 静默缺件）。
 COMPONENTS=()
 while IFS= read -r component; do
 	[ -n "$component" ] && COMPONENTS+=("$component")
@@ -52,7 +54,7 @@ for entry in sorted(os.listdir(root)):
     if os.path.isfile(manifest):
         with open(manifest, encoding="utf-8") as f:
             print(json.load(f).get("component") or entry)
-' "$REPO_ROOT")
+' "$REPO_ROOT" | tr -d '\r')
 [ "${#COMPONENTS[@]}" -gt 0 ] || die "third_party/ 下没有找到任何组件（<component>/manifest.json）"
 
 TMP="$(mktemp -d)"
@@ -85,6 +87,10 @@ for c in index.get("components", []):
     break
 PY
 )" || die "解析 index.json 失败（格式与插件仓约定不符）"
+
+	# Windows 上 python 写的行尾是 \r\n，$() 只吃掉末尾的 \n，最后一个字段（运行期库名）
+	# 会带上 \r，导致「交付件里缺运行期库」。这里统一摘掉尾部 \r（Linux / macOS 上本就不存在）。
+	INFO="${INFO%$'\r'}"
 
 	if [ -z "$INFO" ]; then
 		log "$component · ${RID}：三方件仓未收录 → 跳过"
