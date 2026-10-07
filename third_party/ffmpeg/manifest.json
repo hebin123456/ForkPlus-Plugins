@@ -1,9 +1,6 @@
 {
   "component": "ffmpeg",
   "version": "9.0.2",
-  "buildVersion": "9.0.2-22-g46d8f462ee",
-  "releaseDate": "2026-09-18",
-  "releaseBranch": "release/9.0",
   "license": "LGPL-2.1-or-later",
   "licenseFile": "licenses/ffmpeg/LICENSE.txt",
   "upstream": "https://ffmpeg.org/",
@@ -25,54 +22,32 @@
     "version": "9.0.1.1",
     "note": "NuGet 版本号与 FFmpeg 发行版同步（9.0.x ↔ FFmpeg 9.0.x）；原生库大版本必须与绑定一致，版本错配是崩溃级问题。当前锁 9.0.1.1（含 Abstractions / Bindings.DynamicallyLoaded 两个同版本包）。"
   },
-  "release": {
-    "provider": "BtbN/FFmpeg-Builds",
-    "tag": "autobuild-2026-10-06-13-06",
-    "variant": "lgpl-shared",
-    "urlTemplate": "https://github.com/BtbN/FFmpeg-Builds/releases/download/{tag}/{asset}",
-    "note": "lgpl-shared = 共享库 + LGPL（不含 --enable-gpl 组件）。tag 为含 9.0.2 的自动构建，锁定以避免 latest 漂移。"
+  "source": {
+    "repo": "hebin123456/ForkPlus-Plugins-Third_Party",
+    "component": "ffmpeg",
+    "recipe": "ffmpeg/manifest.json + ffmpeg/build.sh（按锁定的源码 tag 自建，四个 RID 一套 configure）",
+    "consume": [
+      "GET releases/latest/download/index.json → 取本 RID 的 asset / sha256 / libraries",
+      "GET releases/latest/download/<asset> → 校验 sha256 → 只解出运行期库"
+    ],
+    "note": "插件仓**不锁版本**：三方件仓发新 tag 即自动出包，下次构建自动消费；但哈希取自同一次 Release 的 index.json，取件仍强校验。要复现某次构建可钉 THIRD_PARTY_TAG=<tag>。"
   },
-  "artifacts": [
-    {
-      "rid": "win-x64",
-      "asset": "ffmpeg-n9.0.2-22-g46d8f462ee-win64-lgpl-shared-9.0.zip",
-      "archive": "zip",
-      "members": "bin",
-      "sha256": "c6a4d770f93248d62a3ea55b8fa42855f5a6adc078e5db370a51fc7f2487114e",
-      "status": "locked"
-    },
-    {
-      "rid": "linux-x64",
-      "asset": "ffmpeg-n9.0.2-22-g46d8f462ee-linux64-lgpl-shared-9.0.tar.xz",
-      "archive": "tar.xz",
-      "members": "lib",
-      "sha256": "fbda68c91cb296e2296b4f3489354f07f8b3006202fe06f3bd029726d8159f0f",
-      "status": "locked"
-    },
-    {
-      "rid": "linux-arm64",
-      "asset": "ffmpeg-n9.0.2-22-g46d8f462ee-linuxarm64-lgpl-shared-9.0.tar.xz",
-      "archive": "tar.xz",
-      "members": "lib",
-      "sha256": "6bfcac296d1fbbfe4db8d839e9526e909e291cbaf2cef98ea1d291f8aa138972",
-      "status": "locked"
-    },
-    {
-      "rid": "osx-arm64",
-      "asset": null,
-      "archive": null,
-      "members": null,
-      "sha256": null,
-      "status": "undecided",
-      "note": "BtbN/FFmpeg-Builds 无 macOS LGPL 共享构建；计划按锁定 configure 自建，或核实第三方 LGPL 构建后登记。暂不随包分发，该平台降级为「FFmpeg 解码不可用」提示。"
-    }
-  ],
+  "localLayout": {
+    "path": "third_party/ffmpeg/<rid>/（二进制不入库，见 .gitignore）",
+    "note": "不再带版本目录：版本由三方件仓的 index.json 决定并记在 <rid>/.source.json，插件工程与插件仓都不必随 FFmpeg 升版本改路径。"
+  },
+  "platforms": {
+    "win-x64": "三方件仓自建（MSYS2 MINGW64），含随包分发的非系统 DLL（如 zlib1.dll）",
+    "linux-x64": "三方件仓自建（按 SONAME lib<name>.so.<major> 命名）",
+    "linux-arm64": "三方件仓自建",
+    "osx-arm64": "三方件仓自建（lib<name>.<major>.dylib，install_name 为 @loader_path，同目录依赖可解析）"
+  },
   "vendoring": {
-    "layout": "third_party/ffmpeg/<version>/<rid>/（二进制不入库，见 .gitignore）",
+    "script": ".github/scripts/fetch-third-party.sh",
     "steps": [
-      "运行 .github/scripts/fetch-ffmpeg.sh <rid>，按本表锁定的 tag / asset / sha256 取件并校验",
-      "在 licenses/ffmpeg/LICENSE.txt 放许可全文",
-      "在插件的 third-party.json 登记，并重新生成 THIRD-PARTY-NOTICES.md"
+      "构建前运行 .github/scripts/fetch-third-party.sh <rid> 取件并校验到 third_party/ffmpeg/<rid>/",
+      "licenses/ffmpeg/LICENSE.txt 放许可全文（三方件仓交付件内也附有 LICENSE.md / COPYING.LGPLv2.1）",
+      "插件 third-party.json 登记，CI 的 collect-third-party-notices.py --check 拦住登记漂移"
     ]
   },
   "seeAlso": "design/audio-video-plugins.md §12–§14"

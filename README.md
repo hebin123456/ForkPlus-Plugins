@@ -24,7 +24,7 @@ ForkPlus-Plugins/
 ├── .github/
 │   ├── scripts/
 │   │   ├── install-plugin-artifacts.sh   # 单插件产物安装（主 DLL + 私有依赖 + 原生库，排除宿主共享程序集）
-│   │   ├── fetch-ffmpeg.sh               # 按 manifest 锁定取 FFmpeg 原生件（音视频插件的私有依赖）
+│   │   ├── fetch-third-party.sh          # 按 RID 取三方件仓最新 Release 的原生库（校验 sha256，不锁版本）
 │   │   ├── collect-third-party-notices.py# 由插件登记表 + licenses/ 全文生成第三方许可声明
 │   │   ├── capture-screenshots.sh        # Pages 截图采集（装插件 → 无头启动 ForkPlus → 截图）
 │   │   ├── release-notes.py              # 由 conventional commit 生成 Release 版本说明
@@ -145,9 +145,9 @@ ForkPlus-Plugins/
 │   ├── pdfium/LICENSE.txt                # PDFium 及其捆绑组件（BSD-3-Clause 等）
 │   ├── ffmpeg/LICENSE.txt                # FFmpeg 原生件（LGPL-2.1-or-later）
 │   └── ffmpeg-autogen/LICENSE.txt        # FFmpeg.AutoGen 绑定（LGPL-3.0-or-later）
-├── third_party/                          # 三方件「件与锁」：二进制 + 版本 / 来源 / 哈希（二进制不入库）
-│   ├── ffmpeg/manifest.json              # FFmpeg 锁定：版本 / 来源 / 每 RID 资产 + sha256
-│   ├── ffmpeg/9.0.2/<rid>/*.dll|*.so.*  # 实际原生件（由 fetch-ffmpeg.sh 按 manifest 取入）
+├── third_party/                          # 三方件「件与锁」：清单入库，二进制不入库（构建前取件）
+│   ├── ffmpeg/manifest.json              # FFmpeg 来源 / 许可 / 运行期库 / 各 RID 说明（版本以三方件仓为准）
+│   ├── ffmpeg/<rid>/*.dll|*.so.*|*.dylib# 实际原生件（由 fetch-third-party.sh 取入）
 │   └── miniaudio/manifest.json           # 音频输出后端占位（当前未随包分发）
 ├── Directory.Build.props                 # 仓库级公共构建属性（net10.0 / AvaloniaVersion）
 ├── ForkPlus.Plugins.slnx                 # 解决方案（新增插件在此登记）
@@ -634,8 +634,8 @@ zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可�
   modify=`.mp4`(H.264) / add=`.mkv`(H.264) / remove=`.avi`(MPEG-4 Part 2)，旧 `testsrc` 2 s、
   新 `testsrc2` 3 s 并做 90° 色相旋转，让帧条与单帧对比里的画面明显不同。三张截图都停在默认的
   元数据模式。
-- 采集脚本在构建插件前先跑 [fetch-ffmpeg.sh](.github/scripts/fetch-ffmpeg.sh) 按 manifest 取 FFmpeg
-  原生件（未锁定的 RID 自动跳过），否则音视频插件按 RID 拷不出原生库。
+- 采集脚本在构建插件前先跑 [fetch-third-party.sh](.github/scripts/fetch-third-party.sh) 从三方件仓
+  最新 Release 取原生件并校验 sha256，否则音视频插件按 RID 拷不出原生库。
 
 ---
 
@@ -678,12 +678,17 @@ FFmpeg / FFmpeg.AutoGen）**统一登记、集中存放、按包合并**，单�
 3. 重新生成总览：`python3 .github/scripts/collect-third-party-notices.py repo THIRD-PARTY-NOTICES.md`。
 
 **原生件（如 FFmpeg）另有一层「件与锁」**：托管依赖走 NuGet 即可，但随包分发的原生二进制不在
-NuGet 里，需要 [third_party/<组件>/manifest.json](third_party/ffmpeg/manifest.json) 锁定
-**版本 / 来源 / 每 RID 资产名 + sha256**，再由取件脚本（[fetch-ffmpeg.sh](.github/scripts/fetch-ffmpeg.sh)）
-按 RID 下载、校验、解出运行期库名（Linux 按 SONAME 命名）到 `third_party/<组件>/<version>/<rid>/`，
-构建时由插件工程拷进输出。二进制**不入库**（见 [.gitignore](.gitignore)），只锁来源与哈希；
+NuGet 里。这类件统一收到**三方件仓** [ForkPlus-Plugins-Third_Party](https://github.com/hebin123456/ForkPlus-Plugins-Third_Party)：
+源码按组件分目录锁版本、自建编译，tag 触发四平台出包；本仓的取件脚本
+（[fetch-third-party.sh](.github/scripts/fetch-third-party.sh)）按 RID 从**最新 Release** 取件：
+先读 `releases/latest/download/index.json` 拿本 RID 的资产名与 sha256，再下载该资产、校验、
+解出运行期库到 `third_party/<组件>/<rid>/`，构建时由插件工程拷进输出。二进制**不入库**
+（见 [.gitignore](.gitignore)），只留 `third_party/<组件>/manifest.json` 说明来源与取件方式；
 `licenses/` 全文与 `third-party.json` 登记照旧。分工不重叠：`third_party/` 放**件与锁**，
 `licenses/` 放**许可全文**，`third-party.json` 做**登记**。
+
+> **不锁版本**：三方件仓发新 tag 即自动出包，本仓 CI 下次构建自动消费最新；但哈希取自同一次
+> Release 的 `index.json`，取件仍强校验。要复现某次构建，给取件脚本传 `THIRD_PARTY_TAG=<tag>`。
 
 > `THIRD-PARTY-NOTICES.md` 由脚本生成，**请勿手改**；[build.yml](.github/workflows/build.yml)
 > 的 `notices` 作业会用 `--check` 校验它与登记表一致，改了登记表却忘了重新生成会直接失败。
@@ -705,12 +710,12 @@ dotnet build ForkPlus.Plugins.slnx -c Release
 音视频插件要按 RID 构建才带得到 FFmpeg 原生件，且需先取件（原生二进制不入库）：
 
 ```bash
-bash .github/scripts/fetch-ffmpeg.sh linux-x64           # 按 manifest 取件 + 校验 sha256
+bash .github/scripts/fetch-third-party.sh linux-x64      # 从三方件仓最新 Release 取件 + 校验 sha256
 dotnet build plugins/ForkPlus.Plugins.Audio/ForkPlus.Plugins.Audio.csproj -c Release -r linux-x64
 ```
 
 > 不传 `-r <rid>` 时 csproj 里的原生件 ItemGroup 不生效，输出只有托管 DLL，运行期降级为
-> 「FFmpeg decoding unavailable」。未锁定的 RID（如 `osx-arm64`）取件脚本会跳过，该平台同样降级。
+> 「FFmpeg decoding unavailable」。三方件仓尚未收录的 RID 取件脚本会跳过，该平台同样降级。
 
 ### 通过 GitHub Actions 出包（四平台）
 

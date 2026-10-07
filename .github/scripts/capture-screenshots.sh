@@ -53,9 +53,9 @@ trap cleanup EXIT
 
 # ── ① 构建插件 ───────────────────────────────────────────────────────────────
 build_plugins() {
-	# FFmpeg 原生件：按 third_party/ffmpeg/manifest.json 锁定的 tag / sha256 取件（未锁定的 RID 自动跳过）。
-	# 音视频插件按 RID 把原生库随包拷进输出根，故须在构建前完成取件。
-	bash "$REPO_ROOT/.github/scripts/fetch-ffmpeg.sh" "$RID"
+	# 三方件原生库：按 third_party/<component>/manifest.json 从三方件仓最新 Release 取件 +
+	# 校验 sha256（不锁版本）。音视频插件按 RID 把原生库随包拷进输出根，故须在构建前完成。
+	bash "$REPO_ROOT/.github/scripts/fetch-third-party.sh" "$RID"
 	log "构建仓库内插件 ($RID)"
 	shopt -s nullglob
 	local projects=("$REPO_ROOT"/plugins/*/*.csproj)

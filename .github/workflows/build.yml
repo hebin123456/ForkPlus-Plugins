@@ -89,12 +89,13 @@ jobs:
           echo "VERSION=$version" >> "$GITHUB_ENV"
           echo "packaging version: $version"
 
-      # FFmpeg 原生件：按 third_party/ffmpeg/manifest.json 锁定的 tag / asset / sha256 取件到
-      # third_party/ffmpeg/<version>/<rid>/，供音视频插件按 RID 随包拷进输出根。未锁定的 RID
-      # （如 osx-arm64）脚本会跳过，插件在该平台降级为「FFmpeg 解码不可用」提示。必须在构建前完成。
-      - name: Fetch FFmpeg native libraries
+      # 三方件原生库：从三方件仓（hebin123456/ForkPlus-Plugins-Third_Party）的**最新 Release**
+      # 按 index.json 校验 sha256 后取本 RID 的交付件，解出运行期库到 third_party/<component>/<rid>/，
+      # 供音视频插件按 RID 随包拷进输出根。不锁版本：三方件仓发新 tag，这里下次构建自动跟上。
+      # 必须在构建前完成（插件工程按 RID 从该目录拷原生件）。
+      - name: Fetch third-party native libraries
         shell: bash
-        run: bash .github/scripts/fetch-ffmpeg.sh ${{ matrix.rid }}
+        run: bash .github/scripts/fetch-third-party.sh ${{ matrix.rid }}
 
       # 逐个插件工程按 RID 构建（插件工程位于 plugins/<AssemblyName>/，见根 README「插件开发规范」）
       - name: Build plugins

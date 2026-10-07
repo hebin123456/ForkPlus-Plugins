@@ -132,7 +132,7 @@
 
 | 组件 | 版本 | 许可 | 用途 |
 | --- | --- | --- | --- |
-| FFmpeg 原生件 | **9.0.2**（BtbN/FFmpeg-Builds `lgpl-shared`，`9.0.2-22-g46d8f462ee`） | LGPL-2.1-or-later | 解码 / 格式解析 / 缩放 / 重采样 |
+| FFmpeg 原生件 | **9.0.2**（三方件仓 [ForkPlus-Plugins-Third_Party](https://github.com/hebin123456/ForkPlus-Plugins-Third_Party) 按 `n9.0.2` 源码自建，四个 RID 一套 configure） | LGPL-2.1-or-later | 解码 / 格式解析 / 缩放 / 重采样 |
 | FFmpeg.AutoGen | **9.0.1.1**（含 `Abstractions` / `Bindings.DynamicallyLoaded`） | LGPL-3.0-or-later | P/Invoke 绑定 |
 | miniaudio | 本期未采用（只留 [manifest](../third_party/miniaudio/manifest.json) 占位，不随包分发） | public domain / MIT-0 | 跨平台音频输出（见 §8） |
 
@@ -148,13 +148,14 @@
 ## 13. 三方件锁定与 `third_party/` 布局
 
 ```
-third_party/ffmpeg/manifest.json                     锁定：版本 / 许可 / 来源 / 每 RID 资产 + sha256
-third_party/ffmpeg/9.0.2/<rid>/*.dll|*.so.*|*.dylib   实际二进制（由 fetch-ffmpeg.sh 取件，不入库）
-third_party/miniaudio/manifest.json                  占位（本期未采用，无二进制）
-licenses/ffmpeg/LICENSE.txt                          许可全文（沿用现有 licenses/ 约定）
-licenses/ffmpeg-autogen/LICENSE.txt                  绑定许可全文
+三方件仓 ForkPlus-Plugins-Third_Party/ffmpeg/            源码自建的构建配方（manifest.json + build.sh）
+third_party/ffmpeg/manifest.json                        取件说明：来源 / 许可 / 运行期库 / 各 RID（版本以三方件仓为准）
+third_party/ffmpeg/<rid>/*.dll|*.so.*|*.dylib           实际二进制（由 fetch-third-party.sh 取件，不入库）
+third_party/miniaudio/manifest.json                     占位（本期未采用，无二进制）
+licenses/ffmpeg/LICENSE.txt                             许可全文（沿用现有 licenses/ 约定）
+licenses/ffmpeg-autogen/LICENSE.txt                     绑定许可全文
 plugins/ForkPlus.Plugins.{Audio,Video}/third-party.json  登记（沿用现有约定）
-.github/scripts/fetch-ffmpeg.sh                      按 manifest 取件 + 校验 sha256 + 解出运行期库名
+.github/scripts/fetch-third-party.sh                    按 RID 取三方件仓最新 Release + 校验 sha256 + 解出运行期库
 ```
 
 与现有文件的**分工**，避免看起来像重复：
@@ -165,16 +166,16 @@ plugins/ForkPlus.Plugins.{Audio,Video}/third-party.json  登记（沿用现有�
 
 各 RID 来源：
 
-| RID | 来源 | 状态 |
+| RID | 构建环境 | 状态 |
 | --- | --- | --- |
-| `win-x64` | BtbN/FFmpeg-Builds 的 **lgpl-shared** 变体 | 有现成构建 |
-| `linux-x64` | 同上 | 有现成构建 |
-| `linux-arm64` | 同上 | 有现成构建 |
-| `osx-arm64` | **无现成 LGPL 共享构建**（ffmpeg.org 列的 macOS 构建多为静态 / GPL，或已停更） | 未锁定：按锁定的 configure 自建，或核实第三方 LGPL 构建后补登；该平台降级为「FFmpeg 解码不可用」 |
+| `win-x64` | 三方件仓自建（MSYS2 MINGW64） | 出包 |
+| `linux-x64` | 三方件仓自建（ubuntu-latest） | 出包 |
+| `linux-arm64` | 三方件仓自建（ubuntu-22.04-arm） | 出包 |
+| `osx-arm64` | 三方件仓自建（macos-latest） | 出包；dylib 的 install_name 设为 `@loader_path`，同目录依赖可解析 |
 
-- 二进制的 `sha256` 已按 vendoring 实取回填并 `status: locked`；未锁定的 RID 在 manifest 里标 `status: undecided`，取件脚本按状态自动跳过。
-- FFmpeg 的 lgpl-shared 产物在 Linux 上按 SONAME（`libavformat.so.63`）命名，故 `fetch-ffmpeg.sh` 会把软链目标落成实体文件、`install-plugin-artifacts.sh` 也须匹配 `*.so.*`（已改）。
-- 现有 CI 只校验「登记 vs 许可全文」，**仍未校验二进制哈希**（取件脚本自身按 manifest 的 sha256 强校验，等价的保护）。若要防「件被换过」再进 `--check` 亦可（可选）。
+- 四个 RID 都有交付件，**不再有平台降级**。`sha256` 由三方件仓出包时按实际产物写进 Release 的 `index.json`，取件脚本据此强校验——**不锁版本但锁哈希**。
+- Linux 产物按 SONAME（`libavformat.so.63`）命名（打包脚本已把软链目标落成实体文件），Windows 按 `<name>-<major>.dll`，macOS 按 `lib<name>.<major>.dylib`，故 `install-plugin-artifacts.sh` 须匹配 `*.so` / `*.so.*` / `*.dylib`（已改）。
+- 现有 CI 只校验「登记 vs 许可全文」，**不校验二进制哈希**；二进制的完整性由取件脚本按 Release 的 `index.json` 强校验（同一次 Release 内自洽，等价保护）。若要防「件被换过」再进 `--check` 亦可（可选）。
 
 ## 14. 打包与 CI 改动清单（均已落地）
 

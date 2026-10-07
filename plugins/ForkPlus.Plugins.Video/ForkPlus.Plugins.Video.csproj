@@ -21,11 +21,13 @@
     <ProjectReference Include="$(MSBuildThisFileDirectory)../../sdk/ForkPlus.Plugins.Media/ForkPlus.Plugins.Media.csproj" />
   </ItemGroup>
   <ItemGroup Condition="'$(RuntimeIdentifier)' != ''">
-    <!-- FFmpeg 原生件（LGPL，SONAME 命名，见 third_party/ffmpeg/manifest.json）：
-         由 .github/scripts/fetch-ffmpeg.sh 按 RID 取到 third_party/ffmpeg/<version>/<rid>/，
-         这里随构建拷进输出根，运行期 MediaNative 从 AppContext.BaseDirectory 直接加载。
-         缺件时不报错（该 RID 不支持预览，插件降级为「FFmpeg 解码不可用」提示）。 -->
-    <Content Include="$(MSBuildThisFileDirectory)../../third_party/ffmpeg/9.0.2/$(RuntimeIdentifier)/*">
+    <!-- FFmpeg 原生件（LGPL，按平台命名，见 third_party/ffmpeg/manifest.json）：由
+         .github/scripts/fetch-third-party.sh 按 RID 从三方件仓（ForkPlus-Plugins-Third_Party）
+         的最新 Release 取到 third_party/ffmpeg/<rid>/，这里随构建拷进输出根，运行期
+         MediaNative 从本程序集所在目录加载。
+         只收库文件（*.dll / *.so / *.so.* / *.dylib）——同目录还有取件脚本留下的 .source.json，
+         不该混进插件产物。缺件时不报错（该 RID 不支持预览，降级为「FFmpeg 解码不可用」提示）。 -->
+    <Content Include="$(MSBuildThisFileDirectory)../../third_party/ffmpeg/$(RuntimeIdentifier)/*.dll;$(MSBuildThisFileDirectory)../../third_party/ffmpeg/$(RuntimeIdentifier)/*.so;$(MSBuildThisFileDirectory)../../third_party/ffmpeg/$(RuntimeIdentifier)/*.so.*;$(MSBuildThisFileDirectory)../../third_party/ffmpeg/$(RuntimeIdentifier)/*.dylib">
       <Link>%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

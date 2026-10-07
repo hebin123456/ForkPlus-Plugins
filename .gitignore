@@ -11,6 +11,7 @@ artifacts/
 # Pages 站点产物（由 .github/workflows/pages.yml 在 CI 中生成）
 /pages/
 
-# FFmpeg 原生件：按 third_party/ffmpeg/manifest.json 由 .github/scripts/fetch-ffmpeg.sh
-# 取件并校验，二进制不入库（只锁版本 / 来源 / sha256）。
-/third_party/ffmpeg/*/
+# 三方件原生库：按 third_party/<component>/manifest.json 由
+# .github/scripts/fetch-third-party.sh 从三方件仓（ForkPlus-Plugins-Third_Party）
+# 的最新 Release 取件并校验 sha256，二进制不入库（只留清单）。
+/third_party/*/*/
