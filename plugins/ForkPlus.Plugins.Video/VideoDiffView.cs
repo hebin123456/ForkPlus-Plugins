@@ -615,6 +615,10 @@ namespace ForkPlus.Plugins.Video
 						}
 					}
 				}
+				if (side.Failure != null)
+				{
+					PluginLog.Warn($"Video: '{side.Content?.Path ?? "<none>"}' not decoded ({side.Failure.Kind}): {side.Failure.Detail}");
+				}
 			}
 			catch (Exception ex)
 			{

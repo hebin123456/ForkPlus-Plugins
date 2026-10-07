@@ -551,6 +551,10 @@ namespace ForkPlus.Plugins.Audio
 						}
 					}
 				}
+				if (side.Failure != null)
+				{
+					PluginLog.Warn($"Audio: '{side.Content?.Path ?? "<none>"}' not decoded ({side.Failure.Kind}): {side.Failure.Detail}");
+				}
 			}
 			catch (Exception ex)
 			{

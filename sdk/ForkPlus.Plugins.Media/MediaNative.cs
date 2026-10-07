@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using FFmpeg.AutoGen;
@@ -9,10 +10,11 @@ using DynBindings = FFmpeg.AutoGen.Bindings.DynamicallyLoaded.DynamicallyLoadedB
 namespace ForkPlus.Plugins.Media
 {
 	/// <summary>
-	/// FFmpeg 原生库的动态绑定初始化。
-	///
 	/// 原生件（libavformat / libavcodec / libavutil / libswscale / libswresample）随插件包平铺
-	/// 分发在 plugins/ 目录（与插件 DLL 同目录），因此把解析路径指向 <see cref="AppContext.BaseDirectory"/>。
+	/// 分发在宿主的 plugins/ 目录，与本程序集同目录，因此解析路径取**本程序集所在目录**。
+	///
+	/// 不能用 <see cref="AppContext.BaseDirectory"/>：那是宿主可执行文件所在目录，并不含
+	/// plugins/ 子目录，会解析不到原生件而整体报「FFmpeg 解码不可用」。
 	/// 只做一次初始化；失败后记住原因，不再重试（避免每次对比都抛一遍）。
 	///
 	/// 设计约束（见 design/audio-video-plugins.md §12）：只解码不编码；绑定大版本必须与原生库一致。
@@ -25,7 +27,7 @@ namespace ForkPlus.Plugins.Media
 
 		private static string _error;
 
-		/// <summary>原生件所在的目录（默认插件 DLL 所在目录）。</summary>
+		/// <summary>原生件所在的目录（默认与本程序集同目录）。</summary>
 		public static string NativeDirectory { get; set; }
 
 		/// <summary>是否已成功完成绑定初始化。</summary>
@@ -71,10 +73,10 @@ namespace ForkPlus.Plugins.Media
 				}
 				try
 				{
-					string directory = string.IsNullOrEmpty(NativeDirectory) ? AppContext.BaseDirectory : NativeDirectory;
-					if (!Directory.Exists(directory))
+					string directory = ResolveDirectory();
+					if (directory == null)
 					{
-						throw new DirectoryNotFoundException("native directory not found: " + directory);
+						throw new DirectoryNotFoundException("native directory not found (tried: " + string.Join(", ", Candidates()) + ")");
 					}
 					ffmpeg.RootPath = directory;
 					DynBindings.LibrariesPath = directory;
@@ -100,6 +102,27 @@ namespace ForkPlus.Plugins.Media
 					return false;
 				}
 			}
+		}
+
+		/// <summary>按「显式指定 → 本程序集目录 → 宿主根目录」取第一个存在的目录；都不存在返回 null。</summary>
+		private static string ResolveDirectory()
+		{
+			foreach (string candidate in Candidates())
+			{
+				if (!string.IsNullOrEmpty(candidate) && Directory.Exists(candidate))
+				{
+					return candidate;
+				}
+			}
+			return null;
+		}
+
+		private static IEnumerable<string> Candidates()
+		{
+			yield return NativeDirectory;
+			string location = typeof(MediaNative).Assembly.Location;
+			yield return string.IsNullOrEmpty(location) ? null : Path.GetDirectoryName(location);
+			yield return AppContext.BaseDirectory;
 		}
 
 		private static FFmpeg.AutoGen.Bindings.DynamicallyLoaded.IFunctionResolver CreateResolver()
