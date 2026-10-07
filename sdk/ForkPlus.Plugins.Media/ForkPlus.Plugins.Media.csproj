@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- 音视频插件共享解码核心（FFmpeg.AutoGen 动态绑定 + 内存 AVIO + 元数据 / 波形 / 频谱 / 帧解码）。
+         落位 sdk/ 而非 plugins/：CI 的插件发现是 plugins/*/*.csproj 全量构建并逐个打包，
+         共享库放 plugins/ 会被当成一个「插件」打包出多余产物（见 design/audio-video-plugins.md §4）。
+         本工程不引用契约程序集：纯解码，不做日志（错误以字符串返回，由插件侧记录）。 -->
+    <AssemblyName>ForkPlus.Plugins.Media</AssemblyName>
+    <RootNamespace>ForkPlus.Plugins.Media</RootNamespace>
+    <Version>0.1.0</Version>
+
+    <!-- FFmpeg 互操作全程指针操作。 -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- FFmpeg.AutoGen：LGPL 绑定（包版本与 FFmpeg 发行版 9.0.x 同步，大版本必须一致）。
+         Bindings.DynamicallyLoaded：运行期 dlopen / LoadLibrary 原生件，不静态链接。 -->
+    <PackageReference Include="FFmpeg.AutoGen" Version="9.0.1.1" />
+    <PackageReference Include="FFmpeg.AutoGen.Bindings.DynamicallyLoaded" Version="9.0.1.1" />
+  </ItemGroup>
+</Project>

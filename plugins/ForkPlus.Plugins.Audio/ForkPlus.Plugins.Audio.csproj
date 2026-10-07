@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- 音频对比视图插件：认领音频容器，左右两栏并排元数据 / 波形 / 频谱 / 内嵌封面。
+         公共属性（net10.0 / AvaloniaVersion / 契约引用）见 ../Directory.Build.props。 -->
+    <AssemblyName>ForkPlus.Plugins.Audio</AssemblyName>
+    <RootNamespace>ForkPlus.Plugins.Audio</RootNamespace>
+
+    <!-- 插件自身版本（与宿主版本解耦）。 -->
+    <Version>0.0.1</Version>
+
+    <!-- 本插件带私有依赖：共享解码核心 ForkPlus.Plugins.Media.dll + FFmpeg.AutoGen（托管绑定）
+         + 按 RID 的 FFmpeg 原生库。类库工程默认不拷 PackageReference 资产，这里显式开启。 -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- 共享解码核心：只解码不编码（FFmpeg.AutoGen 动态绑定 + 内存 AVIO + 波形 / 频谱分析）。
+         Private=true（默认）：Media.dll 作为插件私有依赖随本插件拷出（与 PDF 带 Docnet.Core 同理）。 -->
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../../sdk/ForkPlus.Plugins.Media/ForkPlus.Plugins.Media.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <!-- FFmpeg 原生件（LGPL，SONAME 命名，见 third_party/ffmpeg/manifest.json）：
+         由 .github/scripts/fetch-ffmpeg.sh 按 RID 取到 third_party/ffmpeg/<version>/<rid>/，
+         这里随构建拷进输出根，运行期 MediaNative 从 AppContext.BaseDirectory 直接加载。
+         缺件时不报错（该 RID 不支持预览，插件降级为「FFmpeg 解码不可用」提示）。 -->
+    <Content Include="$(MSBuildThisFileDirectory)../../third_party/ffmpeg/9.0.2/$(RuntimeIdentifier)/*">
+      <Link>%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+</Project>

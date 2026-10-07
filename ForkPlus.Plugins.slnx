@@ -1,6 +1,8 @@
 <Solution>
   <!-- 插件 SDK 契约（sdk/） -->
   <Project Path="sdk/ForkPlus.Plugins.Abstractions/ForkPlus.Plugins.Abstractions.csproj" />
+  <!-- 共享解码核心（sdk/），音视频插件的私有依赖 -->
+  <Project Path="sdk/ForkPlus.Plugins.Media/ForkPlus.Plugins.Media.csproj" />
   <!-- 插件（plugins/），新增插件在此登记 -->
   <Project Path="plugins/ForkPlus.Plugins.Example/ForkPlus.Plugins.Example.csproj" />
   <Project Path="plugins/ForkPlus.Plugins.Pdf/ForkPlus.Plugins.Pdf.csproj" />
@@ -9,4 +11,6 @@
   <Project Path="plugins/ForkPlus.Plugins.Font/ForkPlus.Plugins.Font.csproj" />
   <Project Path="plugins/ForkPlus.Plugins.Executable/ForkPlus.Plugins.Executable.csproj" />
   <Project Path="plugins/ForkPlus.Plugins.Certificate/ForkPlus.Plugins.Certificate.csproj" />
+  <Project Path="plugins/ForkPlus.Plugins.Audio/ForkPlus.Plugins.Audio.csproj" />
+  <Project Path="plugins/ForkPlus.Plugins.Video/ForkPlus.Plugins.Video.csproj" />
 </Solution>

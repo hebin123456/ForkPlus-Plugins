@@ -89,6 +89,13 @@ jobs:
           echo "VERSION=$version" >> "$GITHUB_ENV"
           echo "packaging version: $version"
 
+      # FFmpeg 原生件：按 third_party/ffmpeg/manifest.json 锁定的 tag / asset / sha256 取件到
+      # third_party/ffmpeg/<version>/<rid>/，供音视频插件按 RID 随包拷进输出根。未锁定的 RID
+      # （如 osx-arm64）脚本会跳过，插件在该平台降级为「FFmpeg 解码不可用」提示。必须在构建前完成。
+      - name: Fetch FFmpeg native libraries
+        shell: bash
+        run: bash .github/scripts/fetch-ffmpeg.sh ${{ matrix.rid }}
+
       # 逐个插件工程按 RID 构建（插件工程位于 plugins/<AssemblyName>/，见根 README「插件开发规范」）
       - name: Build plugins
         shell: bash

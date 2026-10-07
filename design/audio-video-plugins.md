@@ -1,6 +1,6 @@
 # 音视频对比插件 · 设计文档
 
-> 状态：设计已定，未开工。
+> 状态：已实现（插件 v0.0.1，随 v1.0.4 发布；本期只解码、不做播放 / 音频输出，见 §8、§15）。
 > 日期：2026-10-06。
 > 相关：[README.md](../README.md)（插件开发规范）、[sdk/ForkPlus.Plugins.Abstractions](../sdk/ForkPlus.Plugins.Abstractions)（契约）、[third_party/ffmpeg/manifest.json](../third_party/ffmpeg/manifest.json)（原生件锁定）。
 
@@ -33,9 +33,13 @@
 | AssemblyName | `ForkPlus.Plugins.Audio` | `ForkPlus.Plugins.Video` |
 | 扩展名 | `.mp3` `.wav` `.flac` `.ogg` `.oga` `.opus` `.m4a` `.aac` `.wma` | `.mp4` `.mkv` `.mov` `.webm` `.avi` `.m4v` `.mpg` `.mpeg` `.wmv` `.flv` |
 | 默认模式 | 元数据 | 元数据 |
-| 其余模式 | 波形 · 频谱 · 封面 | 帧条 · 单帧对比 · 播放 |
+| 其余模式 | 波形 · 频谱 · 封面 | 帧条 · 单帧对比 |
 
-扩展名无重叠（`.m4a` 音频 / `.m4v` 视频）。`.webm` 可能只含音轨，归视频插件，此时自然退化成波形 + 元数据。
+> 最终落地的模式以上表为准（音频四模式、视频三模式）；原计划里的视频「播放」与音频输出**本期未做**，
+> 见 §8、§15。
+
+扩展名无重叠（`.m4a` 音频 / `.m4v` 视频）。`.webm` 可能只含音轨，归视频插件，此时帧条 / 单帧对比
+取不到视频流，自然退化成只有元数据（波形 / 频谱是音频插件的模式）。
 
 ## 4. 共享解码核心的落位
 
@@ -75,17 +79,26 @@
 
 ## 7. 视频自绘管线
 
-- 后台线程：`av_read_frame` → `avcodec_send_packet` / `avcodec_receive_frame`。
-- 帧格式（`YUV420P` 等）经 `sws_scale` 转 BGRA → Avalonia `WriteableBitmap` → `Image`。
-- 性能：1080p BGRA 每帧约 8 MB。预览要先 `sws_scale` 缩到预览尺寸并控制在 ~15 fps；全尺寸只在「单帧对比」模式给。
-- 帧条取帧：用 `AVFrame.key_frame` / `AV_PKT_FLAG_KEY` 挑关键帧，配合 `av_seek_frame` 在时间轴上均匀采样。
+本期**没有播放**，因此不做帧率控制；只按需取有限几帧，管线很轻：
 
-## 8. 音频输出
+- 后台线程 `av_read_frame` → `avcodec_send_packet` / `avcodec_receive_frame`。
+- 帧格式（`YUV420P` 等）经 `sws_scale`（`MediaConvert.FrameToImage`）转紧凑 BGRA → Avalonia `WriteableBitmap` → `Image`。
+- 取帧定位：`av_seek_frame(..., AVSEEK_FLAG_BACKWARD)` 跳到目标时间前最近的关键帧，`avcodec_flush_buffers`
+  清缓冲，再从该关键帧顺序解到 `pts ≥ 目标时间` 的第一帧；每次取帧只 seek 一次，长视频不必从头解到尾。
+- 帧条：在时间轴上均匀取每段中点、最多 `MediaLimits.MaxFilmstripFrames`（8）帧，每帧缩到
+  `MaxFilmstripWidth`（240）宽。单帧对比：缩到不超过 `MaxFrameCompareWidth`（720）× `MaxFrameCompareHeight`（480）。
+- 像素差异：按 `MediaLimits.PixelDiffThreshold`（24，逐通道最大差）算变更像素比例；「高亮差异像素」
+  偏好开启时把变更像素染到右侧帧上。
+
+## 8. 音频输出（本期未做）
+
+**本期只解码、不出声**，音频输出整体后延，以下仅为后续的候选方案记录：
 
 - `swr_convert` 统一成设备采样格式（如 S16 交错 48 kHz 立体声）。
 - 环形缓冲 + 音频设备回调驱动；播放 / 暂停 / seek 用原子标志。
 - 音画同步以**音频时钟为 master**（视频按 pts 丢弃或等待），够用且实现简单。
-- 后端建议 **miniaudio**（public domain / MIT-0，单文件跨平台），省掉 WASAPI / CoreAudio / ALSA 三套原生代码。备选是平台原生三套，工作量大且不好维护。
+- 后端建议 **miniaudio**（public domain / MIT-0，单文件跨平台），省掉 WASAPI / CoreAudio / ALSA 三套原生代码。
+  因此 [third_party/miniaudio](../third_party/miniaudio/manifest.json) 目前只留占位，**未随包分发**。
 
 ## 9. 差异呈现
 
@@ -94,21 +107,21 @@
 - **音频**
   - 元数据表：时长 / 容器 / 码率 / 采样率 / 声道 / 编码器 tag / 标签与年份。
   - 波形：两侧共用同一时间轴对齐，按窗口能量差**高亮差异段**——「哪几秒的声音变了」一眼可见。
-  - 频谱：STFT 声谱图并排（可延后到二期）。
+  - 频谱：STFT 声谱图并排（低频在下、冷→暖渐变；本期已做）。
   - 封面：`ID3 APIC` / mp4 `covr` 内嵌图并排。
 - **视频**
   - 元数据表：时长 / 容器 / 码率 / 分辨率 / 帧率 / 像素格式 / 色彩空间 / HDR 元数据 / 编码器 tag / 音轨 / 字幕轨 / 章节。
   - 帧条：两侧按同一时间刻度抽关键帧并排，看画面在哪几段变了。
   - 单帧对比：定位到同一时间戳取帧，做像素级差异高亮——直接复用宿主已接线的 `PluginEnvironment.HighlightImageDiff` 与 `ImageDiffHighlightPixelsChanged`（偏好设置里的「高亮差异像素」实时生效）。
-  - 播放：可选模式，不是默认。
+  - ~~播放~~：本期未做（见 §8）。
 
 ## 10. 线程、生命周期与复用
 
 - **控件必须在 UI 线程构建**（本仓库已有先例：后台线程构建的 Avalonia 控件不渲染）。分工：解码在后台线程，控件构建与更新经 `Dispatcher.UIThread.Post` 回 UI 线程。
 - `SetContent` **每次刷新对比都会调用、实例会复用** → 进入时必须取消并等待上一次的解码任务，不能假设是首次。
-- `Activate` / `Deactivate`：恢复 / 暂停播放，失活时停解码线程，省电防闪。
-- `Release`：停线程、释放位图、释放 codec / sws / format / AVIO 上下文。
-- 每个内容一份 `CancellationTokenSource`，随 `SetContent` / `Release` 取消。
+- `Activate` / `Deactivate`：本期无播放，失活时不需要额外动作（保持空实现即可）。
+- `Release`：停线程、退订 `ImageDiffHighlightPixelsChanged`、释放位图；解码上下文随 `using` / 收尾释放。
+- 每轮渲染一份 `CancellationTokenSource` + 递增的**代次**（generation），随 `SetContent` / 切模式 / `Release` 取消上一轮；回投 UI 线程时校验代次，旧任务结果不会画到本次视图。
 
 ## 11. 额度与安全
 
@@ -119,9 +132,9 @@
 
 | 组件 | 版本 | 许可 | 用途 |
 | --- | --- | --- | --- |
-| FFmpeg 原生件 | **9.0.2**（2026-09-18，9.0 分支最新稳定） | LGPL-2.1-or-later | 解码 / 格式解析 / 缩放 / 重采样 |
-| FFmpeg.AutoGen | **9.0.2** | LGPL-3.0（待核实后登记） | P/Invoke 绑定 |
-| miniaudio | 待锁定（见 [manifest](../third_party/miniaudio/manifest.json)） | public domain / MIT-0 | 跨平台音频输出 |
+| FFmpeg 原生件 | **9.0.2**（BtbN/FFmpeg-Builds `lgpl-shared`，`9.0.2-22-g46d8f462ee`） | LGPL-2.1-or-later | 解码 / 格式解析 / 缩放 / 重采样 |
+| FFmpeg.AutoGen | **9.0.1.1**（含 `Abstractions` / `Bindings.DynamicallyLoaded`） | LGPL-3.0-or-later | P/Invoke 绑定 |
+| miniaudio | 本期未采用（只留 [manifest](../third_party/miniaudio/manifest.json) 占位，不随包分发） | public domain / MIT-0 | 跨平台音频输出（见 §8） |
 
 **两条硬约束**：
 
@@ -136,12 +149,12 @@
 
 ```
 third_party/ffmpeg/manifest.json                     锁定：版本 / 许可 / 来源 / 每 RID 资产 + sha256
-third_party/ffmpeg/9.0.2/<rid>/*.dll|*.so*|*.dylib   实际二进制
-third_party/miniaudio/manifest.json                  同上（音频输出后端）
-third_party/miniaudio/<version>/<rid>/               实际二进制
+third_party/ffmpeg/9.0.2/<rid>/*.dll|*.so.*|*.dylib   实际二进制（由 fetch-ffmpeg.sh 取件，不入库）
+third_party/miniaudio/manifest.json                  占位（本期未采用，无二进制）
 licenses/ffmpeg/LICENSE.txt                          许可全文（沿用现有 licenses/ 约定）
-licenses/miniaudio/LICENSE.txt                       同上
+licenses/ffmpeg-autogen/LICENSE.txt                  绑定许可全文
 plugins/ForkPlus.Plugins.{Audio,Video}/third-party.json  登记（沿用现有约定）
+.github/scripts/fetch-ffmpeg.sh                      按 manifest 取件 + 校验 sha256 + 解出运行期库名
 ```
 
 与现有文件的**分工**，避免看起来像重复：
@@ -157,25 +170,29 @@ plugins/ForkPlus.Plugins.{Audio,Video}/third-party.json  登记（沿用现有�
 | `win-x64` | BtbN/FFmpeg-Builds 的 **lgpl-shared** 变体 | 有现成构建 |
 | `linux-x64` | 同上 | 有现成构建 |
 | `linux-arm64` | 同上 | 有现成构建 |
-| `osx-arm64` | **无现成 LGPL 共享构建**（ffmpeg.org 列的 macOS 构建多为静态 / GPL，或已停更） | **待定**：按锁定的 configure 自建，或核实第三方 LGPL 构建后再登记 |
+| `osx-arm64` | **无现成 LGPL 共享构建**（ffmpeg.org 列的 macOS 构建多为静态 / GPL，或已停更） | 未锁定：按锁定的 configure 自建，或核实第三方 LGPL 构建后补登；该平台降级为「FFmpeg 解码不可用」 |
 
-- 二进制的 `sha256` 在 vendoring（实际放入仓库）时回填，manifest 中现留空占位。
-- 现有 CI 只校验「登记 vs 许可全文」，**不校验二进制哈希**。建议增强 `--check` 去核对 `third_party` 里的 sha256（可选，防止件被换过而无人知）。
+- 二进制的 `sha256` 已按 vendoring 实取回填并 `status: locked`；未锁定的 RID 在 manifest 里标 `status: undecided`，取件脚本按状态自动跳过。
+- FFmpeg 的 lgpl-shared 产物在 Linux 上按 SONAME（`libavformat.so.63`）命名，故 `fetch-ffmpeg.sh` 会把软链目标落成实体文件、`install-plugin-artifacts.sh` 也须匹配 `*.so.*`（已改）。
+- 现有 CI 只校验「登记 vs 许可全文」，**仍未校验二进制哈希**（取件脚本自身按 manifest 的 sha256 强校验，等价的保护）。若要防「件被换过」再进 `--check` 亦可（可选）。
 
-## 14. 打包与 CI 改动清单
+## 14. 打包与 CI 改动清单（均已落地）
 
-1. **[install-plugin-artifacts.sh](../.github/scripts/install-plugin-artifacts.sh)**：现在只平铺拷贝 `*.dll` / `*.so` / `*.dylib`。FFmpeg 的 lgpl-shared 产物是平铺的，但 miniaudio 或个别构建可能带子目录 → **需确认，必要时扩展为支持目录树**。
-2. 新增一步：从 `third_party/ffmpeg/<version>/<rid>/` 把原生件拷进插件输出（或在 csproj 里直接引用该路径），四个 RID 都要能找到对应件。
-3. **[capture-screenshots.sh](../.github/scripts/capture-screenshots.sh)**：新增 demo 媒体（用 ffmpeg 生成体积极小的 sample），并给「视图已渲染」这个握手一个**稳定的日志行**；截图走静态默认模式（元数据 / 波形 / 帧条）。
-4. **[pages/plugins.json](../.github/pages/plugins.json)**：新增两个插件条目与截图。
-5. **[build.yml](../.github/workflows/build.yml)**：无需改流程（`plugins/*/*.csproj` 自动发现），但需保证四平台的第三方件齐备，否则打包会缺件。
+1. **[install-plugin-artifacts.sh](../.github/scripts/install-plugin-artifacts.sh)**：平铺拷贝 `*.dll` / `*.so` / `*.so.*` / `*.dylib`，并排除宿主共享程序集；补上 `*.so.*` 以收录 SONAME 命名的 FFmpeg 库。
+2. **[fetch-ffmpeg.sh](../.github/scripts/fetch-ffmpeg.sh)**（新增）：按 manifest 的 tag / asset / sha256 取件并校验，解出运行期库名到 `third_party/ffmpeg/<version>/<rid>/`；构建时由插件的 csproj 按 RID 拷进输出（缺件不报错，降级）。
+3. **[capture-screenshots.sh](../.github/scripts/capture-screenshots.sh)**：新增 demo 音频 / 视频素材（系统 `ffmpeg` 现造），构建插件前先 `fetch-ffmpeg.sh`；三个场景各截一张，走默认元数据模式。
+4. **[pages/plugins.json](../.github/pages/plugins.json)**：新增两个插件条目与各三张截图。
+5. **[build.yml](../.github/workflows/build.yml)**：构建前新增 `Fetch FFmpeg native libraries` 一步（按矩阵 RID 取件）；**[pages.yml](../.github/workflows/pages.yml)** 的 headless 工具链补装 `ffmpeg`。
+6. **[.gitignore](../.gitignore)**：忽略 `third_party/ffmpeg/*/`（二进制不入库，只锁锁文件）。
 
 设计文档本身不需要接入任何 workflow。
 
-## 15. 未决项
+## 15. 遗留项
 
-1. 300 MB 闸法取 A 还是 B（§5）。
-2. macOS（`osx-arm64`）原生件：自建还是用第三方 LGPL 构建。
-3. 频谱图是否一期就做，还是延后。
-4. 音频后端确认用 miniaudio。
-5. 是否把 sha256 校验接进 CI 的 `--check`（§13）。
+已定：300 MB 取方案 A（§5）；频谱一期就做；音频输出 / 播放**本期不做**（§8）；音频后端暂不引入 miniaudio。
+
+仍未决：
+
+1. macOS（`osx-arm64`）原生件：自建还是用第三方 LGPL 构建（该平台暂降级）。
+2. 是否把二进制 sha256 校验再并入 CI 的 `--check`（§13）。
+3. 二期是否补「播放 / 音频输出」（含 miniaudio 后端接入）。

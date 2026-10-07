@@ -1,0 +1,37 @@
+{
+  "$comment": "本插件随包分发的第三方组件登记表。字段：name/version/license/copyright/homepage 用于生成声明头部，licenseFile 是仓库根目录下 licenses/ 里的许可全文（相对仓库根）。FFmpeg 原生件按 RID 由 .github/scripts/fetch-ffmpeg.sh 取入（见 third_party/ffmpeg/manifest.json），版本 / 来源 / sha256 均在那里锁定。",
+  "components": [
+    {
+      "name": "FFmpeg",
+      "version": "9.0.2",
+      "license": "LGPL-2.1-or-later",
+      "copyright": "Copyright (c) 2000-2026 the FFmpeg developers",
+      "homepage": "https://ffmpeg.org/",
+      "licenseFile": "licenses/ffmpeg/LICENSE.txt"
+    },
+    {
+      "name": "FFmpeg.AutoGen",
+      "version": "9.0.1.1",
+      "license": "LGPL-3.0-or-later",
+      "copyright": "Copyright (c) Ruslan Balanukhin",
+      "homepage": "https://github.com/Ruslan-B/FFmpeg.AutoGen",
+      "licenseFile": "licenses/ffmpeg-autogen/LICENSE.txt"
+    },
+    {
+      "name": "FFmpeg.AutoGen.Abstractions",
+      "version": "9.0.1.1",
+      "license": "LGPL-3.0-or-later",
+      "copyright": "Copyright (c) Ruslan Balanukhin",
+      "homepage": "https://github.com/Ruslan-B/FFmpeg.AutoGen",
+      "licenseFile": "licenses/ffmpeg-autogen/LICENSE.txt"
+    },
+    {
+      "name": "FFmpeg.AutoGen.Bindings.DynamicallyLoaded",
+      "version": "9.0.1.1",
+      "license": "LGPL-3.0-or-later",
+      "copyright": "Copyright (c) Ruslan Balanukhin",
+      "homepage": "https://github.com/Ruslan-B/FFmpeg.AutoGen",
+      "licenseFile": "licenses/ffmpeg-autogen/LICENSE.txt"
+    }
+  ]
+}

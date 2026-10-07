@@ -8,7 +8,7 @@
 #   ① 构建仓库内插件（plugins/*/*.csproj）
 #   ② 下载最新的 ForkPlus（linux-x64 发行包）
 #   ③ 把插件产物（主 DLL + 私有依赖 + 原生库）装入 ForkPlus 的 plugins/ 目录
-#   ④ 准备 demo 仓库：PDF / Office / 压缩包 / 字体 / 可执行文件 / 证书 各三种 diff 场景
+#   ④ 准备 demo 仓库：PDF / Office / 压缩包 / 字体 / 可执行文件 / 证书 / 音频 / 视频 各三种 diff 场景
 #      （修改 / 新增 / 删除）
 #   ⑤ 无头 X 环境（Xvfb + openbox）启动 ForkPlus，逐场景触发对应插件对比视图，
 #      截取完整软件界面（整屏 1920x1280，不做局部裁切）
@@ -53,6 +53,9 @@ trap cleanup EXIT
 
 # ── ① 构建插件 ───────────────────────────────────────────────────────────────
 build_plugins() {
+	# FFmpeg 原生件：按 third_party/ffmpeg/manifest.json 锁定的 tag / sha256 取件（未锁定的 RID 自动跳过）。
+	# 音视频插件按 RID 把原生库随包拷进输出根，故须在构建前完成取件。
+	bash "$REPO_ROOT/.github/scripts/fetch-ffmpeg.sh" "$RID"
 	log "构建仓库内插件 ($RID)"
 	shopt -s nullglob
 	local projects=("$REPO_ROOT"/plugins/*/*.csproj)
@@ -811,6 +814,137 @@ prepare_repo_certificate() {
 	echo "  $repo ($mode · .$fmt)"
 }
 
+# ── demo 素材：音频 ──────────────────────────────────────────────────────────
+# 音频样本用 CI runner 上的系统 ffmpeg CLI 现造（pages.yml 已 apt 安装 ffmpeg）。
+# 注意分工：造样本用系统 ffmpeg，插件解码用随包分发的 FFmpeg 原生库，两者互不相干。
+#
+# 三种场景各用一种容器，覆盖有损 / 无损两条解码路径：
+#   modify → .mp3（libmp3lame 有损）
+#   add    → .wav（PCM 无损）
+#   remove → .flac（FLAC 无损压缩）
+# v2 比 v1 换了频率（440→660 Hz）、时长（3→4 s）、采样率（44100→48000）并改了标签，
+# 让元数据表（时长 / 码率 / 采样率 / 标签）与波形 / 频谱都有真实差异。
+write_demo_audio() {
+	local repo="$1" version="$2" ext="$3"
+	local freq dur rate codec
+	if [ "$version" = "v2" ]; then
+		freq=660
+		dur=4
+		rate=48000
+	else
+		freq=440
+		dur=3
+		rate=44100
+	fi
+	case "$ext" in
+	wav) codec=pcm_s16le ;;
+	flac) codec=flac ;;
+	*) codec=libmp3lame ;;
+	esac
+	ffmpeg -hide_banner -loglevel error \
+		-f lavfi -i "sine=frequency=$freq:duration=$dur" \
+		-ac 2 -ar "$rate" \
+		-metadata title="ForkPlus Demo $version" -metadata artist="ForkPlus" \
+		-metadata album="Audio Demo" -metadata date="2026" \
+		-codec:a "$codec" -y "$repo/sample.$ext"
+	echo "  demo audio -> $repo/sample.$ext ($version)"
+}
+
+# 音频 demo 仓库：三场景各用一种容器（modify=mp3 / add=wav / remove=flac）。
+# 音频文件含 NUL 字节，git 判为二进制，命中音频插件而非文本 / Hex 兜底。
+prepare_repo_audio() {
+	local mode="$1" ext="$2"
+	local repo="$WORK/repo-audio-$mode"
+	init_demo_repo "$repo"
+	case "$mode" in
+	add)
+		printf 'baseline\n' >"$repo/readme.txt"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: baseline"
+		write_demo_audio "$repo" v2 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "add: sample.$ext"
+		;;
+	remove)
+		printf 'baseline\n' >"$repo/readme.txt"
+		write_demo_audio "$repo" v1 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: add sample.$ext"
+		git -C "$repo" rm -q "sample.$ext"
+		git -C "$repo" commit -q -m "remove: delete sample.$ext"
+		;;
+	*)
+		write_demo_audio "$repo" v1 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: add sample.$ext"
+		write_demo_audio "$repo" v2 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "update: modify sample.$ext"
+		;;
+	esac
+	echo "  $repo ($mode · .$ext)"
+}
+
+# ── demo 素材：视频 ──────────────────────────────────────────────────────────
+# 视频三种场景各用一种容器 / 编码：
+#   modify → .mp4（H.264）
+#   add    → .mkv（H.264）
+#   remove → .avi（MPEG-4 Part 2）
+# v2 换成 testsrc2 并整体色相旋转 90°，让帧条与单帧对比里的画面明显不同。
+write_demo_video() {
+	local repo="$1" version="$2" ext="$3"
+	local src codec
+	if [ "$version" = "v2" ]; then
+		src="testsrc2=size=320x240:rate=10:duration=3,hue=h=90"
+	else
+		src="testsrc=size=320x240:rate=10:duration=2"
+	fi
+	case "$ext" in
+	avi) codec=mpeg4 ;;
+	*) codec=libx264 ;;
+	esac
+	ffmpeg -hide_banner -loglevel error \
+		-f lavfi -i "$src" \
+		-pix_fmt yuv420p -c:v "$codec" \
+		-metadata title="ForkPlus Demo $version" \
+		-y "$repo/sample.$ext"
+	echo "  demo video -> $repo/sample.$ext ($version)"
+}
+
+# 视频 demo 仓库：三场景各用一种容器（modify=mp4 / add=mkv / remove=avi）。
+prepare_repo_video() {
+	local mode="$1" ext="$2"
+	local repo="$WORK/repo-video-$mode"
+	init_demo_repo "$repo"
+	case "$mode" in
+	add)
+		printf 'baseline\n' >"$repo/readme.txt"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: baseline"
+		write_demo_video "$repo" v2 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "add: sample.$ext"
+		;;
+	remove)
+		printf 'baseline\n' >"$repo/readme.txt"
+		write_demo_video "$repo" v1 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: add sample.$ext"
+		git -C "$repo" rm -q "sample.$ext"
+		git -C "$repo" commit -q -m "remove: delete sample.$ext"
+		;;
+	*)
+		write_demo_video "$repo" v1 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: add sample.$ext"
+		write_demo_video "$repo" v2 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "update: modify sample.$ext"
+		;;
+	esac
+	echo "  $repo ($mode · .$ext)"
+}
+
 seed_settings() {
 	log "预置 ForkPlus 设置（跳过引导 / 亮色主题 / 最大化窗口 / 记录已读更新说明）"
 	local dir="$HOME/.local/share/ForkPlus"
@@ -993,6 +1127,14 @@ prepare_repo_executable remove a
 prepare_repo_certificate modify der
 prepare_repo_certificate add p12
 prepare_repo_certificate remove p7b
+# 音频 demo：三场景各用一种容器（modify=mp3 / add=wav / remove=flac）
+prepare_repo_audio modify mp3
+prepare_repo_audio add wav
+prepare_repo_audio remove flac
+# 视频 demo：三场景各用一种容器（modify=mp4 / add=mkv / remove=avi）
+prepare_repo_video modify mp4
+prepare_repo_video add mkv
+prepare_repo_video remove avi
 start_x
 # PDF 插件三种场景各截一张：修改 / 新增 / 删除
 for mode in modify add remove; do
@@ -1023,6 +1165,16 @@ done
 for mode in modify add remove; do
 	seed_settings
 	capture_one "$WORK/repo-certificate-$mode" "CertificateDiffView.SetContent" "certificate-$mode.png" 4 "证书插件 · $mode"
+done
+# 音频插件三种场景各截一张（mp3 / wav / flac 各覆盖一种；默认元数据模式）
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-audio-$mode" "AudioDiffView.SetContent" "audio-$mode.png" 4 "音频插件 · $mode"
+done
+# 视频插件三种场景各截一张（mp4 / mkv / avi 各覆盖一种；默认元数据模式）
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-video-$mode" "VideoDiffView.SetContent" "video-$mode.png" 4 "视频插件 · $mode"
 done
 write_metadata
 log "完成：截图已输出到 $OUT"

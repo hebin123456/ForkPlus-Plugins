@@ -48,8 +48,9 @@ is_shared() {
 mkdir -p "$dest"
 cp "$outdir/$assembly.dll" "$dest/"
 
-# 私有托管依赖 + 私有原生库（linux: *.so / macos: *.dylib / windows: *.dll）
-for f in "$outdir"/*.dll "$outdir"/*.so "$outdir"/*.dylib; do
+# 私有托管依赖 + 私有原生库（linux: *.so / *.so.<major> / macos: *.dylib / windows: *.dll）。
+# FFmpeg 的 LGPL 共享库在 Linux 上按 SONAME 命名（libavformat.so.63），故须一并匹配 *.so.*。
+for f in "$outdir"/*.dll "$outdir"/*.so "$outdir"/*.so.* "$outdir"/*.dylib; do
 	[ -e "$f" ] || continue
 	base="$(basename "$f")"
 	[ "$base" = "$assembly.dll" ] && continue

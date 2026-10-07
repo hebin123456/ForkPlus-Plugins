@@ -24,6 +24,7 @@ ForkPlus-Plugins/
 ├── .github/
 │   ├── scripts/
 │   │   ├── install-plugin-artifacts.sh   # 单插件产物安装（主 DLL + 私有依赖 + 原生库，排除宿主共享程序集）
+│   │   ├── fetch-ffmpeg.sh               # 按 manifest 锁定取 FFmpeg 原生件（音视频插件的私有依赖）
 │   │   ├── collect-third-party-notices.py# 由插件登记表 + licenses/ 全文生成第三方许可声明
 │   │   ├── capture-screenshots.sh        # Pages 截图采集（装插件 → 无头启动 ForkPlus → 截图）
 │   │   ├── release-notes.py              # 由 conventional commit 生成 Release 版本说明
@@ -46,6 +47,17 @@ ForkPlus-Plugins/
 │       ├── PluginSizeFormat.cs           # 文件尺寸格式化
 │       ├── NullAttribute.cs              # 可空性标注
 │       └── ForkPlus.Plugins.Abstractions.csproj
+│   └── ForkPlus.Plugins.Media/           # 音视频插件共享解码核心（只解码不编码，FFmpeg.AutoGen 动态绑定）
+│       ├── MediaNative.cs                # 按 RID 动态绑定 FFmpeg 原生库；av_log 调级
+│       ├── MemoryAvioContext.cs          # 内存 AVIO 回调（把 git blob 直接喂给 FFmpeg，可 seek）
+│       ├── MediaProbe.cs                 # 容器 / 流 / 标签 / 内嵌封面探测
+│       ├── MediaAudio.cs                 # 波形包络 + STFT 频谱分析
+│       ├── MediaVideo.cs                 # 关键帧定位取帧 + 帧条
+│       ├── MediaConvert.cs               # sws_scale 像素转换 / 音频重采样
+│       ├── AudioDecoder.cs               # 解码循环（send_packet / receive_frame）
+│       ├── Fft.cs / FfError.cs           # 基 2 FFT / FFmpeg 错误码转文本
+│       ├── MediaModels.cs                # 探测 / 波形 / 频谱 / 帧模型 + 额度上限（MediaLimits）
+│       └── ForkPlus.Plugins.Media.csproj # 私有依赖 FFmpeg.AutoGen（LGPL）
 ├── plugins/
 │   ├── Directory.Build.props             # 插件公共属性：统一引用 SDK 契约（Private=false）
 │   ├── ForkPlus.Plugins.Example/         # 示例插件（新插件复制本目录即可）
@@ -98,21 +110,45 @@ ForkPlus-Plugins/
 │   │   ├── Localization/
 │   │   │   └── ExecutableStrings.cs      # 插件自带译文（8 语言）
 │   │   └── ForkPlus.Plugins.Executable.csproj # 零第三方依赖
-│   └── ForkPlus.Plugins.Certificate/     # 证书对比插件（身份 / 有效期时间轴 / SAN 徽章 / 证书链）
-│       ├── CertificateDiffPlugin.cs
-│       ├── CertificateDiffView.cs        # 详情 / 证书链两模式 + 有效期时间轴 + 彩色徽章
-│       ├── CertificateParser.cs          # DER / PKCS#12 / PKCS#7（SignedCms）/ CRL
-│       ├── CertificateModel.cs           # 证书字段 / SAN / 有效期状态模型
+│   ├── ForkPlus.Plugins.Certificate/     # 证书对比插件（身份 / 有效期时间轴 / SAN 徽章 / 证书链）
+│   │   ├── CertificateDiffPlugin.cs
+│   │   ├── CertificateDiffView.cs        # 详情 / 证书链两模式 + 有效期时间轴 + 彩色徽章
+│   │   ├── CertificateParser.cs          # DER / PKCS#12 / PKCS#7（SignedCms）/ CRL
+│   │   ├── CertificateModel.cs           # 证书字段 / SAN / 有效期状态模型
+│   │   ├── Localization/
+│   │   │   └── CertificateStrings.cs     # 插件自带译文（8 语言）
+│   │   ├── third-party.json              # System.Security.Cryptography.Pkcs（MIT）登记
+│   │   └── ForkPlus.Plugins.Certificate.csproj # 私有依赖 Pkcs（MIT）
+│   ├── ForkPlus.Plugins.Audio/           # 音频对比插件（元数据 / 波形 / 频谱 / 内嵌封面）
+│   │   ├── AudioDiffPlugin.cs
+│   │   ├── AudioDiffView.cs              # 四模式视图 + 自建模式标签栏
+│   │   ├── MediaRender.cs                # 波形 / 差异带 / 声谱图位图绘制
+│   │   ├── MediaImage.cs                 # BGRA 字节 → Avalonia Bitmap
+│   │   ├── Localization/
+│   │   │   └── AudioStrings.cs           # 插件自带译文（8 语言）
+│   │   ├── third-party.json              # FFmpeg / FFmpeg.AutoGen（LGPL）登记
+│   │   └── ForkPlus.Plugins.Audio.csproj # 私有依赖共享解码核心 + 按 RID 的 FFmpeg 原生件
+│   └── ForkPlus.Plugins.Video/           # 视频对比插件（元数据 / 关键帧帧条 / 单帧像素差异）
+│       ├── VideoDiffPlugin.cs
+│       ├── VideoDiffView.cs              # 三模式视图 + 单帧时间轴拖动条
+│       ├── MediaRender.cs                # 像素差异比 / 变更像素高亮
+│       ├── MediaImage.cs                 # BGRA 字节 → Avalonia Bitmap
 │       ├── Localization/
-│       │   └── CertificateStrings.cs     # 插件自带译文（8 语言）
-│       ├── third-party.json              # System.Security.Cryptography.Pkcs（MIT）登记
-│       └── ForkPlus.Plugins.Certificate.csproj # 私有依赖 Pkcs（MIT）
+│       │   └── VideoStrings.cs           # 插件自带译文（8 语言）
+│       ├── third-party.json              # FFmpeg / FFmpeg.AutoGen（LGPL）登记
+│       └── ForkPlus.Plugins.Video.csproj # 私有依赖共享解码核心 + 按 RID 的 FFmpeg 原生件
 ├── licenses/                             # 第三方许可全文仓库（按组件分目录，集中管理）
 │   ├── docnet-core/LICENSE.txt           # Docnet.Core（MIT）
 │   ├── open-xml-sdk/LICENSE.txt          # Open XML SDK（MIT）
 │   ├── dotnet-runtime/LICENSE.txt        # System.IO.Packaging / System.Security.Cryptography.Pkcs（MIT）
 │   ├── sharpcompress/LICENSE.txt         # SharpCompress（MIT）
-│   └── pdfium/LICENSE.txt                # PDFium 及其捆绑组件（BSD-3-Clause 等）
+│   ├── pdfium/LICENSE.txt                # PDFium 及其捆绑组件（BSD-3-Clause 等）
+│   ├── ffmpeg/LICENSE.txt                # FFmpeg 原生件（LGPL-2.1-or-later）
+│   └── ffmpeg-autogen/LICENSE.txt        # FFmpeg.AutoGen 绑定（LGPL-3.0-or-later）
+├── third_party/                          # 三方件「件与锁」：二进制 + 版本 / 来源 / 哈希（二进制不入库）
+│   ├── ffmpeg/manifest.json              # FFmpeg 锁定：版本 / 来源 / 每 RID 资产 + sha256
+│   ├── ffmpeg/9.0.2/<rid>/*.dll|*.so.*  # 实际原生件（由 fetch-ffmpeg.sh 按 manifest 取入）
+│   └── miniaudio/manifest.json           # 音频输出后端占位（当前未随包分发）
 ├── Directory.Build.props                 # 仓库级公共构建属性（net10.0 / AvaloniaVersion）
 ├── ForkPlus.Plugins.slnx                 # 解决方案（新增插件在此登记）
 ├── THIRD-PARTY-NOTICES.md                # 第三方许可总览（由脚本生成，勿手改）
@@ -490,6 +526,73 @@ zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可�
 
 ---
 
+## 音频对比插件
+
+[plugins/ForkPlus.Plugins.Audio](plugins/ForkPlus.Plugins.Audio) 认领主流音频容器
+`.mp3` / `.wav` / `.flac` / `.ogg` / `.oga` / `.opus` / `.m4a` / `.aac` / `.wma`：换码率、转码、
+改标签之后，并排看清两版音频到底变了什么——元数据、波形包络、声谱图、内嵌封面四路对照。
+
+四模式（自建工具条 `Metadata / Waveform / Spectrum / Cover` 切换）：
+
+- **元数据**（默认）：按 `Container`（格式 / 时长 / 码率 / 体积 / 流数）、`Audio streams`（逐条流的
+  编码器 / 采样率 / 声道 / 声道布局 / 码率）、`Tags`（两侧标签 key 并集）分组，逐行「名 : 值」并
+  四色铺底 + 行尾状态小标签。
+- **波形**：两侧**同一时间轴对齐**的包络图，下接一条「差异带」——两侧 RMS 逐桶求差，越暖越不同，
+  「哪几秒的声音变了」一眼可见。
+- **频谱**：STFT 声谱图并排（低频在下、冷→暖渐变）。
+- **封面**：内嵌封面（ID3 `APIC` / mp4 `covr`）并排；无封面时明示 `No embedded cover`。
+
+呈现上沿用既有视觉语言：两栏标题由宿主注入的 `context.SrcTitleBrush` / `context.DstTitleBrush`
+着色，元数据逐行按 `相同 / 已变更 / 仅左 / 仅右` 四色标注，本侧缺失的值显示 `not present`
+而不是留空，避免看起来像渲染失败。
+
+分析有额度上限（沿用 Archive 的 `HashBudget`、Office 的 `MaxSheetRows` 模式）：波形最多
+`MediaLimits.MaxAudioSeconds`（600）秒、`MaxWaveBuckets`（2048）桶，频谱最多 `MaxSpectrumSeconds`
+（120）秒，超出截断并在栏内注明只分析了前若干秒。单侧声明大小超过 300 MB（`MediaLimits.MaxSideBytes`）
+只给提示、不渲染媒体内容（设计文档 §5 方案 A：`CanHandle` 一律放行，由视图内判阈值）。
+
+解码走共享核心 [sdk/ForkPlus.Plugins.Media](sdk/ForkPlus.Plugins.Media)（FFmpeg.AutoGen 动态绑定，
+**只解码不编码、不出声**，无播放模式）。探测与波形 / 频谱分析都在后台线程，控件只在 UI 线程构建，
+每次刷新以「代次 + `CancellationToken`」取消上一轮；异常降级为状态行错误文案，绝不冒泡到宿主。
+
+插件实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「音频对比」（英文原文
+`Audio Compare`，8 语言译文见 `Localization/AudioStrings.cs`）、版本 `0.0.1` 与描述。
+
+---
+
+## 视频对比插件
+
+[plugins/ForkPlus.Plugins.Video](plugins/ForkPlus.Plugins.Video) 认领视频容器
+`.mp4` / `.mkv` / `.mov` / `.webm` / `.avi` / `.m4v` / `.mpg` / `.mpeg` / `.wmv` / `.flv`：转封装、
+改码率、重编码、换分辨率之后，并排看清两版视频的差异——元数据、关键帧帧条、单帧像素级差异。
+
+三模式（自建工具条 `Metadata / Filmstrip / Frame comparison` 切换）：
+
+- **元数据**（默认）：按 `Container` / `Video streams` / `Audio streams` / `Subtitles` / `Tags`
+  分组，逐行四色标注。
+- **帧条**：两侧**按同一时间刻度**抽帧（每段中点，最多 `MediaLimits.MaxFilmstripFrames`（8）帧、
+  每帧缩到 `MaxFilmstripWidth`（240）宽），上下两条横向可滚动的缩略图带，逐位置给出像素差异比，
+  看画面在哪几段变了。
+- **单帧对比**：定位到同一时间戳各取一帧（两侧时长都有效时取较短者、按拖动比例定位），做像素级
+  差异；工具条下常驻一条「位置」拖动条（`0–100%`，仅此模式显示，拖动即重新取帧）。开启宿主
+  **「高亮差异像素」**偏好（`PluginEnvironment.HighlightImageDiff`）时把变更像素在右侧帧上染色，
+  尺寸不一致则只算差异比例、不染色。
+
+取帧是一条共用路径：`av_seek_frame(..., AVSEEK_FLAG_BACKWARD)` 先跳到目标时间前最近的关键帧，
+`avcodec_flush_buffers` 清缓冲，再顺序 `av_read_frame` → `avcodec_send_packet` / `avcodec_receive_frame`
+解到 `pts ≥ 目标时间` 的第一帧；解码出的 YUV 等格式经 `sws_scale`（`MediaConvert.FrameToImage`）统一
+转成紧凑 BGRA，再由 `MediaImage.FromImageData` 变成 Avalonia `Bitmap`。帧条与单帧对比共用这条路径。
+
+与音频插件同源：解码走共享核心 [sdk/ForkPlus.Plugins.Media](sdk/ForkPlus.Plugins.Media)
+（FFmpeg.AutoGen 动态绑定，**只解码不播放**，无播放 / 声音输出），300 MB 阈值同取方案 A，
+后台线程解码 + UI 线程建控件 + 代次取消，异常降级为状态行错误文案。帧条 / 单帧的像素差异比按
+`MediaLimits.PixelDiffThreshold`（24，逐通道最大差）计。
+
+插件实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「视频对比」（英文原文
+`Video Compare`，8 语言译文见 `Localization/VideoStrings.cs`）、版本 `0.0.1` 与描述。
+
+---
+
 ## Pages 截图约定
 
 插件对比视图的截图由 CI 在真实 ForkPlus 中现场采集（无头 X + 整屏截图），并随 Pages 一起发布上线；
@@ -507,7 +610,8 @@ zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可�
 - 文件命名：`pages/assets/<插件>-<场景>.png`（PDF 插件即 `pdf-modify.png` / `pdf-add.png` / `pdf-remove.png`，
   Office 插件即 `office-modify.png` / `office-add.png` / `office-remove.png`，
   压缩包插件即 `archive-modify.png` / `archive-add.png` / `archive-remove.png`，
-  字体插件即 `font-*.png`，可执行文件插件即 `executable-*.png`，证书插件即 `certificate-*.png`）；
+  字体插件即 `font-*.png`，可执行文件插件即 `executable-*.png`，证书插件即 `certificate-*.png`，
+  音频插件即 `audio-*.png`，视频插件即 `video-*.png`）；
 - 截图规格：整屏 `1920×1280`，完整软件界面，不做局部裁切；
 - 缺任一场景视为截图不完整；插件新增变更形态时，同步补对应场景截图与 `plugins.json` 登记。
 - demo 素材由采集脚本现场构造（PDF 用 `write_demo_pdf`，Office 用 `write_demo_office`，
@@ -523,14 +627,23 @@ zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可�
   remove=`.p7b`；字体三场景用同一对系统字体（旧 DejaVu Sans → 新 DejaVu Serif）。
   这些依赖见 [pages.yml](.github/workflows/pages.yml) 的 `Install headless toolchain`
   （`fonts-dejavu` / `fonts-liberation` / `gcc` / `binutils` / `openssl`）。
+- **音频 / 视频**两类 demo 素材用 **系统 `ffmpeg` CLI** 现造（`write_demo_audio` / `write_demo_video`，
+  pages.yml 装 `ffmpeg`）。注意分工：造样本用系统 ffmpeg，插件解码用随包分发的 FFmpeg 原生库，
+  两者互不相干。音频三场景各用一种容器（modify=`.mp3` 有损 / add=`.wav` PCM 无损 / remove=`.flac`
+  无损压缩），旧 440 Hz / 3 s / 44100 Hz、新 660 Hz / 4 s / 48000 Hz 并改标签；视频三场景
+  modify=`.mp4`(H.264) / add=`.mkv`(H.264) / remove=`.avi`(MPEG-4 Part 2)，旧 `testsrc` 2 s、
+  新 `testsrc2` 3 s 并做 90° 色相旋转，让帧条与单帧对比里的画面明显不同。三张截图都停在默认的
+  元数据模式。
+- 采集脚本在构建插件前先跑 [fetch-ffmpeg.sh](.github/scripts/fetch-ffmpeg.sh) 按 manifest 取 FFmpeg
+  原生件（未锁定的 RID 自动跳过），否则音视频插件按 RID 拷不出原生库。
 
 ---
 
 ## 第三方许可管理
 
 插件分发的第三方组件（如 PDF 插件的 Docnet.Core / PDFium、Office 插件的 Open XML SDK、
-压缩包插件的 SharpCompress、证书插件的 System.Security.Cryptography.Pkcs）**统一登记、集中存放、
-按包合并**，单一事实来源是两处：
+压缩包插件的 SharpCompress、证书插件的 System.Security.Cryptography.Pkcs、音视频插件的
+FFmpeg / FFmpeg.AutoGen）**统一登记、集中存放、按包合并**，单一事实来源是两处：
 
 1. **`licenses/`** —— 各组件许可全文的中央仓库，按组件分目录（`licenses/<组件>/LICENSE.txt`）。
    全文原样落库（含三方文件自身的编码），不依赖构建时从 NuGet 缓存临时抓取。
@@ -564,6 +677,14 @@ zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可�
 2. 在使用它的插件 `third-party.json` 的 `components` 里追加一条（指向 `licenseFile`）；
 3. 重新生成总览：`python3 .github/scripts/collect-third-party-notices.py repo THIRD-PARTY-NOTICES.md`。
 
+**原生件（如 FFmpeg）另有一层「件与锁」**：托管依赖走 NuGet 即可，但随包分发的原生二进制不在
+NuGet 里，需要 [third_party/<组件>/manifest.json](third_party/ffmpeg/manifest.json) 锁定
+**版本 / 来源 / 每 RID 资产名 + sha256**，再由取件脚本（[fetch-ffmpeg.sh](.github/scripts/fetch-ffmpeg.sh)）
+按 RID 下载、校验、解出运行期库名（Linux 按 SONAME 命名）到 `third_party/<组件>/<version>/<rid>/`，
+构建时由插件工程拷进输出。二进制**不入库**（见 [.gitignore](.gitignore)），只锁来源与哈希；
+`licenses/` 全文与 `third-party.json` 登记照旧。分工不重叠：`third_party/` 放**件与锁**，
+`licenses/` 放**许可全文**，`third-party.json` 做**登记**。
+
 > `THIRD-PARTY-NOTICES.md` 由脚本生成，**请勿手改**；[build.yml](.github/workflows/build.yml)
 > 的 `notices` 作业会用 `--check` 校验它与登记表一致，改了登记表却忘了重新生成会直接失败。
 
@@ -580,6 +701,16 @@ dotnet build ForkPlus.Plugins.slnx -c Release
 ```
 
 > 插件是库工程，构建产物为 `plugins/<插件>/bin/Release/net10.0/<AssemblyName>.dll`。
+
+音视频插件要按 RID 构建才带得到 FFmpeg 原生件，且需先取件（原生二进制不入库）：
+
+```bash
+bash .github/scripts/fetch-ffmpeg.sh linux-x64           # 按 manifest 取件 + 校验 sha256
+dotnet build plugins/ForkPlus.Plugins.Audio/ForkPlus.Plugins.Audio.csproj -c Release -r linux-x64
+```
+
+> 不传 `-r <rid>` 时 csproj 里的原生件 ItemGroup 不生效，输出只有托管 DLL，运行期降级为
+> 「FFmpeg decoding unavailable」。未锁定的 RID（如 `osx-arm64`）取件脚本会跳过，该平台同样降级。
 
 ### 通过 GitHub Actions 出包（四平台）
 
@@ -625,6 +756,14 @@ workflow：[.github/workflows/build.yml](.github/workflows/build.yml)
       ├── ForkPlus.Plugins.Certificate.dll
       ├── System.Security.Cryptography.Pkcs.dll # 证书插件私有依赖
       ├── ForkPlus.Plugins.Certificate.THIRD-PARTY-NOTICES.txt # 三方许可声明（Pkcs）
+      ├── ForkPlus.Plugins.Audio.dll
+      ├── ForkPlus.Plugins.Video.dll
+      ├── ForkPlus.Plugins.Media.dll         # 音视频插件共享解码核心（私有依赖）
+      ├── FFmpeg.AutoGen.dll                 # 音视频绑定（私有依赖）
+      ├── libavformat.so.63                  # 音视频私有原生库（按平台 / SONAME）
+      ├── libavcodec.so.63 …
+      ├── ForkPlus.Plugins.Audio.THIRD-PARTY-NOTICES.txt   # 三方许可声明（FFmpeg / FFmpeg.AutoGen）
+      ├── ForkPlus.Plugins.Video.THIRD-PARTY-NOTICES.txt   # 同上
       └── …（其余插件）
   ```
 
