@@ -130,12 +130,28 @@ jobs:
           done
           echo "packaged $count plugin(s)"
           zip_name="ForkPlus-Plugins-${VERSION}-${{ matrix.name }}.zip"
-          if command -v zip >/dev/null 2>&1; then
-            (cd dist && zip -qr "../$zip_name" plugins)
-          else
-            # windows runner 的 git-bash 通常无 zip，用 PowerShell 兜底
-            powershell -NoProfile -Command "Compress-Archive -Path dist/plugins -DestinationPath '$zip_name' -Force"
-          fi
+          # 打包成 zip 统一走 python 的 zipfile，条目名一律用正斜杠（zip 规范）。此前 windows 走
+          # PowerShell 的 Compress-Archive，它把条目分隔符写成反斜杠（plugins\xxx.dll），在 Linux /
+          # macOS 上解压会得到带反斜杠字面量的文件名——交付件必须四平台都能正常解压。
+          # 与 capture-screenshots.sh / fetch-third-party.sh 同思路：不依赖 zip / unzip 外部工具。
+          # windows runner 通常只有 python（无 python3），选择方式与 install-plugin-artifacts.sh 一致。
+          py=python3
+          command -v python3 >/dev/null 2>&1 || py=python
+          # ↓ heredoc 正文与结束符按本块的基础缩进书写（YAML 会剥掉该缩进，渲染出来即第 0 列）；
+          #   再多缩进或顶格写都会让 heredoc 不结束 / YAML 解析失败。
+          "$py" - "$zip_name" <<'PY'
+          import os
+          import sys
+          import zipfile
+
+          out = sys.argv[1]
+          with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+              for root, _, files in os.walk("dist"):
+                  for name in files:
+                      path = os.path.join(root, name)
+                      # 去掉 dist 前缀，包内即 plugins/...；分隔符按 zip 规范统一为正斜杠。
+                      zf.write(path, os.path.relpath(path, "dist").replace(os.sep, "/"))
+          PY
           ls -la "$zip_name"
 
       - name: Upload artifact
