@@ -354,7 +354,7 @@
       "version": "0.0.1",
       "assembly": "ForkPlus.Plugins.Audio",
       "source": "plugins/ForkPlus.Plugins.Audio",
-      "summary": "音频对比视图：认领 .mp3 / .wav / .flac / .ogg / .oga / .opus / .m4a / .aac / .wma，命中后把差异区换成左右两栏，并排呈现元数据、波形包络、声谱图与内嵌封面四种模式（默认元数据），旧 / 新两侧逐行标注「相同 / 已变更 / 仅左 / 仅右」；解码走共享核心 ForkPlus.Plugins.Media（FFmpeg.AutoGen 动态绑定，只解码不播放）。单侧声明大小超过 300 MB 只给提示、不渲染媒体内容。",
+      "summary": "音频对比视图：认领 .mp3 / .wav / .flac / .ogg / .oga / .opus / .m4a / .aac / .wma，命中后把差异区换成左右两栏，并排呈现元数据、波形包络、声谱图与内嵌封面四种模式（默认元数据），波形 / 频谱模式下还可对旧 / 新两侧就地试听（播放 / 暂停 + 进度定位），旧 / 新两侧逐行标注「相同 / 已变更 / 仅左 / 仅右」；解码走共享核心 ForkPlus.Plugins.Media（FFmpeg.AutoGen 动态绑定），声音输出用三方件 miniaudio（音频时钟为主、暂停冻结、seek 双路同步）。单侧声明大小超过 300 MB 只给提示、不渲染媒体内容。",
       "extensions": [".mp3", ".wav", ".flac", ".ogg", ".oga", ".opus", ".m4a", ".aac", ".wma"],
       "screenshots": [
         {
@@ -371,16 +371,35 @@
           "file": "audio-remove.png",
           "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.flac，差异区左栏渲染被删除音频的元数据卡片，右栏显示 new · not present 占位",
           "caption": "「删除」对比（FLAC · .flac）：提交删除了 <code>sample.flac</code>，新侧不存在。左栏标题 <code>已删除  ·  sample.flac  ·  …</code> 下按分组卡片渲染被删文件的元数据（标签只在左列有值，逐行标成「仅左」）；右栏标题 <code>新  ·  不存在</code> 与 <code>新: 不存在</code> 占位。删除场景同样可见完整内容，而不是空白。"
+        },
+        {
+          "file": "audio-waveform.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.mp3，差异区切到音频插件的「波形」模式，左右两条同一时间轴对齐的包络图叠加差异带，顶部显示试听传输条",
+          "caption": "「波形」模式（MP3 · .mp3，1920×1280 完整界面）：点模式栏的 <code>波形</code> 进入 <code>ViewMode.Waveform</code>，内容区由 <code>BuildWaveformContent</code> 渲染——左右两栏各一条 <code>MediaAudio.AnalyzeWaveform</code> 得到的能量包络，共用同一时间轴对齐；其下一条由 <code>MediaRender.RenderDifference</code> 生成的「差异带」把两侧 RMS 逐桶求差，越暖表示该段越不同。分析上限 <code>MediaLimits.MaxAudioSeconds</code>（600）秒、<code>MediaLimits.MaxWaveBuckets</code>（2048）桶，超出会在栏内注明只分析了前若干秒。demo 旧侧 440 Hz / 3 s、新侧 660 Hz / 4 s，包络长度与密度肉眼可辨。因为波形是「有声音」的模式，模式栏下方多出一整行<strong>试听传输条</strong>（<code>试听</code> 旧 / 新切换 + <code>播放</code> 按钮 + 进度条 + 时间），点播放即用三方件 miniaudio 就地出声；元数据 / 封面模式下这行不显示。"
+        },
+        {
+          "file": "audio-spectrum.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.mp3，差异区切到音频插件的「频谱」模式，左右两张 STFT 声谱图并排，低频在下、冷→暖渐变",
+          "caption": "「频谱」模式（MP3 · .mp3）：<code>ViewMode.Spectrum</code> 下由 <code>BuildSpectrumContent</code> 渲染 <code>MediaAudio.AnalyzeSpectrum</code> 得到的 STFT 声谱图并排——窗长 <code>MediaLimits.FftSize</code>（1024），对数频率分箱成 128 行、最多 720 列，低频在下、冷→暖渐变，分析上限 <code>MediaLimits.MaxSpectrumSeconds</code>（120）秒。demo 的 440 Hz 与 660 Hz 纯音在图上各自是一条位置明显不同的亮线，一眼看出「频段变了」。与波形一样属于有声音模式，故试听传输条照常出现。"
+        },
+        {
+          "file": "audio-cover.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.mp3，差异区切到音频插件的「封面」模式，左右两栏并排显示内嵌封面图（左蓝右橙）",
+          "caption": "「封面」模式（MP3 · .mp3）：<code>ViewMode.Cover</code> 下由 <code>BuildCoverContent</code> 取出内嵌封面（ID3 <code>APIC</code> / mp4 <code>covr</code>）并排显示，最大 360×360。demo 给旧 / 新两版 mp3 各内嵌了一张 300×300 的纯色封面（旧蓝 <code>0x3366cc</code>、新橙 <code>0xcc6633</code>），左右并排即见封面也换了；没有内嵌封面时该栏显示 <code>无内嵌封面</code>。封面模式不属于有声音模式，故试听传输条不出现。"
         }
       ],
       "sections": [
         {
           "heading": "对比视图长什么样",
-          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式标签栏</strong>、<strong>内容区</strong>。标题行是两列 <code>Grid</code>，左旧右新各一个由 <code>NewTitle</code> 创建的 <code>TextBlock</code>，文字形如 <code>old  ·  sample.mp3  ·  1.03 KB</code>（角色名取 <code>PluginEnvironment.Translate</code>，文件名取 <code>Path.GetFileName</code>，体积取 <code>PluginSizeFormat.ReadableFileSize</code>），并直接采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色，跟随主题；某一侧为 <code>null</code> 时标题后半段变成 <code>not present</code>。</p><p>状态行先显示 <code>Analyzing…</code>，随后落到 <code>Audio compare: 源格式 / 目标格式</code>（<code>BuildStatus</code>），出错则显示 <code>Failed to decode media: …</code>。模式标签栏是横向 <code>StackPanel</code> 里四个 <code>Button</code>（<code>NewModeButton</code>），当前项由 <code>StyleModeButton</code> 加浅蓝底 + 半粗。</p>"
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式标签栏</strong>、<strong>试听传输条</strong>（仅波形 / 频谱两个「有声音」模式可见）、<strong>内容区</strong>。标题行是两列 <code>Grid</code>，左旧右新各一个由 <code>NewTitle</code> 创建的 <code>TextBlock</code>，文字形如 <code>old  ·  sample.mp3  ·  1.03 KB</code>（角色名取 <code>PluginEnvironment.Translate</code>，文件名取 <code>Path.GetFileName</code>，体积取 <code>PluginSizeFormat.ReadableFileSize</code>），并直接采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色，跟随主题；某一侧为 <code>null</code> 时标题后半段变成 <code>not present</code>。</p><p>状态行先显示 <code>Analyzing…</code>，随后落到 <code>Audio compare: 源格式 / 目标格式</code>（<code>BuildStatus</code>），出错则显示 <code>Failed to decode media: …</code>。模式标签栏是横向 <code>StackPanel</code> 里四个 <code>Button</code>（<code>NewModeButton</code>），当前项由 <code>StyleModeButton</code> 加浅蓝底 + 半粗。试听传输条是「播放 / 暂停」按钮 + <code>试听</code> 旧 / 新切换 + 进度 <code>Slider</code> + <code>已播 / 总时长</code> 标签，由 <code>UpdateTransport</code> 刷新（详见下方「试听与播放」）。</p>"
         },
         {
           "heading": "四种模式：元数据 / 波形 / 频谱 / 封面",
           "html": "<p>工具条四个模式对应 <code>ViewMode</code> 的四段，切换走 <code>SetMode</code> / <code>OnModeClicked</code>，共用同一套标题、状态与内容区：</p><div class=\"grid grid-2\"><div class=\"card\"><h3>元数据（默认）</h3><p><code>BuildMetadataContent</code>：左右两列分组卡片，是唯一默认展示、也是 CI 截图所停的模式。</p></div><div class=\"card\"><h3>波形</h3><p><code>BuildWaveformContent</code>：两侧同一时间轴对齐的包络图（<code>MediaAudio.AnalyzeWaveform</code>），下接一条由 <code>MediaRender.RenderDifference</code> 生成的「差异带」——两侧 RMS 逐桶求差，越暖表示越不同。分析最多 <code>MediaLimits.MaxAudioSeconds</code>（600）秒、<code>MediaLimits.MaxWaveBuckets</code>（2048）桶。</p></div><div class=\"card\"><h3>频谱</h3><p><code>BuildSpectrumContent</code>：STFT 声谱图并排（<code>MediaAudio.AnalyzeSpectrum</code>，窗长 <code>MediaLimits.FftSize</code> = 1024，对数频率分箱成 128 行、最多 720 列），低频在下、冷→暖渐变，分析最多 <code>MediaLimits.MaxSpectrumSeconds</code>（120）秒。</p></div><div class=\"card\"><h3>封面</h3><p><code>BuildCoverContent</code>：内嵌封面（ID3 <code>APIC</code> / mp4 <code>covr</code>）并排，最大 360×360；无封面显示 <code>No embedded cover</code>。</p></div></div><p>超出分析秒数会截断，栏内以 <code>Analyzed first {0} of {1} s</code> 注明只分析了前若干秒；某个模式解码失败只影响该栏，不牵连另一侧。</p>"
+        },
+        {
+          "heading": "试听与播放（音频输出）",
+          "html": "<p>波形 / 频谱两个模式会显示试听传输条，可就地对旧 / 新两侧<strong>真正出声试听</strong>。播放器由共享核心 <code>MediaPlayback</code> 提供（<code>enableVideo=false</code> / <code>enableAudio=true</code>）：FFmpeg 解码 → <code>swr_convert</code> 统一采样格式 → 三方件 <strong>miniaudio</strong> 低延迟输出，全程在后台线程建流，控件更新经 <code>Dispatcher.UIThread.Post</code> 回 UI 线程。</p><ul><li><strong>播放 / 暂停</strong>：<code>OnPlayClicked</code> 首次点击建流并起播，之后同一侧复用播放器切换 <code>Play</code> / <code>Pause</code>，按钮文案随之在 <code>播放</code> / <code>暂停</code> 间切换。</li><li><strong>试听哪一侧</strong>：<code>试听</code> 的旧 / 新按钮切换 <code>_listenSrc</code>；两侧字节不同、不能共用播放器，故换侧即 <code>DisposePlayback</code> 重建，并把进度归零。</li><li><strong>进度定位</strong>：拖动 <code>Slider</code> 调 <code>MediaPlayback.Seek(秒)</code>，时钟同步重置、从目标位置续播；播放中由 <code>PositionChanged</code> 回写进度与 <code>已播 / 总时长</code> 标签。</li><li><strong>时钟</strong>：以<strong>已播音频帧数为主时钟</strong>（<code>MiniAudioNative.PlayedFrames</code>），暂停冻结、seek 重置，比墙钟更贴合听到的声音。</li><li><strong>降级</strong>：无音频设备 / 输出失败时不让异常冒泡，传输条右侧显示 <code>音频输出不可用: …</code>，解码出的波形 / 频谱照常显示。</li></ul><p>离开波形 / 频谱模式或视图失活（<code>Deactivate</code>）会立即 <code>Pause</code>，省电且避免在别的视图前继续出声。</p>"
         },
         {
           "heading": "元数据表与四色变更标注",
@@ -395,8 +414,8 @@
           "html": "<p>单侧声明大小超过 <code>MediaLimits.MaxSideBytes</code>（<code>300 * 1024 * 1024</code>，即 300 MB）时，<code>LoadSideAsync</code> 直接标记 <code>TooLarge</code>，两侧都不解码，内容区只落一行 <code>File too large to preview</code> 提示。这里取设计文档 §5 的方案 A：<code>CanHandle</code> 一律返回 <code>true</code>，由视图内部判阈值，而不是把超大文件退回 Hex 兜底；大小未知（<code>Size</code> 为 <code>null</code>）时放行。</p><p>探测与解码都在后台线程（<code>Task.Run</code> 执行 <code>RenderAsync</code>），控件只在 UI 线程经 <code>Dispatcher.UIThread.Post</code> 构建与更新。每次刷新 / 切模式调用 <code>CancelRender</code>，以「代次 <code>_renderGeneration</code> + <code>CancellationTokenSource</code>」取消上一轮，回投时再校验代次，切换文件后旧任务的结果不会画到本次视图上；<code>Release</code> 同样取消并清空。整套渲染包在 try/catch 里，异常降级为状态行错误文案，绝不冒泡到宿主。</p>"
         },
         {
-          "heading": "FFmpeg 三方件（LGPL，只解码）",
-          "html": "<p>解码依赖 <strong>FFmpeg 9.0.2</strong> 原生件（<code>avformat / avcodec / avutil / swscale / swresample</code>），许可 <strong>LGPL-2.1-or-later</strong>；绑定用 <strong>FFmpeg.AutoGen 9.0.1.1</strong>（LGPL-3.0-or-later，含 <code>Abstractions</code> 与 <code>Bindings.DynamicallyLoaded</code> 两个同版本包）。绑定大版本与原生库大版本必须一致（9.0.x ↔ 9.0.x），错配是崩溃级问题。</p><p>原生件不再取上游现成构建，而是由独立的三方件仓 <code>ForkPlus-Plugins-Third_Party</code> 按锁定源码 + 固定 configure（只解码、不带 <code>--enable-gpl</code>）<strong>四平台自建</strong>、打 tag 时出交付件；本仓构建前跑 <code>.github/scripts/fetch-third-party.sh</code>，按 <code>releases/latest/download/index.json</code> 取本 RID 的交付件、校验 sha256 后解出运行期库——不锁版本，三方件仓发新 tag 即自动跟上。原生件随插件包平铺分发在 <code>plugins/</code> 目录，<code>MediaNative.EnsureInitialized</code> 把 <code>ffmpeg.RootPath</code> 与 <code>DynBindings.LibrariesPath</code> 指向插件目录并动态解析，只初始化一次；失败记住原因、不再重试，视图降级为 <code>FFmpeg decoding unavailable</code>。构建硬约束是<strong>只解码、不编码、绝不开 <code>--enable-gpl</code></strong>，否则整个插件被迫 GPL。取件方式见 <code>third_party/ffmpeg/manifest.json</code>，许可全文与登记见 <code>licenses/ffmpeg/</code> 与 <code>THIRD-PARTY-NOTICES.md</code>；四个平台（含 macOS <code>osx-arm64</code>）都有自建交付件，不再有平台降级。</p>"
+          "heading": "解码与音频输出三方件（LGPL / MIT-0）",
+          "html": "<p>解码依赖 <strong>FFmpeg 9.0.2</strong> 原生件（<code>avformat / avcodec / avutil / swscale / swresample</code>），许可 <strong>LGPL-2.1-or-later</strong>；绑定用 <strong>FFmpeg.AutoGen 9.0.1.1</strong>（LGPL-3.0-or-later，含 <code>Abstractions</code> 与 <code>Bindings.DynamicallyLoaded</code> 两个同版本包）。绑定大版本与原生库大版本必须一致（9.0.x ↔ 9.0.x），错配是崩溃级问题。</p><p>原生件不再取上游现成构建，而是由独立的三方件仓 <code>ForkPlus-Plugins-Third_Party</code> 按锁定源码 + 固定 configure（只解码、不带 <code>--enable-gpl</code>）<strong>四平台自建</strong>、打 tag 时出交付件；本仓构建前跑 <code>.github/scripts/fetch-third-party.sh</code>，按 <code>releases/latest/download/index.json</code> 取本 RID 的交付件、校验 sha256 后解出运行期库——不锁版本，三方件仓发新 tag 即自动跟上。原生件随插件包平铺分发在 <code>plugins/</code> 目录，<code>MediaNative.EnsureInitialized</code> 把 <code>ffmpeg.RootPath</code> 与 <code>DynBindings.LibrariesPath</code> 指向插件目录并动态解析，只初始化一次；失败记住原因、不再重试，视图降级为 <code>FFmpeg decoding unavailable</code>。构建硬约束是<strong>只解码、不编码、绝不开 <code>--enable-gpl</code></strong>，否则整个插件被迫 GPL。取件方式见 <code>third_party/ffmpeg/manifest.json</code>，许可全文与登记见 <code>licenses/ffmpeg/</code> 与 <code>THIRD-PARTY-NOTICES.md</code>；四个平台（含 macOS <code>osx-arm64</code>）都有自建交付件，不再有平台降级。</p><p>声音输出另用三方件 <strong>miniaudio</strong>（版本 <code>0.11.25</code>，public domain / MIT-0，单文件、运行期 dlopen 系统音频后端），同样由三方件仓四平台自建、随包分发 <code>fpp_audio</code> 运行期库；共享核心经 C ABI 垫片 <code>fpp_audio.h</code> 调用（C# 侧只持有不透明句柄 <code>IntPtr</code>），取件与许可见 <code>third_party/miniaudio/manifest.json</code> 与 <code>licenses/miniaudio/</code>。</p>"
         }
       ]
     },
@@ -406,7 +425,7 @@
       "version": "0.0.1",
       "assembly": "ForkPlus.Plugins.Video",
       "source": "plugins/ForkPlus.Plugins.Video",
-      "summary": "视频对比视图：认领 .mp4 / .mkv / .mov / .webm / .avi / .m4v / .mpg / .mpeg / .wmv / .flv，命中后把差异区换成左右两栏，并排呈现元数据、关键帧帧条与单帧像素差异三种模式（默认元数据），旧 / 新逐行标注「相同 / 已变更 / 仅左 / 仅右」；单帧对比复用宿主「高亮差异像素」偏好。解码走共享核心 ForkPlus.Plugins.Media（FFmpeg.AutoGen 动态绑定，只解码不播放）。单侧声明大小超过 300 MB 只给提示、不渲染媒体内容。",
+      "summary": "视频对比视图：认领 .mp4 / .mkv / .mov / .webm / .avi / .m4v / .mpg / .mpeg / .wmv / .flv，命中后把差异区换成左右两栏，并排呈现元数据、关键帧帧条、单帧像素差异与播放四种模式（默认元数据），旧 / 新逐行标注「相同 / 已变更 / 仅左 / 仅右」；单帧对比复用宿主「高亮差异像素」偏好，播放模式可就地对旧 / 新任一侧放画面与声音（播放 / 暂停 + 进度定位）。解码走共享核心 ForkPlus.Plugins.Media（FFmpeg.AutoGen 动态绑定，视频优先硬件解码、失败静默回落软解；声音走三方件 miniaudio）。单侧声明大小超过 300 MB 只给提示、不渲染媒体内容。",
       "extensions": [".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v", ".mpg", ".mpeg", ".wmv", ".flv"],
       "screenshots": [
         {
@@ -423,20 +442,39 @@
           "file": "video-remove.png",
           "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.avi，差异区左栏渲染被删除视频的元数据卡片，右栏显示 new · not present 占位",
           "caption": "「删除」对比（AVI · .avi）：提交删除了 <code>sample.avi</code>，新侧不存在。左栏标题 <code>已删除  ·  sample.avi  ·  …</code> 下按分组卡片渲染被删文件的元数据（MPEG-4 Part 2 编码，标签只在左列有值，标成「仅左」）；右栏标题 <code>新  ·  不存在</code> 与 <code>新: 不存在</code> 占位。删除场景同样可见完整内容，而不是空白。"
+        },
+        {
+          "file": "video-filmstrip.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.mp4，差异区切到视频插件的「帧条」模式，左右两栏各一条按同一时间刻度抽帧的缩略图带",
+          "caption": "「帧条」模式（MP4 · .mp4，1920×1280 完整界面）：点模式栏的 <code>帧条</code> 进入 <code>ViewMode.Filmstrip</code>，内容区由 <code>BuildFilmstripContent</code> 渲染——左右两栏按同一时间刻度各抽一组关键帧（<code>MediaVideo.ExtractFilmstrip</code>），最多 <code>MediaLimits.MaxFilmstripFrames</code>（8）帧、每帧缩到 <code>MediaLimits.FilmstripWidth</code>（240）宽，逐位置用 <code>MediaRender.ComputeDiffRatio</code> 给出像素差异比。demo 旧侧是 <code>testsrc</code>、新侧是做了 90° 色相旋转的 <code>testsrc2</code>，两侧缩略图色调明显不同，一眼看出画面变了。"
+        },
+        {
+          "file": "video-frame.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.mp4，差异区切到视频插件的「单帧对比」模式，左右各一帧同时间戳画面，顶部显示位置拖动条",
+          "caption": "「单帧对比」模式（MP4 · .mp4）：<code>ViewMode.FrameCompare</code> 下由 <code>BuildFrameCompareContent</code> 定位到同一时间戳各取一帧（<code>MediaVideo.ExtractFrame</code>，缩到不超过 <code>MediaLimits.FrameCompareWidth</code>（720）× <code>MaxFrameCompareHeight</code>（480））。此时「位置」拖动行出现（<code>_scrubRow.IsVisible = true</code>，默认停在 50%），拖动即按比例重新取帧；<code>MediaRender.ComputeDiffRatio</code> 按 <code>MediaLimits.PixelDiffThreshold</code>（24，逐通道最大差）算变更像素比例，开启宿主「高亮差异像素」（<code>PluginEnvironment.HighlightImageDiff</code>）时由 <code>MediaRender.RenderHighlight</code> 把变更像素染到右侧帧上。"
+        },
+        {
+          "file": "video-playback.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.mp4，差异区切到视频插件的「播放」模式，画面区显示一帧视频，顶部有试听传输条",
+          "caption": "「播放」模式（MP4 · .mp4）：<code>ViewMode.Playback</code> 下由 <code>MediaPlayback</code> 直接解码播放当前试听侧——进入模式即后台建流起播，画面经 <code>FrameReady</code> 回投到 <code>Image</code>（<code>WriteableBitmap</code>，<code>sws_scale</code> 转 BGRA）。播放模式<strong>尝试硬件解码</strong>（Windows d3d11va / macOS videotoolbox / Linux vulkan），失败静默回落软解。传输条与音频插件同款：<code>试听</code> 旧 / 新切换（换侧重建播放器）、<code>播放 / 暂停</code>、进度 <code>Slider</code> 与 <code>已播 / 总时长</code>；时钟以音频已播帧数为主、视频按 pts 跟随，暂停冻结、seek 两路同步。传输条右侧在有音频设备且走硬解时显示 <code>硬件解码</code>；无音频设备（如本无头截图环境）时显示 <code>音频输出不可用: …</code>，画面照常播放。"
         }
       ],
       "sections": [
         {
           "heading": "对比视图长什么样",
-          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式标签栏</strong>、<strong>位置拖动行</strong>、<strong>内容区</strong>。标题行是两列 <code>Grid</code>，左旧右新各一个由 <code>NewTitle</code> 创建的 <code>TextBlock</code>，文字形如 <code>old  ·  sample.mp4  ·  12.3 KB</code>，采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色。</p><p>状态行先显示 <code>Analyzing…</code>，随后落到 <code>Video compare: 源格式 / 目标格式</code>（<code>BuildStatus</code>），出错显示 <code>Failed to decode media: …</code>。模式标签栏是三个 <code>Button</code>（<code>Metadata / Filmstrip / Frame compare</code>），当前项加浅蓝底 + 半粗。</p><p>「位置」拖动行是一条常驻创建、但只在单帧对比模式显示的 <code>Slider</code>（<code>0–100</code>，默认 50%）加一个 <code>Frame at {0} s</code> 标签；切换模式只改 <code>_scrubRow.IsVisible</code>，不随内容重建，拖动即按比例重新取帧。</p>"
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式标签栏</strong>、<strong>位置拖动行</strong>（仅单帧对比可见）、<strong>播放传输条</strong>（仅播放模式可见）、<strong>内容区</strong>。标题行是两列 <code>Grid</code>，左旧右新各一个由 <code>NewTitle</code> 创建的 <code>TextBlock</code>，文字形如 <code>old  ·  sample.mp4  ·  12.3 KB</code>，采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色。</p><p>状态行先显示 <code>Analyzing…</code>，随后落到 <code>Video compare: 源格式 / 目标格式</code>（<code>BuildStatus</code>），出错显示 <code>Failed to decode media: …</code>。模式标签栏是四个 <code>Button</code>（<code>Metadata / Filmstrip / Frame compare / Playback</code>），当前项加浅蓝底 + 半粗。</p><p>「位置」拖动行是一条常驻创建、但只在单帧对比模式显示的 <code>Slider</code>（<code>0–100</code>，默认 50%）加一个 <code>Frame at {0} s</code> 标签；切换模式只改 <code>_scrubRow.IsVisible</code>，不随内容重建，拖动即按比例重新取帧。播放传输条同样常驻创建、只在播放模式显示，布局与音频插件一致（试听旧 / 新 + 播放 / 暂停 + 进度 + 时间 + 硬解 / 出错提示）。</p>"
         },
         {
-          "heading": "三种模式：元数据 / 帧条 / 单帧对比",
-          "html": "<p>工具条三段对应 <code>ViewMode</code>，共用同一套标题、状态与内容区：</p><div class=\"grid grid-2\"><div class=\"card\"><h3>元数据（默认）</h3><p><code>BuildMetadataContent</code>：左右两列分组卡片，是唯一默认展示、也是 CI 截图所停的模式。</p></div><div class=\"card\"><h3>帧条</h3><p><code>BuildFilmstripContent</code>：两侧按同一时间刻度抽帧，上下两条横向可滚动的缩略图带（<code>MediaVideo.ExtractFilmstrip</code>），逐位置用 <code>MediaRender.ComputeDiffRatio</code> 给出像素差异比，看画面在哪几段变了。</p></div><div class=\"card\"><h3>单帧对比</h3><p><code>BuildFrameCompareContent</code>：定位到同一时间戳各取一帧（<code>MediaVideo.ExtractFrame</code>）；<code>MediaRender.ComputeDiffRatio</code> 按 <code>MediaLimits.PixelDiffThreshold</code>（24，逐通道最大差）算变更像素比例，开启宿主「高亮差异像素」（<code>PluginEnvironment.HighlightImageDiff</code>）时由 <code>MediaRender.RenderHighlight</code> 在右侧帧上染色；尺寸不一致则只算比例、不染色。</p></div><div class=\"card\"><h3>只解码不播放</h3><p>三个模式都只解码出元数据或帧，没有播放与声音输出——设计上刻意把「解码」与「播放」分开。</p></div></div>"
+          "heading": "四种模式：元数据 / 帧条 / 单帧对比 / 播放",
+          "html": "<p>工具条四段对应 <code>ViewMode</code>，共用同一套标题、状态与内容区：</p><div class=\"grid grid-2\"><div class=\"card\"><h3>元数据（默认）</h3><p><code>BuildMetadataContent</code>：左右两列分组卡片；CI 除默认模式外，另取帧条 / 单帧对比 / 播放三种模式各一张截图。</p></div><div class=\"card\"><h3>帧条</h3><p><code>BuildFilmstripContent</code>：两侧按同一时间刻度抽帧，上下两条横向可滚动的缩略图带（<code>MediaVideo.ExtractFilmstrip</code>），逐位置用 <code>MediaRender.ComputeDiffRatio</code> 给出像素差异比，看画面在哪几段变了。</p></div><div class=\"card\"><h3>单帧对比</h3><p><code>BuildFrameCompareContent</code>：定位到同一时间戳各取一帧（<code>MediaVideo.ExtractFrame</code>）；<code>MediaRender.ComputeDiffRatio</code> 按 <code>MediaLimits.PixelDiffThreshold</code>（24，逐通道最大差）算变更像素比例，开启宿主「高亮差异像素」（<code>PluginEnvironment.HighlightImageDiff</code>）时由 <code>MediaRender.RenderHighlight</code> 在右侧帧上染色；尺寸不一致则只算比例、不染色。</p></div><div class=\"card\"><h3>播放</h3><p><code>BuildPlaybackContent</code>：进入即对当前试听侧就地解码播放（画面 + 声音），见下方「播放、硬解与音画同步」。</p></div></div>"
         },
         {
           "heading": "取帧：关键帧定位 + sws_scale 转 BGRA",
           "html": "<p>帧条与单帧对比共用 <code>MediaVideo</code> 的同一条取帧路径（<code>VideoSession</code>）：打开格式上下文与最佳视频流后，<code>DecodeNear</code> 先 <code>av_seek_frame(..., AVSEEK_FLAG_BACKWARD)</code> 跳到目标时间之前最近的关键帧，<code>avcodec_flush_buffers</code> 清解码器缓冲，再从该关键帧顺序 <code>av_read_frame</code> → <code>avcodec_send_packet</code> / <code>avcodec_receive_frame</code> 解到 <code>pts ≥ 目标时间</code> 的第一帧；每次取帧只 seek 一次，长视频也不必从头解到尾。</p><p>帧条：<code>ExtractFilmstrip</code> 在时间轴上均匀取每段中点、最多 <code>MediaLimits.MaxFilmstripFrames</code>（8）帧，每帧缩到 <code>MediaLimits.FilmstripWidth</code>（240）宽。单帧对比：<code>ExtractFrame</code> 用共用的目标时间戳（两侧时长都有效时取较短者，按拖动比例定位），缩到不超过 <code>MediaLimits.FrameCompareWidth</code>（720）× <code>MediaLimits.FrameCompareHeight</code>（480）。解码出的 YUV 等格式经 <code>MediaConvert.FrameToImage</code>（<code>sws_scale</code>）统一转成紧凑 BGRA <code>ImageData</code>，再由 <code>MediaImage.FromImageData</code> 变成 Avalonia <code>Bitmap</code>。</p>"
+        },
+        {
+          "heading": "播放、硬解与音画同步",
+          "html": "<p>播放模式由共享核心 <code>MediaPlayback</code> 提供（<code>enableVideo=true</code> / <code>enableAudio=true</code> / <code>hardwareDecode=true</code>）：同一份字节起<strong>两路独立解码</strong>（视频一路、音频一路），画面经 <code>FrameReady</code> 回投到 <code>Image</code>、声音经 miniaudio 输出。进入播放模式即后台建流起播，换侧（旧 / 新）则重建播放器，离开模式 <code>DisposePlayback</code> 彻底关设备、停线程。</p><ul><li><strong>硬件解码</strong>：<code>MediaHwDecode</code> 按平台只试一种设备类型——Windows <code>d3d11va</code> / macOS <code>videotoolbox</code> / Linux <code>vulkan</code>，与三方件仓交付件里启用的 hwaccel 一一对应。用的是「设 <code>hw_device_ctx</code>、让默认 <code>get_format</code> 自己挑硬解像素格式」这条路，解码器拿不到可用硬解格式时<strong>自动退回软解、不是致命错误</strong>；硬解帧带 <code>hw_frames_ctx</code>，先 <code>av_hwframe_transfer_data</code> 拷回系统内存再转 BGRA。硬解只在连续播放路径启用——单帧 / 帧条每次只解一两帧，设备创建开销反而更贵。</li><li><strong>音画同步</strong>：以<strong>音频已播帧数为 master 时钟</strong>（<code>MiniAudioNative.PlayedFrames</code>），视频帧按 pts 跟随；音频欠载时暂停视频等待，避免声画越走越偏。暂停冻结时钟，seek 时音频 / 视频两路一起重置。</li><li><strong>降级</strong>：视频解码失败 → <code>MediaPlayback.Error</code> 降级提示；音频设备打不开 → <code>AudioOutputError</code>，传输条右侧显示 <code>音频输出不可用: …</code>，画面照常播放；成功走硬解且无音频错误时该位置显示 <code>硬件解码</code>。</li></ul>"
         },
         {
           "heading": "共享解码核心 sdk/ForkPlus.Plugins.Media",
@@ -447,8 +485,167 @@
           "html": "<p>单侧声明大小超过 <code>MediaLimits.MaxSideBytes</code>（<code>300 * 1024 * 1024</code>，即 300 MB）时，<code>LoadSideAsync</code> 标记 <code>TooLarge</code>，两侧都不取帧，内容区只落一行 <code>File too large to preview</code> 提示。取设计文档 §5 的方案 A：<code>CanHandle</code> 一律返回 <code>true</code>，由视图内判阈值，大小未知时放行。</p><p>探测与取帧都在后台线程（<code>Task.Run</code>），控件只在 UI 线程经 <code>Dispatcher.UIThread.Post</code> 构建与更新。每次刷新 / 切模式调用 <code>CancelRender</code>，以「代次 <code>_renderGeneration</code> + <code>CancellationTokenSource</code>」取消上一轮，回投时再校验代次，切文件后旧任务结果不会画到本次视图；<code>Release</code> 取消、清空并退订 <code>ImageDiffHighlightPixelsChanged</code>。整套取帧包在 try/catch 里，异常降级为状态行错误文案，绝不冒泡到宿主。</p><p>视图订阅 <code>PluginEnvironment.ImageDiffHighlightPixelsChanged</code>，偏好一变即实时生效——单帧模式无需重新解码、仅重绘内容；同时通过 <code>HighlightPixelsAvailableChanged</code> 告诉宿主当前模式下能否做像素高亮。</p>"
         },
         {
-          "heading": "FFmpeg 三方件（LGPL，只解码）",
-          "html": "<p>解码依赖 <strong>FFmpeg 9.0.2</strong> 原生件（<code>avformat / avcodec / avutil / swscale / swresample</code>），许可 <strong>LGPL-2.1-or-later</strong>；绑定用 <strong>FFmpeg.AutoGen 9.0.1.1</strong>（LGPL-3.0-or-later，含 <code>Abstractions</code> 与 <code>Bindings.DynamicallyLoaded</code> 两个同版本包）。绑定大版本与原生库大版本必须一致（9.0.x ↔ 9.0.x），错配是崩溃级问题。</p><p>原生件不再取上游现成构建，而是由独立的三方件仓 <code>ForkPlus-Plugins-Third_Party</code> 按锁定源码 + 固定 configure（只解码、不带 <code>--enable-gpl</code>）<strong>四平台自建</strong>、打 tag 时出交付件；本仓构建前跑 <code>.github/scripts/fetch-third-party.sh</code>，按 <code>releases/latest/download/index.json</code> 取本 RID 的交付件、校验 sha256 后解出运行期库——不锁版本，三方件仓发新 tag 即自动跟上。原生件随插件包平铺分发在 <code>plugins/</code> 目录，<code>MediaNative.EnsureInitialized</code> 把 <code>ffmpeg.RootPath</code> 与 <code>DynBindings.LibrariesPath</code> 指向插件目录并动态解析，只初始化一次；失败记住原因、不再重试，视图降级为 <code>FFmpeg decoding unavailable</code>。构建硬约束是<strong>只解码、不编码、绝不开 <code>--enable-gpl</code></strong>，否则整个插件被迫 GPL。取件方式见 <code>third_party/ffmpeg/manifest.json</code>，许可全文与登记见 <code>licenses/ffmpeg/</code> 与 <code>THIRD-PARTY-NOTICES.md</code>；四个平台（含 macOS <code>osx-arm64</code>）都有自建交付件，不再有平台降级。</p>"
+          "heading": "解码与音频输出三方件（LGPL / MIT-0）",
+          "html": "<p>解码依赖 <strong>FFmpeg 9.0.2</strong> 原生件（<code>avformat / avcodec / avutil / swscale / swresample</code>），许可 <strong>LGPL-2.1-or-later</strong>；绑定用 <strong>FFmpeg.AutoGen 9.0.1.1</strong>（LGPL-3.0-or-later，含 <code>Abstractions</code> 与 <code>Bindings.DynamicallyLoaded</code> 两个同版本包）。绑定大版本与原生库大版本必须一致（9.0.x ↔ 9.0.x），错配是崩溃级问题。</p><p>原生件不再取上游现成构建，而是由独立的三方件仓 <code>ForkPlus-Plugins-Third_Party</code> 按锁定源码 + 固定 configure（只解码、不带 <code>--enable-gpl</code>）<strong>四平台自建</strong>、打 tag 时出交付件；本仓构建前跑 <code>.github/scripts/fetch-third-party.sh</code>，按 <code>releases/latest/download/index.json</code> 取本 RID 的交付件、校验 sha256 后解出运行期库——不锁版本，三方件仓发新 tag 即自动跟上。原生件随插件包平铺分发在 <code>plugins/</code> 目录，<code>MediaNative.EnsureInitialized</code> 把 <code>ffmpeg.RootPath</code> 与 <code>DynBindings.LibrariesPath</code> 指向插件目录并动态解析，只初始化一次；失败记住原因、不再重试，视图降级为 <code>FFmpeg decoding unavailable</code>。构建硬约束是<strong>只解码、不编码、绝不开 <code>--enable-gpl</code></strong>，否则整个插件被迫 GPL。取件方式见 <code>third_party/ffmpeg/manifest.json</code>，许可全文与登记见 <code>licenses/ffmpeg/</code> 与 <code>THIRD-PARTY-NOTICES.md</code>；四个平台（含 macOS <code>osx-arm64</code>）都有自建交付件，不再有平台降级。</p><p>声音输出另用三方件 <strong>miniaudio</strong>（版本 <code>0.11.25</code>，public domain / MIT-0，单文件、运行期 dlopen 系统音频后端），同样由三方件仓四平台自建、随包分发 <code>fpp_audio</code> 运行期库；共享核心经 C ABI 垫片 <code>fpp_audio.h</code> 调用（C# 侧只持有不透明句柄 <code>IntPtr</code>），取件与许可见 <code>third_party/miniaudio/manifest.json</code> 与 <code>licenses/miniaudio/</code>。</p>"
+        }
+      ]
+    },
+    {
+      "id": "structured",
+      "name": "结构化数据对比插件 · Structured Data Compare",
+      "version": "0.0.1",
+      "assembly": "ForkPlus.Plugins.Structured",
+      "source": "plugins/ForkPlus.Plugins.Structured",
+      "summary": "结构化数据对比视图：认领 .json / .jsonc / .yaml / .yml / .toml / .xml / .ini / .cfg / .properties，命中后把差异区换成键路径表与结构树两种模式——把两侧解析成同一套数据模型（对象 / 数组 / 标量）后按键路径做语义 diff，逐行标注「相同 / 已变更 / 仅左 / 仅右」，而不是逐字符比文本。YAML 用 YamlDotNet、TOML 用 Tomlyn，JSON / XML 走共享框架自带解析器，INI 系列自写解析器。这些扩展名都是纯文本格式，自动路由通常不命中，需在偏好设置里把扩展名绑定到本插件。单侧声明大小超过 300 MB 只给提示、不解析。",
+      "extensions": [".json", ".jsonc", ".yaml", ".yml", ".toml", ".xml", ".ini", ".cfg", ".properties"],
+      "screenshots": [
+        {
+          "file": "structured-modify.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.yaml，差异区由结构化数据插件渲染成键路径表，逐行列出键路径 / 旧值 / 新值 / 状态",
+          "caption": "「修改」对比（YAML · .yaml，1920×1280 完整界面，未裁切）：默认停在「键路径」模式。顶部两栏标题由宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色，文字形如 <code>旧 · sample.yaml · …</code> / <code>新 · …</code>；状态行给出 <code>Structured compare: yaml / yaml</code>，随后是 <code>Summary: … keys · … changed · … left only · … right only</code>。内容区是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）：demo 的 v2 把 <code>server.host</code>（localhost→0.0.0.0）、<code>server.port</code>（8080→8443）、<code>server.tls</code>（false→true）、<code>logging.level</code>（info→debug）标成「已变更」，删掉的 <code>logging.file</code> 标成「仅左」，<code>features</code> 尾部新增的 <code>ai</code> 标成「仅右」。"
+        },
+        {
+          "file": "structured-add.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 add: sample.json，差异区右栏渲染新增 JSON 的键路径表，左栏显示 not present 占位",
+          "caption": "「新增」对比（JSON · .json）：提交给仓库新增了 <code>sample.json</code>，旧侧不存在。左栏标题写 <code>旧 · 不存在</code>，右栏标题 <code>已创建 · sample.json · …</code>；键路径表里每个键都只有右侧有值，逐行标成「仅右」。本场景演示的是 <code>System.Text.Json</code> 这条解析路径，一眼看出是纯新增，而非解析失败。"
+        },
+        {
+          "file": "structured-remove.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.toml，差异区左栏渲染被删除 TOML 的键路径表，右栏显示 not present 占位",
+          "caption": "「删除」对比（TOML · .toml）：提交删除了 <code>sample.toml</code>，新侧不存在。左栏标题 <code>已删除 · sample.toml · …</code> 下按键路径列出被删文件的键值（逐行标成「仅左」），右栏标题 <code>新 · 不存在</code>。本场景演示 <code>Tomlyn</code> 解析路径，删除场景同样可见完整内容，而不是空白。"
+        },
+        {
+          "file": "structured-tree.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.yaml，差异区切到结构化数据插件的「结构树」模式，按对象 / 数组层级缩进展开并标注状态",
+          "caption": "「结构树」模式（YAML · .yaml，modify 场景）：点模式栏的 <code>结构树</code> 进入 <code>TreeMode</code>，内容区由 <code>BuildTreeContent</code> 渲染——把数据按对象 / 数组层级递归展开，每行「键 : 值」带缩进与状态底色，父节点按子节点聚合出状态，顺着嵌套就能看出改动落在哪个分支（demo 里 <code>server</code>、<code>logging</code> 两支变化最明显）。"
+        }
+      ],
+      "sections": [
+        {
+          "heading": "对比视图长什么样",
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式标签栏</strong>、<strong>内容区</strong>。标题行是两列 <code>Grid</code>，左旧右新各一个 <code>TextBlock</code>，文字形如 <code>old · sample.yaml · 1.2 KB</code>（角色名取 <code>PluginEnvironment.Translate</code>，文件名取 <code>Path.GetFileName</code>，体积取 <code>PluginSizeFormat.ReadableFileSize</code>），采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色；某一侧为 <code>null</code> 时后半段变成 <code>not present</code>。</p><p>状态行先显示 <code>Analyzing…</code>，解析完成后落到 <code>Structured compare: 源格式 / 目标格式</code>，再追加 <code>Summary: N keys · c changed · l left only · r right only</code>；出错显示 <code>Failed to parse: …</code>。模式标签栏是横向 <code>StackPanel</code> 里两个 <code>Button</code>（<code>Key path / Structure tree</code>），当前项由 <code>StyleModeButton</code> 加浅蓝底 + 半粗。切换走 <code>SetMode</code>，共用同一套标题、状态与内容区。</p>"
+        },
+        {
+          "heading": "键路径模式：拍平 + 语义 diff",
+          "html": "<p>默认模式由 <code>BuildKeyPathContent</code> 渲染。核心是 <code>DataFlatten.Flatten</code>：把两侧数据树各拍平成「键路径 → 标量」的有序列表，键路径用点号连接、数组下标写成 <code>[i]</code>（如 <code>server.ports[0]</code>）。<code>DataDiff.Compute</code> 分别以左右两张 <code>Dictionary</code> 建索引，先按左表再按右表的顺序 <code>Emit</code> 去重合并，得到四类 <code>DiffState</code>：<code>Same / Changed / LeftOnly / RightOnly</code>，汇总成 <code>DiffSummary</code>（<code>Total / Changed / LeftOnly / RightOnly</code>）。</p><p>渲染成一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>，等宽字体），每行按 <code>TintOf</code> 铺状态底色、行尾附一个状态小标签；本侧缺失的值显示为 <code>not present</code> 而不是留空。单值超过 <code>MaxValueChars</code>（300）截断展示，但<strong>不影响比较</strong>（比较用的是完整值）。行数上限 <code>MaxRows</code>（4000），超出截断以免 UI 被拖死。</p>"
+        },
+        {
+          "heading": "结构树模式：顺着层级看改动",
+          "html": "<p>切到 <code>TreeMode</code> 后由 <code>BuildTreeContent</code> 渲染。它先自底向上把每个路径的状态聚合出父节点状态（<code>ResolveState</code>，子树任一节点有变更则父节点同色），再由 <code>AddTreeNodes</code> 递归展开 <code>Map</code> / <code>Seq</code> 节点，<code>BuildTreeRow</code> 为每个「键 : 值」生成一行带缩进的单元格——对象按键、数组按下标 <code>[i]</code>。节点预算 <code>MaxTreeNodes</code>（4000），超出停止展开。相比键路径表把每个叶子摊平，树视图更适合看「改动集中在哪个配置分支」。两个模式共用同一份 <code>DiffSummary</code> 与状态着色，只是组织方式不同。</p>"
+        },
+        {
+          "heading": "解析：多格式到统一数据模型",
+          "html": "<p><code>StructuredParser.Parse</code> 按扩展名分派，统一产出 <code>DataNode</code> 树（<code>DataKind</code> 为 <code>Scalar / Map / Seq</code>）：JSON / JSONC 走框架内置 <code>System.Text.Json</code>；YAML 用 <strong>YamlDotNet</strong> 的表示模型（<strong>保序</strong>）转成 <code>Map</code> / <code>Seq</code>；TOML 用 <strong>Tomlyn</strong> 的 <code>TomlTable / TomlArray</code> 递归转换；XML 用 <code>System.Xml.Linq</code>，把元素 / 属性 / 文本纳入同一套树；INI / <code>.cfg</code> / <code>.properties</code> 走自写解析器（分节 + <code>key=value</code>，兼容 <code>:</code> 分隔与注释）。解析异常不冒泡，转成 <code>error</code> 文本由状态行显示。</p>"
+        },
+        {
+          "heading": "路由说明、300 MB 阈值与线程",
+          "html": "<p><strong>路由</strong>：这几个扩展名都是纯文本，而宿主只对<strong>二进制</strong>差异查询插件路由（文本差异固定由内置文本编辑器渲染），因此自动路由通常不命中；要使用本视图需在宿主「偏好设置 → 扩展名绑定」里把对应扩展名绑定到本插件（用户绑定优先级最高）。demo 仓库刻意用 <code>.gitattributes</code> 给样本加 <code>-diff</code> 属性，让 git 按二进制上报差异，截图才会落到本插件。</p><p>单侧声明大小超过 <code>MaxSideBytes</code>（<code>300 * 1024 * 1024</code>，即 300 MB）时只显示 <code>File too large to preview</code>，两侧都不解析；大小未知时放行。解析与 diff 都在后台线程（<code>Task.Run</code>），控件只在 UI 线程经 <code>Dispatcher.UIThread.Post</code> 构建；每次刷新 / 切模式用「代次 <code>_generation</code> + <code>CancellationTokenSource</code>」取消上一轮，回投时再校验代次，切文件后旧任务结果不会画到本次视图。</p>"
+        }
+      ]
+    },
+    {
+      "id": "subtitle",
+      "name": "字幕 / 时间轴对比插件 · Subtitle Compare",
+      "version": "0.0.1",
+      "assembly": "ForkPlus.Plugins.Subtitle",
+      "source": "plugins/ForkPlus.Plugins.Subtitle",
+      "summary": "字幕 / 时间轴对比视图：认领 .srt / .vtt / .ass / .ssa / .sub，命中后把差异区换成字幕行表与时间轴两种模式——把两侧解析成同一套 cue 模型（序号 / 起止毫秒 / 文本 / 附加信息）后，先按归一化文本对齐、再按时间配对，给出「相同 / 已变 / 仅左 / 仅右」四类。字幕行表逐条四色标注；时间轴以总时长为横轴、旧 / 新两条轨道按起止时间等比铺开，字幕的提前 / 延后 / 拉长一眼可见。零第三方依赖。这几个扩展名都是纯文本格式，自动路由通常不命中，需在偏好设置里绑定到本插件。单侧声明大小超过 300 MB 只给提示、不解析。",
+      "extensions": [".srt", ".vtt", ".ass", ".ssa", ".sub"],
+      "screenshots": [
+        {
+          "file": "subtitle-modify.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.srt，差异区由字幕插件渲染成字幕行表，逐行列出旧时间 / 旧文本 / 新时间 / 新文本 / 状态",
+          "caption": "「修改」对比（SRT · .srt，1920×1280 完整界面，未裁切）：默认停在「字幕行表」模式。顶部两栏标题由宿主注入的画刷着色，文字形如 <code>旧 · sample.srt · …</code> / <code>新 · …</code>；状态行给出 <code>Subtitle compare: srt / srt · cues: … / …</code> 与 <code>Summary: … cues · … changed · … left only · … right only</code>。内容区是一张五列表（<code>旧时间 / 旧文本 / 新时间 / 新文本 / 状态</code>）：demo 的 v2 第 2 句被改写并后移（<code>This is the old build.</code> → <code>This is the new build.</code>，3.5–6.0s → 4.0–6.5s）标成「已变」，末尾新增一条 <code>Brand new subtitle line.</code> 标成「仅右」，第 1、3 句文本与时间都没动，标成「相同」。"
+        },
+        {
+          "file": "subtitle-add.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 add: sample.vtt，差异区右栏渲染新增 WebVTT 的字幕行，左栏显示 not present 占位",
+          "caption": "「新增」对比（WebVTT · .vtt）：提交给仓库新增了 <code>sample.vtt</code>，旧侧不存在。左栏标题写 <code>旧 · 不存在</code>，右栏标题 <code>已创建 · sample.vtt · …</code>；字幕行表里每条 cue 都只有右侧有值，逐行标成「仅右」。本场景演示 WebVTT 解析路径（<code>WEBVTT</code> 头 + 点号毫秒时间戳），一眼看出是纯新增。"
+        },
+        {
+          "file": "subtitle-remove.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.ass，差异区左栏渲染被删除 ASS 的字幕行，右栏显示 not present 占位",
+          "caption": "「删除」对比（ASS · .ass）：提交删除了 <code>sample.ass</code>，新侧不存在。左栏标题 <code>已删除 · sample.ass · …</code> 下按字幕行列出被删文件的 cue（逐行标成「仅左」），右栏标题 <code>新 · 不存在</code>。本场景演示 ASS / SSA 解析路径（<code>[Events]</code> 段的 <code>Dialogue</code> 行），删除场景同样可见完整内容。"
+        },
+        {
+          "file": "subtitle-timeline.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.srt，差异区切到字幕插件的「时间轴」模式，旧 / 新两条轨道按总时长等比铺开彩色 cue 条",
+          "caption": "「时间轴」模式（SRT · .srt，modify 场景）：点模式栏的 <code>时间轴</code> 进入 <code>TimelineMode</code>，内容区由 <code>BuildTimelineContent</code> 渲染——顶部一条 <code>MM:SS</code> 刻度尺，其下 <code>BuildTrack</code> 为旧 / 新各画一条轨道，每条 cue 按起止时间<strong>等比</strong>铺成一根色条（<code>相同 / 已变 / 仅左 / 仅右</code> 四色），鼠标悬停显示该 cue 的起始时间与首行文本。demo 里第 2 句整体后移、末尾多出一根条，时间轴上的挪动与新增一眼可见。"
+        }
+      ],
+      "sections": [
+        {
+          "heading": "对比视图长什么样",
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式标签栏</strong>、<strong>内容区</strong>。标题行左旧右新各一个 <code>TextBlock</code>，文字形如 <code>old · sample.srt · 1.1 KB</code>，采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色。状态行先显示 <code>Analyzing…</code>，随后落到 <code>Subtitle compare: 源格式 / 目标格式 · cues: a / b</code>，再追加 <code>Summary: N cues · c changed · l left only · r right only</code>；MicroDVD 的 <code>.sub</code> 若从首帧时间戳推断出帧率，还会附一条 fps 说明。模式标签栏两个 <code>Button</code>（<code>Cue list / Timeline</code>），当前项加浅蓝底 + 半粗。</p>"
+        },
+        {
+          "heading": "字幕行表与文本归一化",
+          "html": "<p>默认模式由 cue 表渲染：五列（<code>旧时间 / 旧文本 / 新时间 / 新文本 / 状态</code>），两侧同一条对齐成一行，按四色铺底。对齐算法在 <code>SubtitleDiff.Compute</code>：用「双指针 + 有限前瞻」——文本归一化后相同即配对（<code>Same</code>）；否则在前瞻窗口内找匹配项，据此判定插入 / 删除，配不上又都存在的记为 <code>Changed</code>，仅单侧有的记为 <code>LeftOnly</code> / <code>RightOnly</code>。</p><p>文本比较前走 <code>SubtitleText.Normalize</code>：去多余空白、统一换行，避免「只差一个空格」被误判成改写；时间用 <code>FormatTime</code> 渲染成 <code>HH:MM:SS.mmm</code>。行数上限 3000，超出截断。</p>"
+        },
+        {
+          "heading": "时间轴：等比铺开的旧 / 新两条轨道",
+          "html": "<p>切到 <code>TimelineMode</code> 由 <code>BuildTimelineContent</code> 渲染：先由 <code>TotalDuration</code> 取两侧的最大结束时间作横轴总长，<code>BuildRuler</code> 画 <code>MM:SS</code> 刻度尺，<code>BuildTrack</code> 为旧 / 新各画一条轨道，每条 cue 按 <code>StartMs</code> / <code>EndMs</code> 相对总时长换算成像素位置与宽度。逻辑宽度 <code>TimelineWidth</code>（1200px）配合横向滚动，比例刻度稳定；每根条用 <code>ToolTip.SetTip</code> 挂上起始时间与首行文本，鼠标悬停即读。字幕的提前 / 延后 / 拉长、整段的增删，在时间轴上一眼可见——这是纯文本 diff 给不出的视角。</p>"
+        },
+        {
+          "heading": "解析：五种格式统一成 cue 列表",
+          "html": "<p><code>SubtitleParser.Parse</code> 按扩展名分派：<code>.srt</code> 走 SRT（序号 + <code>hh:mm:ss,mmm --&gt; hh:mm:ss,mmm</code>）、<code>.vtt</code> 走 WebVTT（可带 <code>WEBVTT</code> 头与 cue 标识）、<code>.ass</code> / <code>.ssa</code> 读 <code>[Events]</code> 段的 <code>Dialogue</code> 行（按该段 <code>Format</code> 列序取 Start / End / Text）、<code>.sub</code> 兼容 MicroDVD（首行为 <code>{帧号}{帧号}</code>，需按帧率换算时间）与 SubViewer。统一归一化成 <code>SubtitleCue</code>（序号 / 起止毫秒 / 文本 / 附加信息），格式特有的样式标签归入 <code>Extra</code> 不参与文本比较。解析异常转成 <code>error</code> 文本由状态行显示，绝不冒泡。</p>"
+        },
+        {
+          "heading": "路由说明、300 MB 阈值与线程",
+          "html": "<p><strong>路由</strong>：字幕都是纯文本，而宿主只对<strong>二进制</strong>差异查询插件路由，因此自动路由通常不命中；要使用本视图需在宿主「偏好设置 → 扩展名绑定」里把对应扩展名绑定到本插件。demo 仓库用 <code>.gitattributes</code> 的 <code>-diff</code> 让样本按二进制上报差异，截图才会落到本插件而不是内置文本编辑器。</p><p>单侧声明大小超过 <code>MaxSideBytes</code>（<code>300 * 1024 * 1024</code>，即 300 MB）时只显示 <code>File too large to preview</code>。解析与对齐在后台线程，控件只在 UI 线程构建；每次刷新 / 切模式以「代次 + <code>CancellationTokenSource</code>」取消上一轮。插件零第三方依赖，随包进 <code>plugins/</code> 的只有插件自身主 DLL。</p>"
+        }
+      ]
+    },
+    {
+      "id": "svg",
+      "name": "SVG 矢量图对比插件 · SVG Compare",
+      "version": "0.0.1",
+      "assembly": "ForkPlus.Plugins.Svg",
+      "source": "plugins/ForkPlus.Plugins.Svg",
+      "summary": "SVG 矢量图对比视图：认领 .svg，命中后把差异区换成并排渲染与元素结构 diff 两种模式——把两侧 SVG 各自解析成元素树，既按各自 viewBox 等比缩放并排渲染直接比图形，也把元素树拍平成「元素路径 → 属性」列表逐项标出新增 / 删除 / 改值。支持常见图形元素（rect / circle / ellipse / line / polyline / polygon / path）与 g 分组、transform 变换、fill / stroke 等呈现属性，text / tspan 的文字作为伪属性参与比较。解析走 BCL 的 System.Xml.Linq，渲染走 Avalonia 图形原语，零第三方依赖。SVG 是 XML 文本，自动路由通常不命中，需在偏好设置里绑定到本插件。单侧声明大小超过 300 MB 只给提示、不解析。",
+      "extensions": [".svg"],
+      "screenshots": [
+        {
+          "file": "svg-modify.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.svg，差异区由 SVG 插件渲染成左右两栏，左 old、右 new 各是渲染后的矢量图",
+          "caption": "「修改」对比（SVG · .svg，1920×1280 完整界面，未裁切）：默认停在「并排渲染」模式。顶部两栏标题由宿主注入的画刷着色，文字形如 <code>旧 · sample.svg · …</code> / <code>新 · …</code>；状态行给出 <code>SVG compare: … / … elements</code> 与 <code>Summary: … properties · … changed · … left only · … right only</code>。内容区左右各一张卡片：demo 旧图是一个蓝底（<code>#3366cc</code>）矩形 + 灰色轴线 + 文字 <code>ForkPlus v1</code>，新图换色为 <code>#e67e22</code>、矩形右移、多一个绿色圆、文字改成 <code>ForkPlus v2</code>——两图并排，图形变化一眼可见。"
+        },
+        {
+          "file": "svg-add.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 add: sample.svg，差异区右栏渲染新增 SVG 的图形，左栏显示 not present 占位",
+          "caption": "「新增」对比（SVG · .svg）：提交给仓库新增了 <code>sample.svg</code>，旧侧不存在。左栏标题写 <code>旧 · 不存在</code> 并给出占位，右栏标题 <code>已创建 · sample.svg · …</code> 下渲染新增文件的图形，同时在栏顶注明元素数与 viewBox 尺寸。一眼看出是纯新增，而非渲染失败。"
+        },
+        {
+          "file": "svg-remove.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.svg，差异区左栏渲染被删除 SVG 的图形，右栏显示 not present 占位",
+          "caption": "「删除」对比（SVG · .svg）：提交删除了 <code>sample.svg</code>，新侧不存在。左栏标题 <code>已删除 · sample.svg · …</code> 下渲染被删文件的图形，右栏标题 <code>新 · 不存在</code>。删除场景同样可见完整图形内容，而不是空白。"
+        },
+        {
+          "file": "svg-structure.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.svg，差异区切到 SVG 插件的「结构差异」模式，逐行列出元素路径与属性变化",
+          "caption": "「结构差异」模式（SVG · .svg，modify 场景）：点模式栏的 <code>结构差异</code> 进入 <code>StructureMode</code>，内容区由元素结构表渲染——把两侧元素树拍平成「元素路径 → 属性」列表逐项对比：demo 里 <code>rect#bg</code> 的 <code>x</code>（20→80）与 <code>fill</code>（#3366cc→#e67e22）标成「已变更」，新图多出的 <code>circle#dot</code> 标成「仅右」，<code>text#label</code> 的伪属性 <code>#text</code>（ForkPlus v1→v2）标成「已变更」。相比并排渲染，结构表回答的是「到底改了哪个属性」。"
+        }
+      ],
+      "sections": [
+        {
+          "heading": "对比视图长什么样",
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式标签栏</strong>、<strong>内容区</strong>。标题行左旧右新各一个 <code>TextBlock</code>，文字形如 <code>old · sample.svg · 0.5 KB</code>，采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色。状态行先显示 <code>Analyzing…</code>，解析后落到 <code>SVG compare: 源元素数 / 目标元素数 elements</code>，再追加 <code>Summary: N properties · c changed · l left only · r right only</code>；出错显示 <code>Failed to parse: …</code>。模式标签栏两个 <code>Button</code>（<code>Rendered / Structure</code>），当前项加浅蓝底 + 半粗。</p>"
+        },
+        {
+          "heading": "并排渲染：按 viewBox 等比缩放",
+          "html": "<p>默认模式由 <code>RenderCard</code> 渲染左右两张卡片。每侧把 <code>SvgDocument</code> 交给 <code>SvgRenderer.Render</code>：先按 <code>viewBox</code>（缺省回落到 width / height）建一块 <code>Canvas</code>，用 <code>Matrix.CreateTranslation(-ViewX, -ViewY)</code> 把坐标系平移到 viewBox 原点，再递归把 <code>SvgNode</code> 树转成 Avalonia 图形原语（<code>Rectangle / Ellipse / Line / Polyline / Polygon / Path</code>，<code>g</code> 分组递归、<code>transform</code> 矩阵级联、<code>fill / stroke</code> 等呈现属性向下继承），最后套一层 <code>Viewbox</code>（<code>Stretch=Uniform</code>）让两侧按同一尺寸等比缩放——图形挪动 / 换色 / 增删并排即见。元素总数超上限时截断渲染，但结构 diff 仍按完整树计算。某一侧缺失或解析失败时该栏显示占位文案。</p>"
+        },
+        {
+          "heading": "结构差异：元素路径 + 属性逐项比较",
+          "html": "<p>切到 <code>StructureMode</code> 后由元素结构表渲染。核心是 <code>SvgFlatten.Flatten</code>：把元素树拍平成「元素路径 → 属性」条目（路径由标签名 + 序号 / <code>id</code> 拼出），<code>SvgDiff.Compute</code> 以左右两张索引表先左后右 <code>Emit</code> 去重合并，得到 <code>Same / Changed / LeftOnly / RightOnly</code> 四类 <code>SvgState</code> 与 <code>SvgDiffResult</code>。表逐行列出元素路径与属性名，旧值 / 新值分列，按四色铺底 + 行尾状态标签。为了让改字也能报出来，<code>&lt;text&gt;</code> / <code>&lt;tspan&gt;</code> 的直接文本被挂成伪属性 <code>#text</code> 一起参与比较。行数上限 4000、单值展示上限 300 字符（截断不影响比较）。</p>"
+        },
+        {
+          "heading": "解析：System.Xml.Linq 到元素树",
+          "html": "<p><code>SvgParser.Parse</code> 用 <code>System.Xml.Linq</code> 加载文档，读根元素 <code>width / height / viewBox</code> 得到视口，再把元素树转成 <code>SvgNode</code>（标签名 / <code>id</code> / 属性列表 / 子节点 / 序号），同时建立 <code>id → 节点</code> 索引供样式引用（如 <code>url(#id)</code> 的填充 / 渐变）解析。属性名大小写不敏感匹配；解析异常不冒泡，转成 <code>error</code> 文本由状态行显示。插件零第三方依赖，随包进 <code>plugins/</code> 的只有插件自身主 DLL。</p>"
+        },
+        {
+          "heading": "路由说明、300 MB 阈值与线程",
+          "html": "<p><strong>路由</strong>：SVG 是 XML 文本，而宿主只对<strong>二进制</strong>差异查询插件路由，因此自动路由通常不命中；要使用本视图需在宿主「偏好设置 → 扩展名绑定」里把 <code>.svg</code> 绑定到本插件。demo 仓库用 <code>.gitattributes</code> 的 <code>-diff</code> 让样本按二进制上报差异，截图才会落到本插件而不是内置文本编辑器。</p><p>单侧声明大小超过 <code>MaxSideBytes</code>（<code>300 * 1024 * 1024</code>，即 300 MB）时只显示 <code>File too large to preview</code>。解析、diff 与渲染在后台线程，控件只在 UI 线程构建；每次刷新 / 切模式以「代次 <code>_generation</code> + <code>CancellationTokenSource</code>」取消上一轮，回投时校验代次，切文件后旧任务结果不会画到本次视图。</p>"
         }
       ]
     }

@@ -1,0 +1,21 @@
+{
+  "$comment": "本插件随包分发的第三方组件登记表。字段：name/version/license/copyright/homepage 用于生成声明头部，licenseFile 是仓库根目录下 licenses/ 里的许可全文（相对仓库根）。新增依赖时在此追加条目即可，打包脚本会据此合并进 <Assembly>.THIRD-PARTY-NOTICES.txt。",
+  "components": [
+    {
+      "name": "YamlDotNet",
+      "version": "16.3.0",
+      "license": "MIT",
+      "copyright": "Copyright (c) 2008-2014 Antoine Aubry and contributors",
+      "homepage": "https://github.com/aaubry/YamlDotNet",
+      "licenseFile": "licenses/yamldotnet/LICENSE.txt"
+    },
+    {
+      "name": "Tomlyn",
+      "version": "0.19.0",
+      "license": "BSD-2-Clause",
+      "copyright": "Copyright (c) 2019-2026, Alexandre Mutel",
+      "homepage": "https://github.com/xoofx/Tomlyn",
+      "licenseFile": "licenses/tomlyn/LICENSE.txt"
+    }
+  ]
+}

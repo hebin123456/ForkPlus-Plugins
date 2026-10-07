@@ -11,6 +11,9 @@
   <Project Path="plugins/ForkPlus.Plugins.Font/ForkPlus.Plugins.Font.csproj" />
   <Project Path="plugins/ForkPlus.Plugins.Executable/ForkPlus.Plugins.Executable.csproj" />
   <Project Path="plugins/ForkPlus.Plugins.Certificate/ForkPlus.Plugins.Certificate.csproj" />
+  <Project Path="plugins/ForkPlus.Plugins.Svg/ForkPlus.Plugins.Svg.csproj" />
+  <Project Path="plugins/ForkPlus.Plugins.Structured/ForkPlus.Plugins.Structured.csproj" />
+  <Project Path="plugins/ForkPlus.Plugins.Subtitle/ForkPlus.Plugins.Subtitle.csproj" />
   <Project Path="plugins/ForkPlus.Plugins.Audio/ForkPlus.Plugins.Audio.csproj" />
   <Project Path="plugins/ForkPlus.Plugins.Video/ForkPlus.Plugins.Video.csproj" />
 </Solution>

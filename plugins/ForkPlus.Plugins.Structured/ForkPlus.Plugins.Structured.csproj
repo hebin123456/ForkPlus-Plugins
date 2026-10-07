@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- 结构化数据对比视图插件：认领 .json / .jsonc / .yaml / .yml / .toml / .xml / .ini /
+         .cfg / .properties，把两侧解析成同一套数据模型后按键路径做语义 diff（键路径表 /
+         结构树两种视图）。YAML 用 YamlDotNet，TOML 用 Tomlyn，JSON / XML / INI 走共享框架
+         自带的 System.Text.Json / System.Xml.Linq 与自写解析器。
+         公共属性（net10.0 / AvaloniaVersion / 契约引用）见 ../Directory.Build.props。 -->
+    <AssemblyName>ForkPlus.Plugins.Structured</AssemblyName>
+    <RootNamespace>ForkPlus.Plugins.Structured</RootNamespace>
+
+    <!-- 插件自身版本（与宿主版本解耦）；偏好设置 → 插件页展示的 Version 与此一致。 -->
+    <Version>0.0.1</Version>
+
+    <!-- 本插件带私有依赖（YamlDotNet / Tomlyn 及其托管传递依赖），需随插件产物拷贝出来。
+         类库工程默认不拷 PackageReference 资产，这里显式开启；打包脚本再排除宿主共享程序集。 -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 本插件视图用 Avalonia 控件纯代码构建（未使用 .axaml）。
+         运行期 Avalonia 由宿主提供，打包时不随插件分发（见 README「依赖与共享程序集」）。 -->
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+
+    <!-- YamlDotNet：MIT 许可，纯托管的 YAML 解析库，用其表示模型（保序）转成统一数据树。
+         随包分发的依赖与许可全文见本目录 third-party.json 与 licenses/。 -->
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
+
+    <!-- Tomlyn：MIT 许可，纯托管的 TOML 解析库，ToModel 得到表 / 数组 / 标量后递归转换。 -->
+    <PackageReference Include="Tomlyn" Version="0.19.0" />
+  </ItemGroup>
+</Project>

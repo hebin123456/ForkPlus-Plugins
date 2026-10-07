@@ -119,7 +119,33 @@ ForkPlus-Plugins/
 │   │   │   └── CertificateStrings.cs     # 插件自带译文（8 语言）
 │   │   ├── third-party.json              # System.Security.Cryptography.Pkcs（MIT）登记
 │   │   └── ForkPlus.Plugins.Certificate.csproj # 私有依赖 Pkcs（MIT）
-│   ├── ForkPlus.Plugins.Audio/           # 音频对比插件（元数据 / 波形 / 频谱 / 内嵌封面）
+│   ├── ForkPlus.Plugins.Structured/      # 结构化数据对比插件（键路径表 / 结构树）
+│   │   ├── StructuredDiffPlugin.cs
+│   │   ├── StructuredDiffView.cs         # 两模式视图：键路径表 / 结构树
+│   │   ├── StructuredParser.cs           # JSON / JSONC / YAML / TOML / XML / INI 解析成统一数据树
+│   │   ├── StructuredData.cs             # 统一数据模型 + 拍平 + 按键路径语义 diff
+│   │   ├── Localization/
+│   │   │   └── StructuredStrings.cs      # 插件自带译文（8 语言）
+│   │   ├── third-party.json              # YamlDotNet（MIT）/ Tomlyn（BSD-2-Clause）登记
+│   │   └── ForkPlus.Plugins.Structured.csproj # 私有依赖 YamlDotNet / Tomlyn
+│   ├── ForkPlus.Plugins.Subtitle/        # 字幕 / 时间轴对比插件（字幕行表 / 等比时间轴）
+│   │   ├── SubtitleDiffPlugin.cs
+│   │   ├── SubtitleDiffView.cs           # 两模式视图：字幕行表 / 时间轴
+│   │   ├── SubtitleParser.cs             # SRT / VTT / ASS / SSA / MicroDVD(.sub) 解析
+│   │   ├── SubtitleModel.cs              # cue 模型 + 文本归一化 + 时间轴对齐
+│   │   ├── Localization/
+│   │   │   └── SubtitleStrings.cs        # 插件自带译文（8 语言）
+│   │   └── ForkPlus.Plugins.Subtitle.csproj # 零第三方依赖
+│   ├── ForkPlus.Plugins.Svg/             # SVG 矢量图对比插件（并排渲染 / 元素结构 diff）
+│   │   ├── SvgDiffPlugin.cs
+│   │   ├── SvgDiffView.cs                # 两模式视图：并排渲染 / 结构差异
+│   │   ├── SvgParser.cs                  # System.Xml.Linq 解析为元素树（含 viewBox / 文本）
+│   │   ├── SvgRenderer.cs                # 元素树 → Avalonia 图形原语（按 viewBox 缩放）
+│   │   ├── SvgData.cs                    # 元素模型 + 拍平 + 元素路径/属性 diff
+│   │   ├── Localization/
+│   │   │   └── SvgStrings.cs             # 插件自带译文（8 语言）
+│   │   └── ForkPlus.Plugins.Svg.csproj   # 零第三方依赖
+│   ├── ForkPlus.Plugins.Audio/           # 音频对比插件（元数据 / 波形 / 频谱 / 内嵌封面 / 试听）
 │   │   ├── AudioDiffPlugin.cs
 │   │   ├── AudioDiffView.cs              # 四模式视图 + 自建模式标签栏
 │   │   ├── MediaRender.cs                # 波形 / 差异带 / 声谱图位图绘制
@@ -128,9 +154,9 @@ ForkPlus-Plugins/
 │   │   │   └── AudioStrings.cs           # 插件自带译文（8 语言）
 │   │   ├── third-party.json              # FFmpeg / FFmpeg.AutoGen（LGPL）登记
 │   │   └── ForkPlus.Plugins.Audio.csproj # 私有依赖共享解码核心 + 按 RID 的 FFmpeg 原生件
-│   └── ForkPlus.Plugins.Video/           # 视频对比插件（元数据 / 关键帧帧条 / 单帧像素差异）
+│   └── ForkPlus.Plugins.Video/           # 视频对比插件（元数据 / 关键帧帧条 / 单帧像素差异 / 播放）
 │       ├── VideoDiffPlugin.cs
-│       ├── VideoDiffView.cs              # 三模式视图 + 单帧时间轴拖动条
+│       ├── VideoDiffView.cs              # 四模式视图 + 单帧时间轴拖动条 + 播放传输条
 │       ├── MediaRender.cs                # 像素差异比 / 变更像素高亮
 │       ├── MediaImage.cs                 # BGRA 字节 → Avalonia Bitmap
 │       ├── Localization/
@@ -144,11 +170,14 @@ ForkPlus-Plugins/
 │   ├── sharpcompress/LICENSE.txt         # SharpCompress（MIT）
 │   ├── pdfium/LICENSE.txt                # PDFium 及其捆绑组件（BSD-3-Clause 等）
 │   ├── ffmpeg/LICENSE.txt                # FFmpeg 原生件（LGPL-2.1-or-later）
-│   └── ffmpeg-autogen/LICENSE.txt        # FFmpeg.AutoGen 绑定（LGPL-3.0-or-later）
+│   ├── ffmpeg-autogen/LICENSE.txt        # FFmpeg.AutoGen 绑定（LGPL-3.0-or-later）
+│   ├── miniaudio/LICENSE.txt             # miniaudio 音频输出后端（Unlicense OR MIT-0）
+│   ├── yamldotnet/LICENSE.txt            # YamlDotNet（MIT）
+│   └── tomlyn/LICENSE.txt                # Tomlyn（BSD-2-Clause）
 ├── third_party/                          # 三方件「件与锁」：清单入库，二进制不入库（构建前取件）
 │   ├── ffmpeg/manifest.json              # FFmpeg 来源 / 许可 / 运行期库 / 各 RID 说明（版本以三方件仓为准）
 │   ├── ffmpeg/<rid>/*.dll|*.so.*|*.dylib# 实际原生件（由 fetch-third-party.sh 取入）
-│   └── miniaudio/manifest.json           # 音频输出后端占位（当前未随包分发）
+│   └── miniaudio/manifest.json           # 音频输出后端：来源 / 许可 / 运行期库 fpp_audio / 各 RID
 ├── Directory.Build.props                 # 仓库级公共构建属性（net10.0 / AvaloniaVersion）
 ├── ForkPlus.Plugins.slnx                 # 解决方案（新增插件在此登记）
 ├── THIRD-PARTY-NOTICES.md                # 第三方许可总览（由脚本生成，勿手改）
@@ -526,6 +555,89 @@ zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可�
 
 ---
 
+## 结构化数据对比插件
+
+[plugins/ForkPlus.Plugins.Structured](plugins/ForkPlus.Plugins.Structured) 认领常见配置 / 数据格式
+`.json` / `.jsonc` / `.yaml` / `.yml` / `.toml` / `.xml` / `.ini` / `.cfg` / `.properties`：
+配置改了一版之后，并排看清到底**哪个键加 / 删 / 改**了——不是逐字符比文本，而是把两侧解析成
+同一套数据模型后按键路径做**语义 diff**。
+
+两种模式（自建工具条 `Key path / Structure tree` 切换）：
+
+- **键路径**（默认）：把两侧数据各拍平成「键路径 → 标量」的列表，取并集逐行列出，每行按
+  `相同 / 已变更 / 仅左 / 仅右` 四色铺底，路径用点号 + `[i]` 下标表示（如 `server.ports[0]`），
+  并附旧值 / 新值两列——新增 / 删除 / 改值的键一眼可见。
+- **结构树**：按对象 / 数组的层级递归展开，父节点带状态底色，逐层看到是哪个分支变了。
+
+解析：JSON / JSONC 走框架内置 `System.Text.Json`，YAML 用 **YamlDotNet**、TOML 用 **Tomlyn**
+（均按「保序」转成统一数据树），XML 用 `System.Xml.Linq`（元素 / 属性 / 文本），
+INI / `.cfg` / `.properties` 自写解析器。
+
+> **路由说明（重要）**：宿主只对**二进制**差异查询插件路由，纯文本差异固定由内置文本编辑器渲染。
+> 本插件认领的九种扩展名都是文本格式，因此**自动路由通常不会命中**；要使用本视图，需在宿主
+> 「偏好设置 → 扩展名绑定」里把对应扩展名绑定到本插件（用户绑定优先级最高）。之所以仍然实现，
+> 是因为 JSON / YAML / TOML 这类配置的「键级差异」用文本 diff 很难读。
+
+依赖 YamlDotNet（MIT）与 Tomlyn（BSD-2-Clause），登记在插件目录的 `third-party.json`，
+打包时合并成 `ForkPlus.Plugins.Structured.THIRD-PARTY-NOTICES.txt`（见「第三方许可管理」）。
+
+插件实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「结构化数据对比」（英文原文
+`Structured Data Compare`，8 语言译文见 `Localization/StructuredStrings.cs`）、版本 `0.0.1` 与描述。
+
+---
+
+## 字幕 / 时间轴对比插件
+
+[plugins/ForkPlus.Plugins.Subtitle](plugins/ForkPlus.Plugins.Subtitle) 认领 `.srt` / `.vtt` /
+`.ass` / `.ssa` / `.sub`：字幕改的是「某句话在某几秒」——逐行文本 diff 很难看出时间轴的挪动，
+本插件把两侧解析成同一套 cue 模型后先按文本对齐、再按时间配对，给出「相同 / 已变 / 仅左 / 仅右」四类。
+
+两种模式（自建工具条 `Cue list / Timeline` 切换）：
+
+- **字幕行表**（默认）：逐条列出 cue（序号 / 起止时间 / 文本），两侧同一条对齐成一行，按四色标注；
+  文本比较先做**归一化**（去多余空白、统一换行），避免「只差一个空格」被误判成改写。
+- **时间轴**：以总时长为横轴，旧 / 新两条轨道各画自己的 cue 条，按起止时间**等比**铺开——字幕
+  提前 / 延后 / 拉长一眼可见。
+
+解析：SRT / WebVTT / ASS / SSA / MicroDVD（`.sub`）五种格式各一个解析器，统一归一化成
+`SubtitleCue`（序号 / 起止毫秒 / 文本 / 附加信息）。**零第三方依赖**，随包进 `plugins/` 的只有
+插件自身主 DLL。
+
+> **路由说明（重要）**：与结构化数据插件同理——字幕都是文本，宿主只对二进制差异查询插件路由，
+> 因此**自动路由通常不会命中**；要使用本视图，需在宿主「偏好设置 → 扩展名绑定」里把对应扩展名
+> 绑定到本插件。
+
+插件实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「字幕对比」（英文原文
+`Subtitle Compare`，8 语言译文见 `Localization/SubtitleStrings.cs`）、版本 `0.0.1` 与描述。
+
+---
+
+## SVG 矢量图对比插件
+
+[plugins/ForkPlus.Plugins.Svg](plugins/ForkPlus.Plugins.Svg) 认领 `.svg`：SVG 的差异往往在
+「某个图形挪了 / 改了颜色 / 多了一笔」，逐字符的文本 diff 几乎读不出来——本插件把两侧各自解析成
+元素树，既**并排渲染**直接比图形，也按「元素路径 + 呈现属性」做**结构 diff**。
+
+两种模式（自建工具条 `Rendered / Structure` 切换）：
+
+- **并排渲染**（默认）：把两侧 SVG 各自渲染成图形并排显示，按各自的 `viewBox` 等比缩放到统一尺寸
+  （`Viewbox` 自适应），图形挪动 / 换色 / 增删一眼可见。
+- **结构差异**：把元素树拍平成「元素路径 → 属性」列表，逐条按 `相同 / 已变更 / 仅左 / 仅右`
+  四色标注；支持常见图形元素（`rect` / `circle` / `ellipse` / `line` / `polyline` / `polygon` /
+  `path`）与 `g` 分组、`transform` 变换、`fill` / `stroke` 等呈现属性，`<text>` / `<tspan>` 的
+  文字也作为伪属性 `#text` 参与比较。
+
+解析走 BCL 的 `System.Xml.Linq`，渲染走 Avalonia 自带图形原语（`Rectangle` / `Ellipse` / `Line` /
+`Polyline` / `Polygon` / `Path`）。**零第三方依赖**，随包进 `plugins/` 的只有插件自身主 DLL。
+
+> **路由说明（重要）**：SVG 是 XML 文本，宿主只对二进制差异查询插件路由，因此**自动路由通常不会
+> 命中**；要使用本视图，需在宿主「偏好设置 → 扩展名绑定」里把 `.svg` 绑定到本插件。
+
+插件实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「SVG 对比」（英文原文
+`SVG Compare`，8 语言译文见 `Localization/SvgStrings.cs`）、版本 `0.0.1` 与描述。
+
+---
+
 ## 音频对比插件
 
 [plugins/ForkPlus.Plugins.Audio](plugins/ForkPlus.Plugins.Audio) 认领主流音频容器
@@ -541,6 +653,8 @@ zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可�
   「哪几秒的声音变了」一眼可见。
 - **频谱**：STFT 声谱图并排（低频在下、冷→暖渐变）。
 - **封面**：内嵌封面（ID3 `APIC` / mp4 `covr`）并排；无封面时明示 `No embedded cover`。
+- **试听**：波形 / 频谱两模式下，栏内可直接播放旧 / 新任一侧（播放 / 暂停 + 进度定位），
+  用**同一个已解码结果**，不额外重解。
 
 呈现上沿用既有视觉语言：两栏标题由宿主注入的 `context.SrcTitleBrush` / `context.DstTitleBrush`
 着色，元数据逐行按 `相同 / 已变更 / 仅左 / 仅右` 四色标注，本侧缺失的值显示 `not present`
@@ -552,8 +666,10 @@ zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可�
 只给提示、不渲染媒体内容（设计文档 §5 方案 A：`CanHandle` 一律放行，由视图内判阈值）。
 
 解码走共享核心 [sdk/ForkPlus.Plugins.Media](sdk/ForkPlus.Plugins.Media)（FFmpeg.AutoGen 动态绑定，
-**只解码不编码、不出声**，无播放模式）。探测与波形 / 频谱分析都在后台线程，控件只在 UI 线程构建，
-每次刷新以「代次 + `CancellationToken`」取消上一轮；异常降级为状态行错误文案，绝不冒泡到宿主。
+**只解码不编码**；播放由该核心的 `MediaPlayback` 承载，音频输出走 **miniaudio**，经 C ABI 垫片
+`fpp_audio` 调用、随包分发）。探测与波形 / 频谱分析都在后台线程，控件只在 UI 线程构建，每次刷新以
+「代次 + `CancellationToken`」取消上一轮；无音频设备 / 输出失败时降级为传输条提示
+`Audio output unavailable`，可视化照常显示——异常绝不冒泡到宿主。
 
 插件实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「音频对比」（英文原文
 `Audio Compare`，8 语言译文见 `Localization/AudioStrings.cs`）、版本 `0.0.1` 与描述。
@@ -564,9 +680,10 @@ zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可�
 
 [plugins/ForkPlus.Plugins.Video](plugins/ForkPlus.Plugins.Video) 认领视频容器
 `.mp4` / `.mkv` / `.mov` / `.webm` / `.avi` / `.m4v` / `.mpg` / `.mpeg` / `.wmv` / `.flv`：转封装、
-改码率、重编码、换分辨率之后，并排看清两版视频的差异——元数据、关键帧帧条、单帧像素级差异。
+改码率、重编码、换分辨率之后，并排看清两版视频的差异——元数据、关键帧帧条、单帧像素级差异，
+以及可就地播放的整段对照。
 
-三模式（自建工具条 `Metadata / Filmstrip / Frame comparison` 切换）：
+四模式（自建工具条 `Metadata / Filmstrip / Frame compare / Playback` 切换）：
 
 - **元数据**（默认）：按 `Container` / `Video streams` / `Audio streams` / `Subtitles` / `Tags`
   分组，逐行四色标注。
@@ -577,6 +694,9 @@ zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可�
   差异；工具条下常驻一条「位置」拖动条（`0–100%`，仅此模式显示，拖动即重新取帧）。开启宿主
   **「高亮差异像素」**偏好（`PluginEnvironment.HighlightImageDiff`）时把变更像素在右侧帧上染色，
   尺寸不一致则只算差异比例、不染色。
+- **播放**：直接解码播放旧 / 新任一侧的画面与声音（播放 / 暂停 + 进度定位），一次只播一侧、
+  换侧即重建播放器。**优先硬件解码**（Windows `d3d11va` / macOS `videotoolbox` / Linux `vulkan`），
+  拿不到可用设备即静默回落软解（非致命），硬解生效时传输条显示 `Hardware decoding`。
 
 取帧是一条共用路径：`av_seek_frame(..., AVSEEK_FLAG_BACKWARD)` 先跳到目标时间前最近的关键帧，
 `avcodec_flush_buffers` 清缓冲，再顺序 `av_read_frame` → `avcodec_send_packet` / `avcodec_receive_frame`
@@ -584,9 +704,9 @@ zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可�
 转成紧凑 BGRA，再由 `MediaImage.FromImageData` 变成 Avalonia `Bitmap`。帧条与单帧对比共用这条路径。
 
 与音频插件同源：解码走共享核心 [sdk/ForkPlus.Plugins.Media](sdk/ForkPlus.Plugins.Media)
-（FFmpeg.AutoGen 动态绑定，**只解码不播放**，无播放 / 声音输出），300 MB 阈值同取方案 A，
-后台线程解码 + UI 线程建控件 + 代次取消，异常降级为状态行错误文案。帧条 / 单帧的像素差异比按
-`MediaLimits.PixelDiffThreshold`（24，逐通道最大差）计。
+（FFmpeg.AutoGen 动态绑定，**只解码不编码**；播放 / 音频输出由核心的 `MediaPlayback` 与 miniaudio
+承载），300 MB 阈值同取方案 A，后台线程解码 + UI 线程建控件 + 代次取消，异常降级为状态行错误文案。
+帧条 / 单帧的像素差异比按 `MediaLimits.PixelDiffThreshold`（24，逐通道最大差）计。
 
 插件实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「视频对比」（英文原文
 `Video Compare`，8 语言译文见 `Localization/VideoStrings.cs`）、版本 `0.0.1` 与描述。
@@ -611,6 +731,7 @@ zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可�
   Office 插件即 `office-modify.png` / `office-add.png` / `office-remove.png`，
   压缩包插件即 `archive-modify.png` / `archive-add.png` / `archive-remove.png`，
   字体插件即 `font-*.png`，可执行文件插件即 `executable-*.png`，证书插件即 `certificate-*.png`，
+  结构化数据插件即 `structured-*.png`，字幕插件即 `subtitle-*.png`，SVG 插件即 `svg-*.png`，
   音频插件即 `audio-*.png`，视频插件即 `video-*.png`）；
 - 截图规格：整屏 `1920×1280`，完整软件界面，不做局部裁切；
 - 缺任一场景视为截图不完整；插件新增变更形态时，同步补对应场景截图与 `plugins.json` 登记。
@@ -627,6 +748,13 @@ zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可�
   remove=`.p7b`；字体三场景用同一对系统字体（旧 DejaVu Sans → 新 DejaVu Serif）。
   这些依赖见 [pages.yml](.github/workflows/pages.yml) 的 `Install headless toolchain`
   （`fonts-dejavu` / `fonts-liberation` / `gcc` / `binutils` / `openssl`）。
+- **结构化数据 / 字幕 / SVG** 三类的 demo 素材都是**纯文本**，由采集脚本用纯 Python 标准库直接写出
+  （`write_demo_structured` / `write_demo_subtitle` / `write_demo_svg`）。因为宿主只对**二进制**差异
+  查询插件路由，这三类文本格式**自动路由不会命中**，采集脚本须在 demo 仓库里预置
+  「把对应扩展名绑定到本插件」的设置（用户绑定优先级最高），否则截图会落到内置文本编辑器上。
+  三张截图各覆盖一种格式形态：结构化数据 modify=`.yaml` / add=`.json` / remove=`.toml`（另用
+  `.ini` / `.xml` 体现解析广度），字幕 modify=`.srt` / add=`.vtt` / remove=`.ass`（另用 `.ssa` /
+  MicroDVD `.sub`），SVG 三场景共用同一对 `.svg`（旧：蓝底矩形 + 灰线；新：换色 + 挪位 + 多一笔）。
 - **音频 / 视频**两类 demo 素材用 **系统 `ffmpeg` CLI** 现造（`write_demo_audio` / `write_demo_video`，
   pages.yml 装 `ffmpeg`）。注意分工：造样本用系统 ffmpeg，插件解码用随包分发的 FFmpeg 原生库，
   两者互不相干。音频三场景各用一种容器（modify=`.mp3` 有损 / add=`.wav` PCM 无损 / remove=`.flac`
@@ -642,8 +770,9 @@ zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可�
 ## 第三方许可管理
 
 插件分发的第三方组件（如 PDF 插件的 Docnet.Core / PDFium、Office 插件的 Open XML SDK、
-压缩包插件的 SharpCompress、证书插件的 System.Security.Cryptography.Pkcs、音视频插件的
-FFmpeg / FFmpeg.AutoGen）**统一登记、集中存放、按包合并**，单一事实来源是两处：
+压缩包插件的 SharpCompress、证书插件的 System.Security.Cryptography.Pkcs、结构化数据插件的
+YamlDotNet / Tomlyn、音视频插件的 FFmpeg / FFmpeg.AutoGen / miniaudio）**统一登记、集中存放、
+按包合并**，单一事实来源是两处：
 
 1. **`licenses/`** —— 各组件许可全文的中央仓库，按组件分目录（`licenses/<组件>/LICENSE.txt`）。
    全文原样落库（含三方文件自身的编码），不依赖构建时从 NuGet 缓存临时抓取。
@@ -761,6 +890,12 @@ workflow：[.github/workflows/build.yml](.github/workflows/build.yml)
       ├── ForkPlus.Plugins.Certificate.dll
       ├── System.Security.Cryptography.Pkcs.dll # 证书插件私有依赖
       ├── ForkPlus.Plugins.Certificate.THIRD-PARTY-NOTICES.txt # 三方许可声明（Pkcs）
+      ├── ForkPlus.Plugins.Structured.dll
+      ├── YamlDotNet.dll                     # 结构化数据插件私有依赖
+      ├── Tomlyn.dll                         # 结构化数据插件私有依赖
+      ├── ForkPlus.Plugins.Structured.THIRD-PARTY-NOTICES.txt # 三方许可声明（YamlDotNet / Tomlyn）
+      ├── ForkPlus.Plugins.Subtitle.dll      # 字幕插件（零私有依赖）
+      ├── ForkPlus.Plugins.Svg.dll           # SVG 插件（零私有依赖）
       ├── ForkPlus.Plugins.Audio.dll
       ├── ForkPlus.Plugins.Video.dll
       ├── ForkPlus.Plugins.Media.dll         # 音视频插件共享解码核心（私有依赖）

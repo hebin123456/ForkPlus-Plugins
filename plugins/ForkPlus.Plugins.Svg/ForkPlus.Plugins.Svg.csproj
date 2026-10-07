@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- SVG 矢量图对比视图插件：认领 .svg，把两侧解析成元素树后既并排渲染（按 viewBox 等比缩放），
+         也按「元素路径 + 呈现属性」做结构 diff。
+         零第三方依赖：XML 解析走 BCL 的 System.Xml.Linq，渲染走 Avalonia 自带图形原语，
+         因此随包进 plugins/ 的只有插件自身主 DLL。
+         公共属性（net10.0 / AvaloniaVersion / 契约引用）见 ../Directory.Build.props。 -->
+    <AssemblyName>ForkPlus.Plugins.Svg</AssemblyName>
+    <RootNamespace>ForkPlus.Plugins.Svg</RootNamespace>
+
+    <!-- 插件自身版本（与宿主版本解耦）；偏好设置 → 插件页展示的 Version 与此一致。 -->
+    <Version>0.0.1</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 本插件视图用 Avalonia 控件纯代码构建（未使用 .axaml）。
+         运行期 Avalonia 由宿主提供，打包时不随插件分发（见 README「依赖与共享程序集」）。 -->
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+  </ItemGroup>
+</Project>

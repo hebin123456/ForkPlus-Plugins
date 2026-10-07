@@ -8,8 +8,8 @@
 #   ① 构建仓库内插件（plugins/*/*.csproj）
 #   ② 下载最新的 ForkPlus（linux-x64 发行包）
 #   ③ 把插件产物（主 DLL + 私有依赖 + 原生库）装入 ForkPlus 的 plugins/ 目录
-#   ④ 准备 demo 仓库：PDF / Office / 压缩包 / 字体 / 可执行文件 / 证书 / 音频 / 视频 各三种 diff 场景
-#      （修改 / 新增 / 删除）
+#   ④ 准备 demo 仓库：PDF / Office / 压缩包 / 字体 / 可执行文件 / 证书 / 音频 / 视频 /
+#      结构化数据 / 字幕 / SVG 各三种 diff 场景（修改 / 新增 / 删除）
 #   ⑤ 无头 X 环境（Xvfb + openbox）启动 ForkPlus，逐场景触发对应插件对比视图，
 #      截取完整软件界面（整屏 1920x1280，不做局部裁切）
 #   ⑥ 产物落到 <repo>/pages/assets/，交由 build-pages.py 生成站点
@@ -826,21 +826,42 @@ prepare_repo_certificate() {
 # 让元数据表（时长 / 码率 / 采样率 / 标签）与波形 / 频谱都有真实差异。
 write_demo_audio() {
 	local repo="$1" version="$2" ext="$3"
-	local freq dur rate codec
+	local freq dur rate codec cover_color
 	if [ "$version" = "v2" ]; then
 		freq=660
 		dur=4
 		rate=48000
+		cover_color=0xcc6633
 	else
 		freq=440
 		dur=3
 		rate=44100
+		cover_color=0x3366cc
 	fi
 	case "$ext" in
 	wav) codec=pcm_s16le ;;
 	flac) codec=flac ;;
 	*) codec=libmp3lame ;;
 	esac
+	# mp3 额外内嵌一张随版本变色的封面（ID3 APIC），让「封面」模式的截图左右可辨；
+	# 其它容器不支持内嵌封面，跳过。造图 / 合流失败则降级为无封面。
+	if [ "$ext" = "mp3" ]; then
+		local cover="$repo/.cover-$version.png"
+		if ffmpeg -hide_banner -loglevel error -f lavfi \
+			-i "color=c=$cover_color:s=300x300" -frames:v 1 -y "$cover"; then
+			ffmpeg -hide_banner -loglevel error \
+				-f lavfi -i "sine=frequency=$freq:duration=$dur" \
+				-i "$cover" -map 0:a -map 1:v -c:v copy -disposition:v attached_pic \
+				-c:a "$codec" -ac:a 2 -ar:a "$rate" \
+				-metadata title="ForkPlus Demo $version" -metadata artist="ForkPlus" \
+				-metadata album="Audio Demo" -metadata date="2026" \
+				-y "$repo/sample.$ext"
+			rm -f "$cover"
+			echo "  demo audio -> $repo/sample.$ext ($version · 含内嵌封面)"
+			return
+		fi
+		rm -f "$cover"
+	fi
 	ffmpeg -hide_banner -loglevel error \
 		-f lavfi -i "sine=frequency=$freq:duration=$dur" \
 		-ac 2 -ar "$rate" \
@@ -945,6 +966,252 @@ prepare_repo_video() {
 	echo "  $repo ($mode · .$ext)"
 }
 
+# ── demo 素材：结构化数据 / 字幕 / SVG（纯文本格式）────────────────────────────
+# 这三类素材都是**纯文本**，而宿主只对**二进制**差异查询插件路由（文本差异固定由内置文本
+# 编辑器渲染）。因此 demo 仓库用 .gitattributes 给样本加 `-diff` 属性，让 git 按二进制上报
+# 差异——文件内容仍是合法文本（插件照常解析），但差异会走插件路由，截图才落到这三个插件上，
+# 而不是内置文本编辑器（对照 README「Pages 截图约定」）。
+
+# 结构化数据样本：三种场景各用一种格式，覆盖三条解析路径——
+#   modify → .yaml（YamlDotNet）/ add → .json（System.Text.Json）/ remove → .toml（Tomlyn）
+# v2 改 server.host / port / tls 与 logging.level、删掉 logging.file、features 多一项，
+# 让「已变更 / 仅左 / 仅右」三类行都出现在截图里。
+write_demo_structured() {
+	local repo="$1" version="$2" ext="$3"
+	python3 - "$repo" "$version" "$ext" <<'PY'
+import os, sys
+repo, version, ext = sys.argv[1], sys.argv[2], sys.argv[3]
+is_new = version == "v2"
+
+YAML_V1 = """server:
+  host: localhost
+  port: 8080
+  tls: false
+logging:
+  level: info
+  file: /var/log/forkplus.log
+features:
+  - export
+  - sync
+"""
+YAML_V2 = """server:
+  host: 0.0.0.0
+  port: 8443
+  tls: true
+logging:
+  level: debug
+features:
+  - export
+  - sync
+  - ai
+"""
+JSON_V1 = """{
+  "name": "forkplus",
+  "version": "1.0.0",
+  "server": { "host": "localhost", "port": 8080, "tls": false },
+  "logging": { "level": "info", "file": "/var/log/forkplus.log" },
+  "features": ["export", "sync"]
+}
+"""
+JSON_V2 = """{
+  "name": "forkplus",
+  "version": "2.0.0",
+  "server": { "host": "0.0.0.0", "port": 8443, "tls": true },
+  "logging": { "level": "debug" },
+  "features": ["export", "sync", "ai"]
+}
+"""
+TOML_V1 = """[server]
+host = "localhost"
+port = 8080
+tls = false
+
+[logging]
+level = "info"
+file = "/var/log/forkplus.log"
+
+[features]
+list = ["export", "sync"]
+"""
+TOML_V2 = """[server]
+host = "0.0.0.0"
+port = 8443
+tls = true
+
+[logging]
+level = "debug"
+
+[features]
+list = ["export", "sync", "ai"]
+"""
+
+pairs = {
+    "yaml": (YAML_V1, YAML_V2),
+    "json": (JSON_V1, JSON_V2),
+    "toml": (TOML_V1, TOML_V2),
+}
+try:
+    old, new = pairs[ext]
+except KeyError:
+    raise SystemExit("unsupported demo structured ext: " + ext)
+target = os.path.join(repo, "sample." + ext)
+with open(target, "w", encoding="utf-8") as f:
+    f.write(new if is_new else old)
+print("  demo structured ->", target, "(" + version + ")")
+PY
+}
+
+# 字幕样本：三种场景各用一种格式，覆盖三条解析路径——
+#   modify → .srt / add → .vtt（WebVTT）/ remove → .ass（ASS）
+# v2 把第 2 句改写并后移、末尾新增一条 cue，让「已变 / 仅右」与时间轴上的挪动都可见。
+write_demo_subtitle() {
+	local repo="$1" version="$2" ext="$3"
+	python3 - "$repo" "$version" "$ext" <<'PY'
+import os, sys
+repo, version, ext = sys.argv[1], sys.argv[2], sys.argv[3]
+is_new = version == "v2"
+
+SRT_V1 = """1
+00:00:01,000 --> 00:00:03,000
+Hello and welcome.
+
+2
+00:00:03,500 --> 00:00:06,000
+This is the old build.
+
+3
+00:00:06,500 --> 00:00:08,000
+Shared line.
+"""
+SRT_V2 = """1
+00:00:01,000 --> 00:00:03,000
+Hello and welcome.
+
+2
+00:00:04,000 --> 00:00:06,500
+This is the new build.
+
+3
+00:00:06,500 --> 00:00:08,000
+Shared line.
+
+4
+00:00:09,000 --> 00:00:11,000
+Brand new subtitle line.
+"""
+VTT_V2 = """WEBVTT
+
+00:00:01.000 --> 00:00:03.000
+Hello and welcome.
+
+00:00:04.000 --> 00:00:06.500
+This is the new build.
+
+00:00:06.500 --> 00:00:08.000
+Shared line.
+
+00:00:09.000 --> 00:00:11.000
+Brand new subtitle line.
+"""
+ASS_V1 = """[Script Info]
+Title: ForkPlus Demo
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,10,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.00,0:00:03.00,Default,Old,0,0,0,,Hello and welcome.
+Dialogue: 0,0:00:03.50,0:00:06.00,Default,Old,0,0,0,,This is the old build.
+Dialogue: 0,0:00:06.50,0:00:08.00,Default,Old,0,0,0,,Shared line.
+"""
+
+texts = {
+    "srt": SRT_V2 if is_new else SRT_V1,
+    "vtt": VTT_V2,
+    "ass": ASS_V1,
+}
+try:
+    text = texts[ext]
+except KeyError:
+    raise SystemExit("unsupported demo subtitle ext: " + ext)
+target = os.path.join(repo, "sample." + ext)
+with open(target, "w", encoding="utf-8") as f:
+    f.write(text)
+print("  demo subtitle ->", target, "(" + version + ")")
+PY
+}
+
+# SVG 样本：三场景共用同一对 .svg（旧：蓝底矩形 + 灰轴线；新：换色 + 矩形挪位 + 多一个圆 +
+# 文字改版号），让并排渲染与结构 diff 两种模式都有明显可见的差异。
+write_demo_svg() {
+	local repo="$1" version="$2"
+	python3 - "$repo" "$version" <<'PY'
+import os, sys
+repo, version = sys.argv[1], sys.argv[2]
+is_new = version == "v2"
+
+SVG_V1 = """<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200" viewBox="0 0 320 200">
+  <rect id="bg" x="20" y="30" width="120" height="80" fill="#3366cc"/>
+  <line id="axis" x1="20" y1="150" x2="300" y2="150" stroke="#999999" stroke-width="2"/>
+  <text id="label" x="20" y="180" font-size="14" fill="#333333">ForkPlus v1</text>
+</svg>
+"""
+SVG_V2 = """<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200" viewBox="0 0 320 200">
+  <rect id="bg" x="80" y="30" width="120" height="80" fill="#e67e22"/>
+  <line id="axis" x1="20" y1="150" x2="300" y2="150" stroke="#999999" stroke-width="2"/>
+  <circle id="dot" cx="240" cy="70" r="28" fill="#2e9e5b"/>
+  <text id="label" x="20" y="180" font-size="14" fill="#333333">ForkPlus v2</text>
+</svg>
+"""
+target = os.path.join(repo, "sample.svg")
+with open(target, "w", encoding="utf-8") as f:
+    f.write(SVG_V2 if is_new else SVG_V1)
+print("  demo svg ->", target, "(" + version + ")")
+PY
+}
+
+# 三类文本格式 demo 仓库共用一套骨架：
+#   ① 写 .gitattributes 给样本加 `-diff`——宿主只对二进制差异查询插件路由，这样样本虽仍是
+#      合法文本，差异却会走插件（否则截图会落到内置文本编辑器上）；
+#   ② 按 modify / add / remove 三种变更提交。writer 签名统一为 <repo> <version> [ext]。
+prepare_repo_text() {
+	local kind="$1" mode="$2" sample="$3" writer="$4" ext="${5:-}"
+	local repo="$WORK/repo-$kind-$mode"
+	init_demo_repo "$repo"
+	printf '%s -diff\n' "$sample" >"$repo/.gitattributes"
+	case "$mode" in
+	add)
+		printf 'baseline\n' >"$repo/readme.txt"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: baseline"
+		"$writer" "$repo" v2 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "add: $sample"
+		;;
+	remove)
+		printf 'baseline\n' >"$repo/readme.txt"
+		"$writer" "$repo" v1 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: add $sample"
+		git -C "$repo" rm -q "$sample"
+		git -C "$repo" commit -q -m "remove: delete $sample"
+		;;
+	*)
+		"$writer" "$repo" v1 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: add $sample"
+		"$writer" "$repo" v2 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "update: modify $sample"
+		;;
+	esac
+	echo "  $repo ($mode · $sample)"
+}
+
 seed_settings() {
 	log "预置 ForkPlus 设置（跳过引导 / 亮色主题 / 最大化窗口 / 记录已读更新说明）"
 	local dir="$HOME/.local/share/ForkPlus"
@@ -1033,10 +1300,14 @@ dismiss_dialogs() {
 # 打开单个仓库，逐行扫过差异区的文件行；日志一出现目标插件的 marker 就整屏截图。
 # marker 由各插件在 SetContent 里写日志给出；日志从头读起，自动加载或点击触发都能命中。
 capture_one() {
-	local repo="$1" marker="$2" outfile="$3" settle="$4" label="$5"
+	local repo="$1" marker="$2" outfile="$3" settle="$4" label="$5" plugin_mode="${6:-}"
 	log "启动 ForkPlus 打开 $repo（$label）"
 	mkdir -p "$OUT"
-	( cd "$APPDIR" && DISPLAY="$DISPLAY_NUM" ./ForkPlus "$repo" >"$WORK/forkplus.log" 2>&1 & )
+	# plugin_mode 非空时经 FORKPLUS_PLUGIN_VIEW_MODE 指定插件的初始视图模式
+	# （音频 波形 / 频谱 / 封面，视频 帧条 / 单帧对比 / 播放，
+	#  结构化数据 tree，字幕 timeline，SVG structure）；不设则走各插件默认模式。
+	( cd "$APPDIR" && DISPLAY="$DISPLAY_NUM" FORKPLUS_PLUGIN_VIEW_MODE="$plugin_mode" \
+		./ForkPlus "$repo" >"$WORK/forkplus.log" 2>&1 & )
 
 	local ok=0
 	# 等待主窗口期间持续关闭启动期模态弹窗（git 版本提示等会阻塞主窗口创建）
@@ -1135,6 +1406,19 @@ prepare_repo_audio remove flac
 prepare_repo_video modify mp4
 prepare_repo_video add mkv
 prepare_repo_video remove avi
+# 结构化数据 demo：三场景各用一种格式（modify=yaml / add=json / remove=toml）；
+# 样本是纯文本，靠 .gitattributes 的 `-diff` 让差异走插件而非内置文本编辑器。
+prepare_repo_text structured modify "sample.yaml" write_demo_structured yaml
+prepare_repo_text structured add "sample.json" write_demo_structured json
+prepare_repo_text structured remove "sample.toml" write_demo_structured toml
+# 字幕 demo：三场景各用一种格式（modify=srt / add=vtt / remove=ass）
+prepare_repo_text subtitle modify "sample.srt" write_demo_subtitle srt
+prepare_repo_text subtitle add "sample.vtt" write_demo_subtitle vtt
+prepare_repo_text subtitle remove "sample.ass" write_demo_subtitle ass
+# SVG demo：三场景共用同一对 .svg（旧 / 新各有明显图形差异）
+prepare_repo_text svg modify "sample.svg" write_demo_svg
+prepare_repo_text svg add "sample.svg" write_demo_svg
+prepare_repo_text svg remove "sample.svg" write_demo_svg
 start_x
 # PDF 插件三种场景各截一张：修改 / 新增 / 删除
 for mode in modify add remove; do
@@ -1171,10 +1455,45 @@ for mode in modify add remove; do
 	seed_settings
 	capture_one "$WORK/repo-audio-$mode" "AudioDiffView.SetContent" "audio-$mode.png" 4 "音频插件 · $mode"
 done
+# 音频插件另取三个可视化模式各一张（波形 / 频谱 / 封面），均以 modify 场景为样本
+for m in "waveform:波形" "spectrum:频谱" "cover:封面"; do
+	seed_settings
+	capture_one "$WORK/repo-audio-modify" "AudioDiffView.SetContent" "audio-${m%%:*}.png" 5 "音频插件 · ${m##*:}" "${m%%:*}"
+done
 # 视频插件三种场景各截一张（mp4 / mkv / avi 各覆盖一种；默认元数据模式）
 for mode in modify add remove; do
 	seed_settings
 	capture_one "$WORK/repo-video-$mode" "VideoDiffView.SetContent" "video-$mode.png" 4 "视频插件 · $mode"
 done
+# 视频插件另取三个模式各一张（帧条 / 单帧对比 / 播放），均以 modify 场景为样本；
+# 播放模式要等后台解码建流并出首帧，settle 放大。
+for m in "filmstrip:帧条" "frame:单帧对比" "playback:播放"; do
+	seed_settings
+	capture_one "$WORK/repo-video-modify" "VideoDiffView.SetContent" "video-${m%%:*}.png" 6 "视频插件 · ${m##*:}" "${m%%:*}"
+done
+# 结构化数据插件三种场景各截一张（yaml / json / toml 各覆盖一种；默认键路径模式）
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-structured-$mode" "StructuredDiffView.SetContent" "structured-$mode.png" 4 "结构化数据插件 · $mode"
+done
+# 结构化数据插件另取结构树模式一张（modify 场景为样本）
+seed_settings
+capture_one "$WORK/repo-structured-modify" "StructuredDiffView.SetContent" "structured-tree.png" 4 "结构化数据插件 · 结构树" "tree"
+# 字幕插件三种场景各截一张（srt / vtt / ass 各覆盖一种；默认字幕行表模式）
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-subtitle-$mode" "SubtitleDiffView.SetContent" "subtitle-$mode.png" 4 "字幕插件 · $mode"
+done
+# 字幕插件另取时间轴模式一张（modify 场景为样本）
+seed_settings
+capture_one "$WORK/repo-subtitle-modify" "SubtitleDiffView.SetContent" "subtitle-timeline.png" 4 "字幕插件 · 时间轴" "timeline"
+# SVG 插件三种场景各截一张（旧 / 新同一对 .svg；默认并排渲染模式）
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-svg-$mode" "SvgDiffView.SetContent" "svg-$mode.png" 4 "SVG 插件 · $mode"
+done
+# SVG 插件另取结构差异模式一张（modify 场景为样本）
+seed_settings
+capture_one "$WORK/repo-svg-modify" "SvgDiffView.SetContent" "svg-structure.png" 4 "SVG 插件 · 结构差异" "structure"
 write_metadata
 log "完成：截图已输出到 $OUT"
