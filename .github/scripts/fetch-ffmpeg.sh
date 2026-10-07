@@ -51,7 +51,7 @@ case "$STATUS" in
 locked) ;;
 missing) die "manifest 未登记 RID $RID" ;;
 *)
-	log "RID $RID 的原生件未锁定（status=$STATUS）→ 跳过取件"
+	log "RID $RID 的原生件未锁定（status=${STATUS}）→ 跳过取件"
 	echo "  该平台不随包分发 FFmpeg，插件降级为「FFmpeg 解码不可用」提示。"
 	exit 0
 	;;
@@ -80,17 +80,6 @@ print("\t".join([
 PY
 ) || die "无法解析 manifest.json 中的 RID 信息：$RID"
 
-# 需要随包分发的库（不含 avdevice / avfilter）
-RUNTIME_LIBS="$(python3 - "$MANIFEST" <<'PY'
-import json
-import sys
-
-data = json.load(open(sys.argv[1], encoding="utf-8"))
-libs = data.get("runtimeLibraries") or ["avformat", "avcodec", "avutil", "swscale", "swresample"]
-print(" ".join(libs))
-PY
-)"
-
 URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/$TAG/$ASSET"
 DEST="$REPO_ROOT/third_party/ffmpeg/$VERSION/$RID"
 MARKER="$DEST/.sha256"
@@ -112,58 +101,97 @@ ARCHIVE_FILE="$TMP/ffmpeg.$ARCHIVE"
 log "下载归档"
 curl -fsSL --retry 3 -o "$ARCHIVE_FILE" "$URL" || die "下载失败：$URL"
 
-log "校验 sha256"
-ACTUAL="$(sha256sum "$ARCHIVE_FILE" | awk '{print $1}')"
-if [ "$ACTUAL" != "$SHA256" ]; then
-	die "sha256 不一致：期望 $SHA256，实际 $ACTUAL（上游归档已变，请更新 manifest）"
-fi
-echo "  ok: $ACTUAL"
-
-log "解包到 third_party/ffmpeg/$VERSION/$RID/"
+# 校验 + 解包 + 选库统一交给 Python（stdlib 的 zipfile / tarfile / hashlib）：
+# 不用 unzip / tar / find / sha256sum，避免各平台（尤其 Windows Git-Bash 的 find.exe /
+# macOS 无 sha256sum）工具差异；也不需要解出整包，只写出运行时库那 5 个文件。
+log "校验 sha256 并解出运行时库到 third_party/ffmpeg/$VERSION/$RID/"
 rm -rf "$DEST"
 mkdir -p "$DEST"
-case "$ARCHIVE" in
-tar.xz | tar.gz | tgz) tar -xf "$ARCHIVE_FILE" -C "$TMP" ;;
-zip) unzip -q -o "$ARCHIVE_FILE" -d "$TMP/extract" ;;
-*) die "未知归档类型：$ARCHIVE" ;;
-esac
+python3 - "$MANIFEST" "$RID" "$ARCHIVE_FILE" "$DEST" <<'PY' || die "取件失败：sha256 不一致或归档里缺运行时库"
+import hashlib
+import json
+import os
+import re
+import sys
+import tarfile
+import zipfile
 
-# 按平台命名规则把 5 个运行时库落成实体文件（见文件头说明）。
-count=0
-missing=""
-if [ "$ARCHIVE" = "zip" ]; then
-	# Windows：bin/<name>-<major>.dll
-	for lib in $RUNTIME_LIBS; do
-		src="$(find "$TMP" -type f -path "*/$MEMBERS/$lib-*.dll" 2>/dev/null | head -n1 || true)"
-		if [ -n "$src" ]; then
-			cp "$src" "$DEST/"
-			count=$((count + 1))
-		else
-			missing="$missing $lib"
-		fi
-	done
-else
-	# Linux / macOS：取 SONAME 链接名（运行期 dlopen 的名字）落成实体文件
-	for lib in $RUNTIME_LIBS; do
-		src="$(find "$TMP" -type l -regex ".*/$MEMBERS/lib$lib\.so\.[0-9]+" 2>/dev/null | head -n1 || true)"
-		if [ -z "$src" ]; then
-			# 兜底：没有软链时，按文件名的首个版本号拼出 SONAME
-			real="$(find "$TMP" -type f -regex ".*/$MEMBERS/lib$lib\.so\.[0-9]+\(\.[0-9]+\)*" 2>/dev/null | head -n1 || true)"
-			if [ -n "$real" ]; then
-				major="$(basename "$real" | sed -E "s/^lib.*\.so\.([0-9]+).*/\1/")"
-				cp "$real" "$DEST/lib$lib.so.$major"
-				count=$((count + 1))
-			else
-				missing="$missing $lib"
-			fi
-			continue
-		fi
-		cp -L "$src" "$DEST/$(basename "$src")"
-		count=$((count + 1))
-	done
-fi
+manifest_path, rid, archive_path, dest = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+data = json.load(open(manifest_path, encoding="utf-8"))
+libs = data.get("runtimeLibraries") or ["avformat", "avcodec", "avutil", "swscale", "swresample"]
+entry = next((a for a in data.get("artifacts", []) if a.get("rid") == rid), None)
+if entry is None:
+    sys.exit("manifest 未登记 RID " + rid)
 
-[ -z "$missing" ] || die "归档里没找到运行时库：$missing"
+# 1) 校验归档哈希
+expected = entry["sha256"]
+h = hashlib.sha256()
+with open(archive_path, "rb") as f:
+    for chunk in iter(lambda: f.read(1 << 20), b""):
+        h.update(chunk)
+actual = h.hexdigest()
+if actual != expected:
+    sys.exit("sha256 不一致：期望 %s，实际 %s（上游归档已变，请更新 manifest）" % (expected, actual))
+print("  ok: " + actual)
+
+kind = (entry.get("archive") or "tar.xz").lower()
+members_dir = entry.get("members") or "lib"
+written = []
+missing = []
+
+
+def save(name, reader):
+    out = os.path.join(dest, name)
+    with open(out, "wb") as f:
+        for chunk in iter(lambda: reader.read(1 << 20), b""):
+            f.write(chunk)
+    written.append(name)
+
+
+if kind == "zip":
+    # Windows：bin/<name>-<major>.dll（归档即此名，原样取）
+    with zipfile.ZipFile(archive_path) as zf:
+        names = [n for n in zf.namelist() if not n.endswith("/")]
+        for lib in libs:
+            pat = re.compile(re.escape(lib) + r"-\d+\.dll$")
+            match = next(
+                (n for n in names
+                 if pat.match(n.rsplit("/", 1)[-1])
+                 and n.split("/")[-2:-1] == [members_dir]),
+                None,
+            )
+            if match is None:
+                missing.append(lib)
+                continue
+            with zf.open(match) as reader:
+                save(match.rsplit("/", 1)[-1], reader)
+else:
+    # Linux / macOS：取 SONAME（lib<name>.so.<major>，归档里是软链）落成实体文件
+    with tarfile.open(archive_path) as tf:
+        members = [m for m in tf.getmembers() if m.isfile() or m.issym()]
+        for lib in libs:
+            pat = re.compile(r"lib" + re.escape(lib) + r"\.so\.\d+$")
+            match = next(
+                (m for m in members
+                 if pat.match(m.name.rsplit("/", 1)[-1])
+                 and m.name.split("/")[-2:-1] == [members_dir]),
+                None,
+            )
+            if match is None:
+                missing.append(lib)
+                continue
+            # extractfile() 对软链会跟随到目标内容，正好落成实体文件
+            reader = tf.extractfile(match)
+            if reader is None:
+                missing.append(lib)
+                continue
+            with reader:
+                save(match.name.rsplit("/", 1)[-1], reader)
+
+if missing:
+    sys.exit("归档里没找到运行时库：" + " ".join(missing))
+print("  wrote: " + " ".join(written))
+PY
+
 echo "$SHA256" >"$MARKER"
-echo "  已取入 $count 个文件："
-ls -1 "$DEST" | sed 's/^/    /'
+echo "  已取入以上文件到 ${DEST#$REPO_ROOT/}"
