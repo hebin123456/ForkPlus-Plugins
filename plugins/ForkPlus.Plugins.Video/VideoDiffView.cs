@@ -42,7 +42,8 @@ namespace ForkPlus.Plugins.Video
 		{
 			Metadata,
 			Filmstrip,
-			FrameCompare
+			FrameCompare,
+			Playback
 		}
 
 		private enum MetaState
@@ -51,6 +52,24 @@ namespace ForkPlus.Plugins.Video
 			Changed,
 			LeftOnly,
 			RightOnly
+		}
+
+		/// <summary>
+		/// CI 截图用的初始模式：无头截图脚本经环境变量 FORKPLUS_PLUGIN_VIEW_MODE 指定
+		/// （filmstrip / frame / playback），据此逐模式取图；正常运行时该变量为空，走默认元数据模式。
+		/// </summary>
+		private static readonly ViewMode InitialMode = ResolveInitialMode();
+
+		private static ViewMode ResolveInitialMode()
+		{
+			string forced = (Environment.GetEnvironmentVariable("FORKPLUS_PLUGIN_VIEW_MODE") ?? string.Empty).Trim();
+			return forced.ToLowerInvariant() switch
+			{
+				"filmstrip" => ViewMode.Filmstrip,
+				"frame" => ViewMode.FrameCompare,
+				"playback" => ViewMode.Playback,
+				_ => ViewMode.Metadata
+			};
 		}
 
 		/// <summary>一行元数据对比计划（左右取值 + 差异状态）。</summary>
@@ -145,11 +164,27 @@ namespace ForkPlus.Plugins.Video
 
 		private readonly Button _frameButton;
 
+		private readonly Button _playbackButton;
+
 		private readonly Grid _scrubRow;
 
 		private readonly Slider _scrubSlider;
 
 		private readonly TextBlock _scrubLabel;
+
+		private readonly Grid _transportRow;
+
+		private readonly Button _playButton;
+
+		private readonly Button _srcListenButton;
+
+		private readonly Button _dstListenButton;
+
+		private readonly Slider _transportSlider;
+
+		private readonly TextBlock _transportLabel;
+
+		private readonly TextBlock _transportNote;
 
 		private readonly ContentControl _content;
 
@@ -159,7 +194,7 @@ namespace ForkPlus.Plugins.Video
 
 		private CancellationTokenSource _cts;
 
-		private ViewMode _mode;
+		private ViewMode _mode = InitialMode;
 
 		private Side _src;
 
@@ -172,6 +207,35 @@ namespace ForkPlus.Plugins.Video
 		private double _position = 0.5;
 
 		private bool _highlightAvailable;
+
+		/// <summary>播放模式用的播放器（视频 + 声音一路）；null 表示尚未创建。</summary>
+		private MediaPlayback _playback;
+
+		/// <summary>播放的是哪一侧：true = 旧（左）/ false = 新（右）。</summary>
+		private bool _listenSrc = true;
+
+		/// <summary>正在后台创建播放器（避免连点重复创建）。</summary>
+		private bool _playbackBusy;
+
+		/// <summary>已建播放器对应的是否为旧（左）侧；换侧试听要重建。</summary>
+		private bool _playbackSideIsSrc = true;
+
+		/// <summary>播放器代次：换侧 / 释放时递增，丢弃在途创建的回投。</summary>
+		private int _playbackGeneration;
+
+		/// <summary>播放头占比 0–1（与传输条拖动、播放器 seek 共用）。</summary>
+		private double _playbackPosition;
+
+		/// <summary>传输条的值是本进程回写时置位，避免与用户拖动互相触发。</summary>
+		private bool _suppressTransport;
+
+		/// <summary>播放不可用 / 建流失败的原因，显示在传输条提示位。</summary>
+		private string _playbackError;
+
+		/// <summary>播放模式内容区里承载当前帧的画布与说明（内容重建时替换）。</summary>
+		private Image _playbackImage;
+
+		private TextBlock _playbackCaption;
 
 		/// <summary>「高亮差异像素」能力变化（单帧对比可否做像素高亮）。</summary>
 		private event EventHandler<bool> HighlightAvailableChanged;
@@ -200,6 +264,7 @@ namespace ForkPlus.Plugins.Video
 			_metadataButton = NewModeButton("Metadata", ViewMode.Metadata);
 			_filmstripButton = NewModeButton("Filmstrip", ViewMode.Filmstrip);
 			_frameButton = NewModeButton("Frame compare", ViewMode.FrameCompare);
+			_playbackButton = NewModeButton("Playback", ViewMode.Playback);
 			StackPanel modes = new StackPanel
 			{
 				Orientation = Orientation.Horizontal,
@@ -209,6 +274,7 @@ namespace ForkPlus.Plugins.Video
 			modes.Children.Add(_metadataButton);
 			modes.Children.Add(_filmstripButton);
 			modes.Children.Add(_frameButton);
+			modes.Children.Add(_playbackButton);
 
 			_scrubSlider = new Slider
 			{
@@ -237,6 +303,61 @@ namespace ForkPlus.Plugins.Video
 			Grid.SetColumn(_scrubLabel, 2);
 			_scrubRow.Children.Add(_scrubLabel);
 
+			// 播放传输条：试听哪一侧（旧 / 新）+ 播放暂停 + 进度 + 时间（+ 硬解 / 出错提示）。
+			// 只在播放模式下显示。
+			_playButton = new Button
+			{
+				Content = VideoStrings.T("Play"),
+				Padding = new Thickness(12.0, 4.0, 12.0, 4.0),
+				MinWidth = 72.0,
+				VerticalAlignment = VerticalAlignment.Center
+			};
+			_playButton.Click += OnPlayClicked;
+			_srcListenButton = NewListenButton(DiffSideRole.Old, isSrc: true);
+			_dstListenButton = NewListenButton(DiffSideRole.New, isSrc: false);
+			_transportSlider = new Slider
+			{
+				Minimum = 0.0,
+				Maximum = 100.0,
+				Value = 0.0,
+				Width = 320.0,
+				TickFrequency = 10.0,
+				IsSnapToTickEnabled = false,
+				VerticalAlignment = VerticalAlignment.Center
+			};
+			_transportSlider.ValueChanged += OnTransportChanged;
+			_transportLabel = Label(string.Empty, 11.5, FontWeight.Normal, 0.7);
+			_transportLabel.Margin = new Thickness(10.0, 0.0, 0.0, 0.0);
+			_transportNote = NoteText(string.Empty, new Thickness(10.0, 0.0, 0.0, 0.0));
+			_transportNote.TextTrimming = TextTrimming.CharacterEllipsis;
+			_transportRow = new Grid
+			{
+				ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,Auto,Auto,*"),
+				Margin = new Thickness(12.0, 0.0, 12.0, 8.0)
+			};
+			TextBlock listenTitle = Label(VideoStrings.T("Audition"), 11.5, FontWeight.SemiBold, 0.75);
+			listenTitle.Margin = new Thickness(10.0, 0.0, 6.0, 0.0);
+			Grid.SetColumn(_playButton, 0);
+			_transportRow.Children.Add(_playButton);
+			Grid.SetColumn(listenTitle, 1);
+			_transportRow.Children.Add(listenTitle);
+			StackPanel sides = new StackPanel
+			{
+				Orientation = Orientation.Horizontal,
+				Spacing = 6.0,
+				VerticalAlignment = VerticalAlignment.Center
+			};
+			sides.Children.Add(_srcListenButton);
+			sides.Children.Add(_dstListenButton);
+			Grid.SetColumn(sides, 2);
+			_transportRow.Children.Add(sides);
+			Grid.SetColumn(_transportSlider, 3);
+			_transportRow.Children.Add(_transportSlider);
+			Grid.SetColumn(_transportLabel, 4);
+			_transportRow.Children.Add(_transportLabel);
+			Grid.SetColumn(_transportNote, 5);
+			_transportRow.Children.Add(_transportNote);
+
 			_content = new ContentControl
 			{
 				HorizontalContentAlignment = HorizontalAlignment.Stretch,
@@ -257,7 +378,7 @@ namespace ForkPlus.Plugins.Video
 
 			_root = new Grid
 			{
-				RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,*")
+				RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,*")
 			};
 			Grid.SetRow(header, 0);
 			_root.Children.Add(header);
@@ -267,7 +388,9 @@ namespace ForkPlus.Plugins.Video
 			_root.Children.Add(modes);
 			Grid.SetRow(_scrubRow, 3);
 			_root.Children.Add(_scrubRow);
-			Grid.SetRow(contentHost, 4);
+			Grid.SetRow(_transportRow, 4);
+			_root.Children.Add(_transportRow);
+			Grid.SetRow(contentHost, 5);
 			_root.Children.Add(contentHost);
 
 			PluginEnvironment.ImageDiffHighlightPixelsChanged += OnHighlightPreferenceChanged;
@@ -295,6 +418,7 @@ namespace ForkPlus.Plugins.Video
 			_dstTitle.Foreground = context?.DstTitleBrush;
 			_src = null;
 			_dst = null;
+			DisposePlayback();
 			// CI 截图定位用：日志里必须出现 VideoDiffView.SetContent。
 			PluginLog.Info($"VideoDiffView.SetContent src='{context?.Src?.Path ?? "<none>"}' dst='{context?.Dst?.Path ?? "<none>"}'");
 			StartRender();
@@ -315,6 +439,10 @@ namespace ForkPlus.Plugins.Video
 				case "frame":
 					mode = ViewMode.FrameCompare;
 					break;
+				case "playback":
+				case "play":
+					mode = ViewMode.Playback;
+					break;
 				default:
 					return;
 			}
@@ -333,6 +461,13 @@ namespace ForkPlus.Plugins.Video
 
 		public void Deactivate()
 		{
+			// 失活即停播：既省电，也避免在别的视图前还继续出声。
+			MediaPlayback playback = _playback;
+			if (playback != null && playback.IsPlaying)
+			{
+				playback.Pause();
+				UpdateTransport();
+			}
 		}
 
 		public void ApplyLocalization()
@@ -347,10 +482,13 @@ namespace ForkPlus.Plugins.Video
 			_released = true;
 			PluginEnvironment.ImageDiffHighlightPixelsChanged -= OnHighlightPreferenceChanged;
 			CancelRender();
+			DisposePlayback();
 			_context = null;
 			_host = null;
 			_src = null;
 			_dst = null;
+			_playbackImage = null;
+			_playbackCaption = null;
 			_content.Content = null;
 			_srcTitle.Text = string.Empty;
 			_dstTitle.Text = string.Empty;
@@ -416,16 +554,297 @@ namespace ForkPlus.Plugins.Video
 			_metadataButton.Content = VideoStrings.T("Metadata");
 			_filmstripButton.Content = VideoStrings.T("Filmstrip");
 			_frameButton.Content = VideoStrings.T("Frame compare");
+			_playbackButton.Content = VideoStrings.T("Playback");
 			StyleModeButton(_metadataButton, _mode == ViewMode.Metadata);
 			StyleModeButton(_filmstripButton, _mode == ViewMode.Filmstrip);
 			StyleModeButton(_frameButton, _mode == ViewMode.FrameCompare);
+			StyleModeButton(_playbackButton, _mode == ViewMode.Playback);
 			_scrubRow.IsVisible = _mode == ViewMode.FrameCompare;
+			bool playbackMode = _mode == ViewMode.Playback;
+			_transportRow.IsVisible = playbackMode;
+			if (!playbackMode)
+			{
+				// 切走播放模式就彻底停下（关设备、停解码线程），别在别的模式里继续出声 / 耗电。
+				DisposePlayback();
+			}
+			else
+			{
+				UpdateTransport();
+			}
 		}
 
 		private static void StyleModeButton(Button button, bool active)
 		{
 			button.FontWeight = active ? FontWeight.SemiBold : FontWeight.Normal;
 			button.Background = active ? ActiveTint : Brushes.Transparent;
+		}
+
+		// ---- 播放 / 传输控制 ----
+		//
+		// 画面与声音由共享核心的 MediaPlayback 给出（FFmpeg 解码，视频优先硬解、失败静默回落软解；
+		// 声音走三方件 miniaudio 输出）。一次只播一侧（旧 / 新），换侧就重建播放器——两侧字节不同，
+		// 不能共用一个。时钟以音频已播帧数为主，暂停冻结、seek 两路同步。
+
+		private Button NewListenButton(DiffSideRole role, bool isSrc)
+		{
+			Button button = new Button
+			{
+				Content = PluginEnvironment.Translate(RoleKey(role)),
+				Padding = new Thickness(10.0, 3.0, 10.0, 3.0),
+				Tag = isSrc,
+				VerticalAlignment = VerticalAlignment.Center
+			};
+			button.Click += OnListenClicked;
+			return button;
+		}
+
+		private void OnListenClicked(object sender, RoutedEventArgs e)
+		{
+			if (sender is not Button { Tag: bool isSrc } || isSrc == _listenSrc)
+			{
+				return;
+			}
+			_listenSrc = isSrc;
+			DisposePlayback();
+			_playbackPosition = 0.0;
+			SetTransportValue(0.0);
+			UpdateTransport();
+			// 播放模式下换侧即续播新一侧，省得再点一次播放。
+			if (_mode == ViewMode.Playback)
+			{
+				EnsurePlayback();
+			}
+		}
+
+		private void OnPlayClicked(object sender, RoutedEventArgs e)
+		{
+			if (_playback != null && _playbackSideIsSrc == _listenSrc)
+			{
+				if (_playback.IsPlaying)
+				{
+					_playback.Pause();
+				}
+				else
+				{
+					_playback.Play();
+				}
+				UpdateTransport();
+				return;
+			}
+			EnsurePlayback();
+		}
+
+		private void OnTransportChanged(object sender, RangeBaseValueChangedEventArgs e)
+		{
+			if (_suppressTransport)
+			{
+				return;
+			}
+			MediaPlayback playback = _playback;
+			if (playback == null)
+			{
+				return;
+			}
+			double duration = playback.DurationSeconds;
+			if (duration <= 0.0)
+			{
+				return;
+			}
+			_playbackPosition = Math.Max(0.0, Math.Min(1.0, e.NewValue / 100.0));
+			playback.Seek(_playbackPosition * duration);
+			SetTransportLabel(_playbackPosition * duration, duration);
+		}
+
+		/// <summary>建（或续播）当前试听侧的播放器；字节取自该侧已加载的原始字节。</summary>
+		private void EnsurePlayback()
+		{
+			Side side = _listenSrc ? _src : _dst;
+			if (side?.Bytes == null || side.Bytes.Length == 0)
+			{
+				_playbackError = VideoStrings.T("Media content unavailable");
+				UpdateTransport();
+				return;
+			}
+			if (_playbackBusy || _playback != null)
+			{
+				return;
+			}
+			_playbackBusy = true;
+			int generation = _playbackGeneration;
+			byte[] bytes = side.Bytes;
+			bool isSrc = _listenSrc;
+			Task.Run(delegate
+			{
+				MediaPlayback created = null;
+				string error = null;
+				try
+				{
+					// 视频插件既出画也出声：enableVideo=true / enableAudio=true；
+					// 硬解优先（hardwareDecode=true），设备建不出会自动静默回落软解。
+					created = new MediaPlayback(bytes, true, true, true, 0, 0);
+					if (created.Error != null)
+					{
+						error = created.Error;
+						created.Dispose();
+						created = null;
+					}
+				}
+				catch (Exception ex)
+				{
+					error = ex.GetType().Name + ": " + ex.Message;
+				}
+				Dispatcher.UIThread.Post(delegate
+				{
+					if (_released || generation != _playbackGeneration)
+					{
+						created?.Dispose();
+						return;
+					}
+					_playbackBusy = false;
+					if (created == null)
+					{
+						_playbackError = error ?? VideoStrings.T("Media content unavailable");
+						UpdateTransport();
+						return;
+					}
+					_playback = created;
+					_playbackSideIsSrc = isSrc;
+					created.FrameReady += OnPlaybackFrame;
+					created.PositionChanged += OnPlaybackPosition;
+					created.Ended += OnPlaybackEnded;
+					_playbackError = created.AudioOutputError;
+					created.Play();
+					UpdateTransport();
+				});
+			});
+		}
+
+		private void DisposePlayback()
+		{
+			_playbackGeneration++;
+			_playbackBusy = false;
+			MediaPlayback playback = _playback;
+			_playback = null;
+			_playbackError = null;
+			if (playback != null)
+			{
+				playback.FrameReady -= OnPlaybackFrame;
+				playback.PositionChanged -= OnPlaybackPosition;
+				playback.Ended -= OnPlaybackEnded;
+				try
+				{
+					playback.Dispose();
+				}
+				catch (Exception ex)
+				{
+					PluginLog.Warn("Video: dispose playback failed", ex);
+				}
+			}
+		}
+
+		/// <summary>播放头推进（后台线程回调，回投 UI 线程）。</summary>
+		private void OnPlaybackPosition(double seconds)
+		{
+			Dispatcher.UIThread.Post(delegate
+			{
+				MediaPlayback playback = _playback;
+				if (_released || playback == null)
+				{
+					return;
+				}
+				double duration = playback.DurationSeconds;
+				_playbackPosition = duration > 0.0 ? Math.Max(0.0, Math.Min(1.0, seconds / duration)) : 0.0;
+				SetTransportValue(_playbackPosition * 100.0);
+				SetTransportLabel(seconds, duration);
+			});
+		}
+
+		private void OnPlaybackEnded()
+		{
+			Dispatcher.UIThread.Post(delegate
+			{
+				if (_released)
+				{
+					return;
+				}
+				_playbackPosition = 0.0;
+				SetTransportValue(0.0);
+				UpdateTransport();
+			});
+		}
+
+		/// <summary>一帧到位（后台解码线程回调）：转位图并贴到播放画布。</summary>
+		private void OnPlaybackFrame(ImageData image, double seconds)
+		{
+			Dispatcher.UIThread.Post(delegate
+			{
+				if (_released || _mode != ViewMode.Playback)
+				{
+					return;
+				}
+				Bitmap bitmap = MediaImage.FromImageData(image);
+				if (bitmap != null && _playbackImage != null)
+				{
+					_playbackImage.Source = bitmap;
+				}
+				if (_playbackCaption != null)
+				{
+					DiffSideRole role = _playbackSideIsSrc ? (_context?.SrcRole ?? DiffSideRole.Old) : (_context?.DstRole ?? DiffSideRole.New);
+					_playbackCaption.Text = PluginEnvironment.Translate(RoleKey(role)) + "  ·  " + FormatClock(seconds);
+				}
+			});
+		}
+
+		private void SetTransportValue(double value)
+		{
+			_suppressTransport = true;
+			try
+			{
+				_transportSlider.Value = value;
+			}
+			finally
+			{
+				_suppressTransport = false;
+			}
+		}
+
+		/// <summary>刷新传输条：播放按钮文案、试听侧高亮、时间标签与硬解 / 出错提示。</summary>
+		private void UpdateTransport()
+		{
+			_playButton.Content = VideoStrings.T(_playback?.IsPlaying == true ? "Pause" : "Play");
+			StyleModeButton(_srcListenButton, _listenSrc);
+			StyleModeButton(_dstListenButton, !_listenSrc);
+			double duration = _playback?.DurationSeconds ?? 0.0;
+			SetTransportLabel(_playbackPosition * duration, duration);
+			if (_playbackError != null)
+			{
+				_transportNote.Text = VideoStrings.T("Audio output unavailable") + ": " + _playbackError;
+			}
+			else if (_playback?.IsHardwareActive == true)
+			{
+				_transportNote.Text = VideoStrings.T("Hardware decoding");
+			}
+			else
+			{
+				_transportNote.Text = string.Empty;
+			}
+		}
+
+		private void SetTransportLabel(double seconds, double duration)
+		{
+			_transportLabel.Text = FormatClock(seconds) + " / " + (duration > 0.0 ? FormatClock(duration) : "--:--");
+		}
+
+		private static string FormatClock(double seconds)
+		{
+			if (seconds < 0.0)
+			{
+				seconds = 0.0;
+			}
+			TimeSpan span = TimeSpan.FromSeconds(seconds);
+			return span.TotalHours >= 1.0
+				? span.ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture)
+				: span.ToString(@"m\:ss", CultureInfo.InvariantCulture);
 		}
 
 		private void SetHighlightAvailable(bool value)
@@ -451,6 +870,8 @@ namespace ForkPlus.Plugins.Video
 				return;
 			}
 			_status.Text = VideoStrings.T("Analyzing…");
+			// CI 截图定位用：模式切换后日志里出现 VideoDiffView mode=<Mode>，脚本据此确认已切到目标模式。
+			PluginLog.Info($"VideoDiffView mode={_mode}");
 			CancellationTokenSource cts = new CancellationTokenSource();
 			_cts = cts;
 			int generation = _renderGeneration;
@@ -711,6 +1132,10 @@ namespace ForkPlus.Plugins.Video
 				case ViewMode.Filmstrip:
 					SetHighlightAvailable(false);
 					_content.Content = BuildFilmstripContent();
+					break;
+				case ViewMode.Playback:
+					SetHighlightAvailable(false);
+					_content.Content = BuildPlaybackContent();
 					break;
 				default:
 					_content.Content = BuildFrameCompareContent();
@@ -1112,6 +1537,75 @@ namespace ForkPlus.Plugins.Video
 			}
 			panel.Children.Add(Label(VideoStrings.F("Frame at {0} s", side.Frame.Timestamp.ToString("0.#", CultureInfo.InvariantCulture)), 11.0, FontWeight.Normal, 0.7));
 			return panel;
+		}
+
+		// ---- 播放模式 ----
+
+		/// <summary>
+		/// 播放模式内容区：一块随解码逐帧刷新的画面 + 当前试听侧 / 时间说明。进入即建流播放
+		/// （两侧字节不同，换侧由传输条上的「试听」按钮触发重建）。画面与声音都来自共享核心的
+		/// <see cref="MediaPlayback"/>；此处只负责承载 UI，实际解码在后台线程。
+		/// </summary>
+		private Control BuildPlaybackContent()
+		{
+			StackPanel root = new StackPanel
+			{
+				Margin = new Thickness(12.0, 0.0, 12.0, 12.0)
+			};
+			AddSideNotes(root);
+			root.Children.Add(SectionTitle(VideoStrings.T("Playback")));
+
+			DiffSideRole role = _listenSrc
+				? (_context?.SrcRole ?? DiffSideRole.Old)
+				: (_context?.DstRole ?? DiffSideRole.New);
+			Side side = _listenSrc ? _src : _dst;
+			if (side == null || side.Bytes == null)
+			{
+				_playbackImage = null;
+				_playbackCaption = null;
+				root.Children.Add(NoteText(side == null ? VideoStrings.T("not present") : VideoStrings.T("Media content unavailable"), new Thickness(0.0, 4.0, 0.0, 0.0)));
+				return root;
+			}
+
+			_playbackImage = new Image
+			{
+				Stretch = Stretch.Uniform,
+				HorizontalAlignment = HorizontalAlignment.Left,
+				Margin = new Thickness(0.0, 4.0, 0.0, 4.0)
+			};
+			Border canvas = new Border
+			{
+				Background = Subtle,
+				BorderBrush = GridLine,
+				BorderThickness = new Thickness(1.0),
+				CornerRadius = new CornerRadius(4.0),
+				Padding = new Thickness(4.0),
+				MaxWidth = MediaLimits.FrameCompareWidth,
+				HorizontalAlignment = HorizontalAlignment.Left,
+				Child = _playbackImage
+			};
+			_playbackCaption = Label(PluginEnvironment.Translate(RoleKey(role)), 11.5, FontWeight.Normal, 0.7);
+			root.Children.Add(new StackPanel
+			{
+				Spacing = 4.0,
+				Children =
+				{
+					canvas,
+					_playbackCaption
+				}
+			});
+
+			if (_playbackError != null)
+			{
+				root.Children.Add(NoteText(VideoStrings.T("Audio output unavailable") + ": " + _playbackError, new Thickness(0.0, 6.0, 0.0, 0.0)));
+			}
+			else if (side.Info != null && !side.Info.HasVideo)
+			{
+				root.Children.Add(NoteText(VideoStrings.T("No video stream"), new Thickness(0.0, 6.0, 0.0, 0.0)));
+			}
+			// 进入播放模式即建流播放；已建则复用，不重复创建。
+			EnsurePlayback();
+			return root;
 		}
 
 		// ---- 描述 / 辅助 ----

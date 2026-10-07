@@ -52,6 +52,24 @@ namespace ForkPlus.Plugins.Audio
 			RightOnly
 		}
 
+		/// <summary>
+		/// CI 截图用的初始模式：无头截图脚本经环境变量 FORKPLUS_PLUGIN_VIEW_MODE 指定
+		/// （waveform / spectrum / cover），据此逐模式取图；正常运行时该变量为空，走默认元数据模式。
+		/// </summary>
+		private static readonly ViewMode InitialMode = ResolveInitialMode();
+
+		private static ViewMode ResolveInitialMode()
+		{
+			string forced = (Environment.GetEnvironmentVariable("FORKPLUS_PLUGIN_VIEW_MODE") ?? string.Empty).Trim();
+			return forced.ToLowerInvariant() switch
+			{
+				"waveform" => ViewMode.Waveform,
+				"spectrum" => ViewMode.Spectrum,
+				"cover" => ViewMode.Cover,
+				_ => ViewMode.Metadata
+			};
+		}
+
 		/// <summary>一行元数据对比计划（左右取值 + 差异状态）。</summary>
 		private sealed class MetaRow
 		{
@@ -152,6 +170,20 @@ namespace ForkPlus.Plugins.Audio
 
 		private readonly Button _coverButton;
 
+		private readonly Grid _transportRow;
+
+		private readonly Button _playButton;
+
+		private readonly Button _srcListenButton;
+
+		private readonly Button _dstListenButton;
+
+		private readonly Slider _scrubSlider;
+
+		private readonly TextBlock _scrubLabel;
+
+		private readonly TextBlock _transportNote;
+
 		private readonly ContentControl _content;
 
 		private DiffViewContext _context;
@@ -160,7 +192,7 @@ namespace ForkPlus.Plugins.Audio
 
 		private CancellationTokenSource _cts;
 
-		private ViewMode _mode;
+		private ViewMode _mode = InitialMode;
 
 		private Side _src;
 
@@ -169,6 +201,30 @@ namespace ForkPlus.Plugins.Audio
 		private int _renderGeneration;
 
 		private bool _released;
+
+		/// <summary>试听用的播放器（只开音频一路）；null 表示尚未创建。</summary>
+		private MediaPlayback _playback;
+
+		/// <summary>试听的是哪一侧：true = 旧（左）/ false = 新（右）。</summary>
+		private bool _listenSrc = true;
+
+		/// <summary>正在后台创建播放器（避免连点重复创建）。</summary>
+		private bool _playbackBusy;
+
+		/// <summary>已建播放器对应的是否为旧（左）侧；换侧试听要重建。</summary>
+		private bool _playbackSideIsSrc = true;
+
+		/// <summary>播放器代次：换侧 / 释放时递增，丢弃在途创建的回投。</summary>
+		private int _playbackGeneration;
+
+		/// <summary>播放头占比 0–1（与拖动条、播放器 seek 共用）。</summary>
+		private double _position;
+
+		/// <summary>拖动条的值是本进程回写时置位，避免与用户拖动互相触发。</summary>
+		private bool _suppressScrub;
+
+		/// <summary>试听不可用 / 建流失败的原因，显示在传输条提示位。</summary>
+		private string _playbackError;
 
 		public AudioDiffView()
 		{
@@ -206,6 +262,61 @@ namespace ForkPlus.Plugins.Audio
 			modes.Children.Add(_spectrumButton);
 			modes.Children.Add(_coverButton);
 
+			// 传输条：试听哪一侧（旧 / 新）+ 播放暂停 + 进度 + 时间（+ 出错提示）。
+			// 只在波形 / 频谱两个「有声音」的模式下显示（元数据 / 封面没有可听的内容）。
+			_playButton = new Button
+			{
+				Content = AudioStrings.T("Play"),
+				Padding = new Thickness(12.0, 4.0, 12.0, 4.0),
+				MinWidth = 72.0,
+				VerticalAlignment = VerticalAlignment.Center
+			};
+			_playButton.Click += OnPlayClicked;
+			_srcListenButton = NewListenButton(DiffSideRole.Old, isSrc: true);
+			_dstListenButton = NewListenButton(DiffSideRole.New, isSrc: false);
+			_scrubSlider = new Slider
+			{
+				Minimum = 0.0,
+				Maximum = 100.0,
+				Value = 0.0,
+				Width = 320.0,
+				TickFrequency = 10.0,
+				IsSnapToTickEnabled = false,
+				VerticalAlignment = VerticalAlignment.Center
+			};
+			_scrubSlider.ValueChanged += OnScrubChanged;
+			_scrubLabel = Label(string.Empty, 11.5, FontWeight.Normal, 0.7);
+			_transportNote = NoteText(string.Empty, new Thickness(10.0, 0.0, 0.0, 0.0));
+			_transportNote.TextTrimming = TextTrimming.CharacterEllipsis;
+			_transportRow = new Grid
+			{
+				ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,Auto,Auto,*"),
+				Margin = new Thickness(12.0, 0.0, 12.0, 8.0)
+			};
+			TextBlock listenTitle = Label(AudioStrings.T("Audition"), 11.5, FontWeight.SemiBold, 0.75);
+			listenTitle.Margin = new Thickness(10.0, 0.0, 6.0, 0.0);
+			_scrubLabel.Margin = new Thickness(10.0, 0.0, 0.0, 0.0);
+			Grid.SetColumn(_playButton, 0);
+			_transportRow.Children.Add(_playButton);
+			Grid.SetColumn(listenTitle, 1);
+			_transportRow.Children.Add(listenTitle);
+			StackPanel sides = new StackPanel
+			{
+				Orientation = Orientation.Horizontal,
+				Spacing = 6.0,
+				VerticalAlignment = VerticalAlignment.Center
+			};
+			sides.Children.Add(_srcListenButton);
+			sides.Children.Add(_dstListenButton);
+			Grid.SetColumn(sides, 2);
+			_transportRow.Children.Add(sides);
+			Grid.SetColumn(_scrubSlider, 3);
+			_transportRow.Children.Add(_scrubSlider);
+			Grid.SetColumn(_scrubLabel, 4);
+			_transportRow.Children.Add(_scrubLabel);
+			Grid.SetColumn(_transportNote, 5);
+			_transportRow.Children.Add(_transportNote);
+
 			_content = new ContentControl
 			{
 				HorizontalContentAlignment = HorizontalAlignment.Stretch,
@@ -226,7 +337,7 @@ namespace ForkPlus.Plugins.Audio
 
 			_root = new Grid
 			{
-				RowDefinitions = new RowDefinitions("Auto,Auto,Auto,*")
+				RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,*")
 			};
 			Grid.SetRow(header, 0);
 			_root.Children.Add(header);
@@ -234,7 +345,9 @@ namespace ForkPlus.Plugins.Audio
 			_root.Children.Add(_status);
 			Grid.SetRow(modes, 2);
 			_root.Children.Add(modes);
-			Grid.SetRow(contentHost, 3);
+			Grid.SetRow(_transportRow, 3);
+			_root.Children.Add(_transportRow);
+			Grid.SetRow(contentHost, 4);
 			_root.Children.Add(contentHost);
 
 			UpdateStaticTexts();
@@ -261,6 +374,7 @@ namespace ForkPlus.Plugins.Audio
 			_dstTitle.Foreground = context?.DstTitleBrush;
 			_src = null;
 			_dst = null;
+			DisposePlayback();
 			// CI 截图定位用：日志里必须出现 AudioDiffView.SetContent。
 			PluginLog.Info($"AudioDiffView.SetContent src='{context?.Src?.Path ?? "<none>"}' dst='{context?.Dst?.Path ?? "<none>"}'");
 			StartRender();
@@ -301,6 +415,12 @@ namespace ForkPlus.Plugins.Audio
 
 		public void Deactivate()
 		{
+			// 失活即停播：既省电，也避免在别的视图前还继续出声。
+			if (_playback != null && _playback.IsPlaying)
+			{
+				_playback.Pause();
+				UpdateTransport();
+			}
 		}
 
 		public void ApplyLocalization()
@@ -314,6 +434,7 @@ namespace ForkPlus.Plugins.Audio
 		{
 			_released = true;
 			CancelRender();
+			DisposePlayback();
 			_context = null;
 			_host = null;
 			_src = null;
@@ -365,12 +486,253 @@ namespace ForkPlus.Plugins.Audio
 			StyleModeButton(_waveformButton, _mode == ViewMode.Waveform);
 			StyleModeButton(_spectrumButton, _mode == ViewMode.Spectrum);
 			StyleModeButton(_coverButton, _mode == ViewMode.Cover);
+			// 试听传输条只在波形 / 频谱两个「有声音」的模式下出现（元数据 / 封面没有可听内容）。
+			bool audible = _mode == ViewMode.Waveform || _mode == ViewMode.Spectrum;
+			_transportRow.IsVisible = audible;
+			if (!audible)
+			{
+				// 切走时停播，避免离开模式后仍在出声。
+				if (_playback != null && _playback.IsPlaying)
+				{
+					_playback.Pause();
+				}
+			}
+			UpdateTransport();
+		}
+
+		/// <summary>刷新传输条：播放按钮文案、试听侧高亮、时间标签与错误提示。</summary>
+		private void UpdateTransport()
+		{
+			_playButton.Content = AudioStrings.T(_playback?.IsPlaying == true ? "Pause" : "Play");
+			StyleModeButton(_srcListenButton, _listenSrc);
+			StyleModeButton(_dstListenButton, !_listenSrc);
+			double duration = _playback?.DurationSeconds ?? 0.0;
+			UpdateScrubLabel(_position * duration, duration);
+			_transportNote.Text = _playbackError == null
+				? string.Empty
+				: AudioStrings.T("Audio output unavailable") + ": " + _playbackError;
 		}
 
 		private static void StyleModeButton(Button button, bool active)
 		{
 			button.FontWeight = active ? FontWeight.SemiBold : FontWeight.Normal;
 			button.Background = active ? ActiveTint : Brushes.Transparent;
+		}
+
+		// ---- 试听 / 播放控制 ----
+		//
+		// 声音由共享核心的 MediaPlayback（FFmpeg 解码 + 三方件 miniaudio 输出）给出，
+		// 一次只听一侧（旧 / 新），点到哪侧就重建哪侧的播放器——两侧字节不同，不能共用一个。
+
+		private Button NewListenButton(DiffSideRole role, bool isSrc)
+		{
+			Button button = new Button
+			{
+				Content = PluginEnvironment.Translate(RoleKey(role)),
+				Padding = new Thickness(10.0, 3.0, 10.0, 3.0),
+				Tag = isSrc,
+				VerticalAlignment = VerticalAlignment.Center
+			};
+			button.Click += OnListenClicked;
+			return button;
+		}
+
+		private void OnListenClicked(object sender, RoutedEventArgs e)
+		{
+			if (sender is not Button { Tag: bool isSrc } || isSrc == _listenSrc)
+			{
+				return;
+			}
+			_listenSrc = isSrc;
+			DisposePlayback();
+			_position = 0.0;
+			SetScrubValue(0.0);
+			UpdateTransport();
+		}
+
+		private void OnPlayClicked(object sender, RoutedEventArgs e)
+		{
+			if (_playback != null && _playbackSideIsSrc == _listenSrc)
+			{
+				if (_playback.IsPlaying)
+				{
+					_playback.Pause();
+				}
+				else
+				{
+					_playback.Play();
+				}
+				UpdateTransport();
+				return;
+			}
+			EnsurePlayback();
+		}
+
+		private void OnScrubChanged(object sender, RangeBaseValueChangedEventArgs e)
+		{
+			if (_suppressScrub)
+			{
+				return;
+			}
+			MediaPlayback playback = _playback;
+			if (playback == null)
+			{
+				return;
+			}
+			double duration = playback.DurationSeconds;
+			if (duration <= 0.0)
+			{
+				return;
+			}
+			_position = Math.Max(0.0, Math.Min(1.0, e.NewValue / 100.0));
+			playback.Seek(_position * duration);
+			UpdateScrubLabel(_position * duration, duration);
+		}
+
+		/// <summary>建（或续播）当前试听侧的播放器；字节取自该侧已加载的原始字节。</summary>
+		private void EnsurePlayback()
+		{
+			Side side = _listenSrc ? _src : _dst;
+			if (side?.Bytes == null || side.Bytes.Length == 0)
+			{
+				_playbackError = AudioStrings.T("Media content unavailable");
+				UpdateTransport();
+				return;
+			}
+			if (_playbackBusy)
+			{
+				return;
+			}
+			DisposePlayback();
+			_playbackBusy = true;
+			int generation = _playbackGeneration;
+			byte[] bytes = side.Bytes;
+			bool isSrc = _listenSrc;
+			Task.Run(delegate
+			{
+				MediaPlayback created = null;
+				string error = null;
+				try
+				{
+					// 音频插件只出声、不出画：enableVideo=false / enableAudio=true。
+					created = new MediaPlayback(bytes, false, true, false, 0, 0);
+					if (created.Error != null)
+					{
+						error = created.Error;
+						created.Dispose();
+						created = null;
+					}
+				}
+				catch (Exception ex)
+				{
+					error = ex.GetType().Name + ": " + ex.Message;
+				}
+				Dispatcher.UIThread.Post(delegate
+				{
+					if (_released || generation != _playbackGeneration)
+					{
+						created?.Dispose();
+						return;
+					}
+					_playbackBusy = false;
+					if (created == null)
+					{
+						_playbackError = error ?? AudioStrings.T("Media content unavailable");
+						UpdateTransport();
+						return;
+					}
+					_playback = created;
+					_playbackSideIsSrc = isSrc;
+					created.PositionChanged += OnPlaybackPosition;
+					created.Ended += OnPlaybackEnded;
+					_playbackError = created.AudioOutputError;
+					created.Play();
+					UpdateTransport();
+				});
+			});
+		}
+
+		private void DisposePlayback()
+		{
+			_playbackGeneration++;
+			_playbackBusy = false;
+			MediaPlayback playback = _playback;
+			_playback = null;
+			_playbackError = null;
+			if (playback != null)
+			{
+				playback.PositionChanged -= OnPlaybackPosition;
+				playback.Ended -= OnPlaybackEnded;
+				try
+				{
+					playback.Dispose();
+				}
+				catch (Exception ex)
+				{
+					PluginLog.Warn("Audio: dispose playback failed", ex);
+				}
+			}
+		}
+
+		/// <summary>播放头推进（后台线程回调，回投 UI 线程）。</summary>
+		private void OnPlaybackPosition(double seconds)
+		{
+			Dispatcher.UIThread.Post(delegate
+			{
+				MediaPlayback playback = _playback;
+				if (_released || playback == null)
+				{
+					return;
+				}
+				double duration = playback.DurationSeconds;
+				_position = duration > 0.0 ? Math.Max(0.0, Math.Min(1.0, seconds / duration)) : 0.0;
+				SetScrubValue(_position * 100.0);
+				UpdateScrubLabel(seconds, duration);
+			});
+		}
+
+		private void OnPlaybackEnded()
+		{
+			Dispatcher.UIThread.Post(delegate
+			{
+				if (_released)
+				{
+					return;
+				}
+				_position = 0.0;
+				SetScrubValue(0.0);
+				UpdateTransport();
+			});
+		}
+
+		private void SetScrubValue(double value)
+		{
+			_suppressScrub = true;
+			try
+			{
+				_scrubSlider.Value = value;
+			}
+			finally
+			{
+				_suppressScrub = false;
+			}
+		}
+
+		private void UpdateScrubLabel(double seconds, double duration)
+		{
+			_scrubLabel.Text = FormatClock(seconds) + " / " + (duration > 0.0 ? FormatClock(duration) : "--:--");
+		}
+
+		private static string FormatClock(double seconds)
+		{
+			if (seconds < 0.0)
+			{
+				seconds = 0.0;
+			}
+			TimeSpan span = TimeSpan.FromSeconds(seconds);
+			return span.TotalHours >= 1.0
+				? span.ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture)
+				: span.ToString(@"m\:ss", CultureInfo.InvariantCulture);
 		}
 
 		// ---- 渲染管线 ----

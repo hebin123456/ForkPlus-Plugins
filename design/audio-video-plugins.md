@@ -1,6 +1,6 @@
 # 音视频对比插件 · 设计文档
 
-> 状态：已实现（插件 v0.0.1，随 v1.0.4 发布；本期只解码、不做播放 / 音频输出，见 §8、§15）。
+> 状态：已实现（插件 v0.0.1；解码、可视化与**播放 / 音频输出**均已落地，硬件解码见 §7.1、§8、§12）。
 > 日期：2026-10-06。
 > 相关：[README.md](../README.md)（插件开发规范）、[sdk/ForkPlus.Plugins.Abstractions](../sdk/ForkPlus.Plugins.Abstractions)（契约）、[third_party/ffmpeg/manifest.json](../third_party/ffmpeg/manifest.json)（原生件锁定）。
 
@@ -33,10 +33,10 @@
 | AssemblyName | `ForkPlus.Plugins.Audio` | `ForkPlus.Plugins.Video` |
 | 扩展名 | `.mp3` `.wav` `.flac` `.ogg` `.oga` `.opus` `.m4a` `.aac` `.wma` | `.mp4` `.mkv` `.mov` `.webm` `.avi` `.m4v` `.mpg` `.mpeg` `.wmv` `.flv` |
 | 默认模式 | 元数据 | 元数据 |
-| 其余模式 | 波形 · 频谱 · 封面 | 帧条 · 单帧对比 |
+| 其余模式 | 波形 · 频谱 · 封面 | 帧条 · 单帧对比 · 播放 |
 
-> 最终落地的模式以上表为准（音频四模式、视频三模式）；原计划里的视频「播放」与音频输出**本期未做**，
-> 见 §8、§15。
+> 最终落地的模式以上表为准（音频四模式、视频四模式，视频含「播放」；音频的波形 / 频谱两模式就地试听，
+> 音频输出见 §8、视频播放与硬解见 §7.1）。
 
 扩展名无重叠（`.m4a` 音频 / `.m4v` 视频）。`.webm` 可能只含音轨，归视频插件，此时帧条 / 单帧对比
 取不到视频流，自然退化成只有元数据（波形 / 频谱是音频插件的模式）。
@@ -79,7 +79,7 @@
 
 ## 7. 视频自绘管线
 
-本期**没有播放**，因此不做帧率控制；只按需取有限几帧，管线很轻：
+**帧条 / 单帧对比不做帧率控制**，只按需取有限几帧，管线很轻；**播放**模式另走连续解码（见 §7.1）：
 
 - 后台线程 `av_read_frame` → `avcodec_send_packet` / `avcodec_receive_frame`。
 - 帧格式（`YUV420P` 等）经 `sws_scale`（`MediaConvert.FrameToImage`）转紧凑 BGRA → Avalonia `WriteableBitmap` → `Image`。
@@ -90,15 +90,29 @@
 - 像素差异：按 `MediaLimits.PixelDiffThreshold`（24，逐通道最大差）算变更像素比例；「高亮差异像素」
   偏好开启时把变更像素染到右侧帧上。
 
-## 8. 音频输出（本期未做）
+### 7.1 播放模式与硬件解码
 
-**本期只解码、不出声**，音频输出整体后延，以下仅为后续的候选方案记录：
+播放是本期的正式能力（`ViewMode.Playback`），由共享核心 `MediaPlayback` 承载：同一份字节起**视频 / 音频两路独立解码**，
+画面经 `FrameReady` 回投 `Image`，声音见 §8。
 
-- `swr_convert` 统一成设备采样格式（如 S16 交错 48 kHz 立体声）。
-- 环形缓冲 + 音频设备回调驱动；播放 / 暂停 / seek 用原子标志。
+- **只播一侧**：一次只播旧或新（`试听` 切换），两侧字节不同、不共用播放器，换侧即重建。
+- **硬件解码**：`MediaHwDecode` 按平台只试一种设备类型，与三方件仓交付件里启用的 hwaccel 对应——
+  Windows `d3d11va`（`dxva2` 同开）、macOS `videotoolbox`、Linux `vulkan`；用「设 `hw_device_ctx`、
+  由默认 `get_format` 自选硬解像素格式」这条路，拿不到可用格式即**静默回落软解，非致命**。硬解帧带
+  `hw_frames_ctx`，先 `av_hwframe_transfer_data` 拷回系统内存再转 BGRA。硬解**只在连续播放启用**：
+  单帧 / 帧条每次只解一两帧，设备创建开销反而更贵。
+- **时钟**：以**音频已播帧数为 master**，视频按 pts 跟随，音频欠载时暂停视频等待；暂停冻结时钟，seek 两路同步。
+
+## 8. 音频输出（已实现）
+
+音频输出已落地，波形 / 频谱两个「有声音」模式下可就地对旧 / 新两侧试听：
+
+- `swr_convert` 统一成设备采样格式。
+- 环形缓冲 + 音频设备回调驱动；播放 / 暂停 / seek 用原子标志，`PositionChanged` 回写进度。
 - 音画同步以**音频时钟为 master**（视频按 pts 丢弃或等待），够用且实现简单。
-- 后端建议 **miniaudio**（public domain / MIT-0，单文件跨平台），省掉 WASAPI / CoreAudio / ALSA 三套原生代码。
-  因此 [third_party/miniaudio](../third_party/miniaudio/manifest.json) 目前只留占位，**未随包分发**。
+- 后端采用 **miniaudio**（public domain / MIT-0，单文件跨平台），省掉 WASAPI / CoreAudio / ALSA 三套原生代码；
+  经 C ABI 垫片 `fpp_audio.h` 调用，[third_party/miniaudio](../third_party/miniaudio/manifest.json) 已随包分发。
+- **降级**：无音频设备 / 输出失败时不让异常冒泡，传输条显示 `音频输出不可用: …`，可视化照常显示。
 
 ## 9. 差异呈现
 
@@ -107,19 +121,20 @@
 - **音频**
   - 元数据表：时长 / 容器 / 码率 / 采样率 / 声道 / 编码器 tag / 标签与年份。
   - 波形：两侧共用同一时间轴对齐，按窗口能量差**高亮差异段**——「哪几秒的声音变了」一眼可见。
-  - 频谱：STFT 声谱图并排（低频在下、冷→暖渐变；本期已做）。
+  - 频谱：STFT 声谱图并排（低频在下、冷→暖渐变）。
   - 封面：`ID3 APIC` / mp4 `covr` 内嵌图并排。
+  - 试听：波形 / 频谱两模式下就地播放旧 / 新（播放 / 暂停 + 进度 seek），见 §8。
 - **视频**
   - 元数据表：时长 / 容器 / 码率 / 分辨率 / 帧率 / 像素格式 / 色彩空间 / HDR 元数据 / 编码器 tag / 音轨 / 字幕轨 / 章节。
   - 帧条：两侧按同一时间刻度抽关键帧并排，看画面在哪几段变了。
   - 单帧对比：定位到同一时间戳取帧，做像素级差异高亮——直接复用宿主已接线的 `PluginEnvironment.HighlightImageDiff` 与 `ImageDiffHighlightPixelsChanged`（偏好设置里的「高亮差异像素」实时生效）。
-  - ~~播放~~：本期未做（见 §8）。
+  - 播放：直接解码播放旧 / 新任一侧的画面与声音（播放 / 暂停 + 进度 seek，视频优先硬解），见 §7.1。
 
 ## 10. 线程、生命周期与复用
 
 - **控件必须在 UI 线程构建**（本仓库已有先例：后台线程构建的 Avalonia 控件不渲染）。分工：解码在后台线程，控件构建与更新经 `Dispatcher.UIThread.Post` 回 UI 线程。
 - `SetContent` **每次刷新对比都会调用、实例会复用** → 进入时必须取消并等待上一次的解码任务，不能假设是首次。
-- `Activate` / `Deactivate`：本期无播放，失活时不需要额外动作（保持空实现即可）。
+- `Activate` / `Deactivate`：失活即停播——音频插件暂停当前播放器、视频插件切走播放模式时 `DisposePlayback`，避免在别的视图前继续出声 / 耗电。
 - `Release`：停线程、退订 `ImageDiffHighlightPixelsChanged`、释放位图；解码上下文随 `using` / 收尾释放。
 - 每轮渲染一份 `CancellationTokenSource` + 递增的**代次**（generation），随 `SetContent` / 切模式 / `Release` 取消上一轮；回投 UI 线程时校验代次，旧任务结果不会画到本次视图。
 
@@ -134,7 +149,7 @@
 | --- | --- | --- | --- |
 | FFmpeg 原生件 | **9.0.2**（三方件仓 [ForkPlus-Plugins-Third_Party](https://github.com/hebin123456/ForkPlus-Plugins-Third_Party) 按 `n9.0.2` 源码自建，四个 RID 一套 configure） | LGPL-2.1-or-later | 解码 / 格式解析 / 缩放 / 重采样 |
 | FFmpeg.AutoGen | **9.0.1.1**（含 `Abstractions` / `Bindings.DynamicallyLoaded`） | LGPL-3.0-or-later | P/Invoke 绑定 |
-| miniaudio | 本期未采用（只留 [manifest](../third_party/miniaudio/manifest.json) 占位，不随包分发） | public domain / MIT-0 | 跨平台音频输出（见 §8） |
+| miniaudio | **0.11.25**（三方件仓自建，经 C ABI 垫片 `fpp_audio.h`，运行期库 `fpp_audio`，随包分发） | public domain / MIT-0 | 跨平台音频输出（见 §8） |
 
 **两条硬约束**：
 
@@ -148,12 +163,15 @@
 ## 13. 三方件锁定与 `third_party/` 布局
 
 ```
-三方件仓 ForkPlus-Plugins-Third_Party/ffmpeg/            源码自建的构建配方（manifest.json + build.sh）
+三方件仓 ForkPlus-Plugins-Third_Party/ffmpeg/            源码自建的构建配方（manifest.json + build.sh，启用平台对应 hwaccel）
+三方件仓 ForkPlus-Plugins-Third_Party/miniaudio/        源码自建的构建配方（manifest.json + build.sh + fpp_audio 垫片）
 third_party/ffmpeg/manifest.json                        取件说明：来源 / 许可 / 运行期库 / 各 RID（版本以三方件仓为准）
 third_party/ffmpeg/<rid>/*.dll|*.so.*|*.dylib           实际二进制（由 fetch-third-party.sh 取件，不入库）
-third_party/miniaudio/manifest.json                     占位（本期未采用，无二进制）
+third_party/miniaudio/manifest.json                     取件说明：来源 / 许可 / 运行期库 fpp_audio / 各 RID
+third_party/miniaudio/<rid>/libfpp_audio.*              实际二进制（由 fetch-third-party.sh 取件，不入库）
 licenses/ffmpeg/LICENSE.txt                             许可全文（沿用现有 licenses/ 约定）
 licenses/ffmpeg-autogen/LICENSE.txt                     绑定许可全文
+licenses/miniaudio/LICENSE.txt                          miniaudio 许可全文（MIT-0）
 plugins/ForkPlus.Plugins.{Audio,Video}/third-party.json  登记（沿用现有约定）
 .github/scripts/fetch-third-party.sh                    按 RID 取三方件仓最新 Release + 校验 sha256 + 解出运行期库
 ```
@@ -180,9 +198,9 @@ plugins/ForkPlus.Plugins.{Audio,Video}/third-party.json  登记（沿用现有�
 ## 14. 打包与 CI 改动清单（均已落地）
 
 1. **[install-plugin-artifacts.sh](../.github/scripts/install-plugin-artifacts.sh)**：平铺拷贝 `*.dll` / `*.so` / `*.so.*` / `*.dylib`，并排除宿主共享程序集；补上 `*.so.*` 以收录 SONAME 命名的 FFmpeg 库。
-2. **[fetch-ffmpeg.sh](../.github/scripts/fetch-ffmpeg.sh)**（新增）：按 manifest 的 tag / asset / sha256 取件并校验，解出运行期库名到 `third_party/ffmpeg/<version>/<rid>/`；构建时由插件的 csproj 按 RID 拷进输出（缺件不报错，降级）。
-3. **[capture-screenshots.sh](../.github/scripts/capture-screenshots.sh)**：新增 demo 音频 / 视频素材（系统 `ffmpeg` 现造），构建插件前先 `fetch-ffmpeg.sh`；三个场景各截一张，走默认元数据模式。
-4. **[pages/plugins.json](../.github/pages/plugins.json)**：新增两个插件条目与各三张截图。
+2. **[fetch-third-party.sh](../.github/scripts/fetch-third-party.sh)**：按 manifest 的 asset / sha256 取件并校验，解出运行期库到 `third_party/<component>/<rid>/`；构建时由插件的 csproj 按 RID 拷进输出（缺件不报错，降级）。已同时支持 `ffmpeg` 与 `miniaudio` 两个组件。
+3. **[capture-screenshots.sh](../.github/scripts/capture-screenshots.sh)**：新增 demo 音频 / 视频素材（系统 `ffmpeg` 现造，音频 mp3 内嵌随版本变色的封面）；构建插件前先 `fetch-third-party.sh`；三个场景走默认元数据模式，另经 `FORKPLUS_PLUGIN_VIEW_MODE` 环境变量把音频切到波形 / 频谱 / 封面、视频切到帧条 / 单帧对比 / 播放各截一张。
+4. **[pages/plugins.json](../.github/pages/plugins.json)**：新增两个插件条目；音频 6 张（3 场景 + 波形 / 频谱 / 封面）、视频 6 张（3 场景 + 帧条 / 单帧对比 / 播放）截图，并补充播放 / 硬解 / miniaudio 说明与章节。
 5. **[build.yml](../.github/workflows/build.yml)**：构建前新增 `Fetch FFmpeg native libraries` 一步（按矩阵 RID 取件）；**[pages.yml](../.github/workflows/pages.yml)** 的 headless 工具链补装 `ffmpeg`。
 6. **[.gitignore](../.gitignore)**：忽略 `third_party/ffmpeg/*/`（二进制不入库，只锁锁文件）。
 
@@ -190,10 +208,10 @@ plugins/ForkPlus.Plugins.{Audio,Video}/third-party.json  登记（沿用现有�
 
 ## 15. 遗留项
 
-已定：300 MB 取方案 A（§5）；频谱一期就做；音频输出 / 播放**本期不做**（§8）；音频后端暂不引入 miniaudio。
+已定：300 MB 取方案 A（§5）；频谱一期就做；**播放 / 音频输出已落地**（§7.1、§8），音频后端采用 miniaudio。
 
 仍未决：
 
-1. macOS（`osx-arm64`）原生件：自建还是用第三方 LGPL 构建（该平台暂降级）。
+1. 视频硬解在无 GPU / 无对应驱动的环境（含 CI 的 Xvfb）会自动回落软解——是否要在传输条上把「已回落软解」也显式提示（当前仅在硬解生效时显示 `硬件解码`）。
 2. 是否把二进制 sha256 校验再并入 CI 的 `--check`（§13）。
-3. 二期是否补「播放 / 音频输出」（含 miniaudio 后端接入）。
+3. 播放期间视频帧到 Avalonia `WriteableBitmap` 的零拷贝路径（当前每帧 `sws_scale` 转 BGRA 后整帧上传），高分辨率下可再优化。

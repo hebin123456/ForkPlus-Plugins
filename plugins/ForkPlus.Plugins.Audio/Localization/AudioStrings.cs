@@ -31,13 +31,13 @@ namespace ForkPlus.Plugins.Audio
 
 		internal static readonly Dictionary<string, string> Descriptions = new Dictionary<string, string>
 		{
-			{ "zh-Hans", "音频对比插件：认领 .mp3 / .wav / .flac / .ogg / .oga / .opus / .m4a / .aac / .wma，用 FFmpeg 只解码不出声，并排呈现元数据、波形包络、声谱图与内嵌封面，差异逐行标注。单侧超过 300 MB 不预览。" },
-			{ "zh-Hant", "音訊對比外掛：認領 .mp3 / .wav / .flac / .ogg / .oga / .opus / .m4a / .aac / .wma，以 FFmpeg 只解碼不出聲，並排呈現中繼資料、波形包絡、聲譜圖與內嵌封面，差異逐行標註。單側超過 300 MB 不預覽。" },
-			{ "ja-JP", "オーディオ比較プラグイン: .mp3 / .wav / .flac / .ogg / .oga / .opus / .m4a / .aac / .wma を対象に、FFmpeg でデコードのみ行い、メタデータ・波形エンベロープ・スペクトログラム・埋め込みカバーを並べて表示し、差分を行単位で注記します。片面が 300 MB を超える場合はプレビューしません。" },
-			{ "ko-KR", "오디오 비교 플러그인: .mp3 / .wav / .flac / .ogg / .oga / .opus / .m4a / .aac / .wma를 처리하여 FFmpeg로 디코딩만 하고 메타데이터, 파형 포락선, 스펙트로그램, 내장 커버를 나란히 표시하며 차이를 행 단위로 표시합니다. 한쪽이 300 MB를 넘으면 미리 보지 않습니다." },
-			{ "fr-FR", "Plugin de comparaison audio : prend en charge .mp3 / .wav / .flac / .ogg / .oga / .opus / .m4a / .aac / .wma, décode sans restituer avec FFmpeg et affiche côte à côte métadonnées, enveloppe d'onde, spectrogramme et pochette intégrée, avec les différences ligne par ligne. Aucun aperçu si un côté dépasse 300 Mo." },
-			{ "de-DE", "Audiovergleichs-Plugin: übernimmt .mp3 / .wav / .flac / .ogg / .oga / .opus / .m4a / .aac / .wma, dekodiert mit FFmpeg (ohne Wiedergabe) und zeigt Metadaten, Wellenform-Hüllkurve, Spektrogramm und eingebettetes Cover nebeneinander, Unterschiede zeilenweise markiert. Keine Vorschau, wenn eine Seite 300 MB überschreitet." },
-			{ "es-ES", "Plugin de comparación de audio: admite .mp3 / .wav / .flac / .ogg / .oga / .opus / .m4a / .aac / .wma, decodifica sin reproducir con FFmpeg y muestra en paralelo metadatos, envolvente de forma de onda, espectrograma y carátula incrustada, con las diferencias marcadas línea a línea. Sin vista previa si un lado supera 300 MB." }
+			{ "zh-Hans", "音频对比插件：认领 .mp3 / .wav / .flac / .ogg / .oga / .opus / .m4a / .aac / .wma，用 FFmpeg 解码后并排呈现元数据、波形包络、声谱图与内嵌封面，差异逐行标注；波形 / 频谱两模式下可就地试听旧 / 新两侧（播放 / 暂停 + 进度定位），音频输出走 miniaudio。单侧超过 300 MB 不预览。" },
+			{ "zh-Hant", "音訊對比外掛：認領 .mp3 / .wav / .flac / .ogg / .oga / .opus / .m4a / .aac / .wma，以 FFmpeg 解碼後並排呈現中繼資料、波形包絡、聲譜圖與內嵌封面，差異逐行標註；波形 / 頻譜兩模式下可就地試聽舊 / 新兩側（播放 / 暫停 + 進度定位），音訊輸出走 miniaudio。單側超過 300 MB 不預覽。" },
+			{ "ja-JP", "オーディオ比較プラグイン: .mp3 / .wav / .flac / .ogg / .oga / .opus / .m4a / .aac / .wma を対象に、FFmpeg でデコードし、メタデータ・波形エンベロープ・スペクトログラム・埋め込みカバーを並べて表示し、差分を行単位で注記します。波形 / スペクトルモードでは新旧どちらもその場で試聴でき（再生 / 一時停止 + シーク）、音声出力は miniaudio を使用します。片面が 300 MB を超える場合はプレビューしません。" },
+			{ "ko-KR", "오디오 비교 플러그인: .mp3 / .wav / .flac / .ogg / .oga / .opus / .m4a / .aac / .wma를 처리하여 FFmpeg로 디코딩하고 메타데이터, 파형 포락선, 스펙트로그램, 내장 커버를 나란히 표시하며 차이를 행 단위로 표시합니다. 파형 / 스펙트럼 모드에서는 이전 / 이후 어느 쪽이든 바로 들어볼 수 있으며(재생 / 일시정지 + 탐색) 오디오 출력은 miniaudio를 사용합니다. 한쪽이 300 MB를 넘으면 미리 보지 않습니다." },
+			{ "fr-FR", "Plugin de comparaison audio : prend en charge .mp3 / .wav / .flac / .ogg / .oga / .opus / .m4a / .aac / .wma, décode avec FFmpeg et affiche côte à côte métadonnées, enveloppe d'onde, spectrogramme et pochette intégrée, avec les différences ligne par ligne ; dans les modes forme d'onde / spectre, écoute de l'ancien ou du nouveau côté (lecture / pause + position), sortie audio via miniaudio. Aucun aperçu si un côté dépasse 300 Mo." },
+			{ "de-DE", "Audiovergleichs-Plugin: übernimmt .mp3 / .wav / .flac / .ogg / .oga / .opus / .m4a / .aac / .wma, dekodiert mit FFmpeg und zeigt Metadaten, Wellenform-Hüllkurve, Spektrogramm und eingebettetes Cover nebeneinander, Unterschiede zeilenweise markiert; in den Modi Wellenform / Spektrum lässt sich die alte oder neue Seite direkt anhören (Wiedergabe / Pause + Position), Audioausgabe über miniaudio. Keine Vorschau, wenn eine Seite 300 MB überschreitet." },
+			{ "es-ES", "Plugin de comparación de audio: admite .mp3 / .wav / .flac / .ogg / .oga / .opus / .m4a / .aac / .wma, decodifica con FFmpeg y muestra en paralelo metadatos, envolvente de forma de onda, espectrograma y carátula incrustada, con las diferencias marcadas línea a línea; en los modos de forma de onda / espectro permite escuchar el lado antiguo o el nuevo (reproducir / pausar + posición), con salida de audio vía miniaudio. Sin vista previa si un lado supera 300 MB." }
 		};
 
 		// ---- 界面文案（key = 英文原文；含 {0} 的走 F(...) 格式化） ----
@@ -67,6 +67,32 @@ namespace ForkPlus.Plugins.Audio
 				{
 					{ "zh-Hans", "封面" }, { "zh-Hant", "封面" }, { "ja-JP", "カバー" },
 					{ "ko-KR", "커버" }, { "fr-FR", "Pochette" }, { "de-DE", "Cover" }, { "es-ES", "Carátula" }
+				}
+			},
+
+			// ---- 试听 / 播放（传输条） ----
+			{ "Play", new Dictionary<string, string>
+				{
+					{ "zh-Hans", "播放" }, { "zh-Hant", "播放" }, { "ja-JP", "再生" },
+					{ "ko-KR", "재생" }, { "fr-FR", "Lecture" }, { "de-DE", "Wiedergabe" }, { "es-ES", "Reproducir" }
+				}
+			},
+			{ "Pause", new Dictionary<string, string>
+				{
+					{ "zh-Hans", "暂停" }, { "zh-Hant", "暫停" }, { "ja-JP", "一時停止" },
+					{ "ko-KR", "일시정지" }, { "fr-FR", "Pause" }, { "de-DE", "Pause" }, { "es-ES", "Pausar" }
+				}
+			},
+			{ "Audition", new Dictionary<string, string>
+				{
+					{ "zh-Hans", "试听" }, { "zh-Hant", "試聽" }, { "ja-JP", "試聴" },
+					{ "ko-KR", "미리 듣기" }, { "fr-FR", "Écoute" }, { "de-DE", "Anhören" }, { "es-ES", "Escuchar" }
+				}
+			},
+			{ "Audio output unavailable", new Dictionary<string, string>
+				{
+					{ "zh-Hans", "音频输出不可用" }, { "zh-Hant", "音訊輸出不可用" }, { "ja-JP", "オーディオ出力を利用できません" },
+					{ "ko-KR", "오디오 출력을 사용할 수 없음" }, { "fr-FR", "Sortie audio indisponible" }, { "de-DE", "Audioausgabe nicht verfügbar" }, { "es-ES", "Salida de audio no disponible" }
 				}
 			},
 

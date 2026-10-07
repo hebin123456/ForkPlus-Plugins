@@ -30,13 +30,13 @@ namespace ForkPlus.Plugins.Video
 
 		internal static readonly Dictionary<string, string> Descriptions = new Dictionary<string, string>
 		{
-			{ "zh-Hans", "视频对比插件：认领 .mp4 / .mkv / .mov / .webm / .avi / .m4v / .mpg / .mpeg / .wmv / .flv，用 FFmpeg 只解码不播放，并排呈现元数据、关键帧帧条与单帧像素差异（复用宿主「高亮差异像素」偏好），差异逐行标注。单侧超过 300 MB 不预览。" },
-			{ "zh-Hant", "視訊對比外掛：認領 .mp4 / .mkv / .mov / .webm / .avi / .m4v / .mpg / .mpeg / .wmv / .flv，以 FFmpeg 只解碼不播放，並排呈現中繼資料、關鍵影格影格條與單幀像素差異（沿用宿主「高亮差異像素」偏好），差異逐行標註。單側超過 300 MB 不預覽。" },
-			{ "ja-JP", "ビデオ比較プラグイン: .mp4 / .mkv / .mov / .webm / .avi / .m4v / .mpg / .mpeg / .wmv / .flv を対象に、FFmpeg でデコードのみ行い、メタデータ・キーフレームのフィルムストリップ・単一フレームのピクセル差分（ホストの「差分ピクセルを強調」設定に連動）を並べて表示し、差分を行単位で注記します。片面が 300 MB を超える場合はプレビューしません。" },
-			{ "ko-KR", "비디오 비교 플러그인: .mp4 / .mkv / .mov / .webm / .avi / .m4v / .mpg / .mpeg / .wmv / .flv를 처리하여 FFmpeg로 디코딩만 하고 메타데이터, 키프레임 필름스트립, 단일 프레임 픽셀 차이(호스트의 '차이 픽셀 강조' 설정 연동)를 나란히 표시하며 차이를 행 단위로 표시합니다. 한쪽이 300 MB를 넘으면 미리 보지 않습니다." },
-			{ "fr-FR", "Plugin de comparaison vidéo : prend en charge .mp4 / .mkv / .mov / .webm / .avi / .m4v / .mpg / .mpeg / .wmv / .flv, décode sans lire avec FFmpeg et affiche côte à côte métadonnées, bande de vignettes de keyframes et différence de pixels sur une image (lié au réglage hôte « surligner les pixels différents »), avec les différences ligne par ligne. Aucun aperçu si un côté dépasse 300 Mo." },
-			{ "de-DE", "Videovergleichs-Plugin: übernimmt .mp4 / .mkv / .mov / .webm / .avi / .m4v / .mpg / .mpeg / .wmv / .flv, dekodiert mit FFmpeg (ohne Wiedergabe) und zeigt Metadaten, Keyframe-Filmstreifen und Pixelunterschiede einzelner Frames nebeneinander (mit der Host-Einstellung „Unterschiedliche Pixel hervorheben“). Keine Vorschau, wenn eine Seite 300 MB überschreitet." },
-			{ "es-ES", "Plugin de comparación de vídeo: admite .mp4 / .mkv / .mov / .webm / .avi / .m4v / .mpg / .mpeg / .wmv / .flv, decodifica sin reproducir con FFmpeg y muestra en paralelo metadatos, tira de fotogramas clave y diferencia de píxeles de un fotograma (ligado a la preferencia «resaltar píxeles distintos»), con las diferencias marcadas línea a línea. Sin vista previa si un lado supera 300 MB." }
+			{ "zh-Hans", "视频对比插件：认领 .mp4 / .mkv / .mov / .webm / .avi / .m4v / .mpg / .mpeg / .wmv / .flv，用 FFmpeg 解码后并排呈现元数据、关键帧帧条与单帧像素差异（复用宿主「高亮差异像素」偏好），差异逐行标注；另有播放模式可就地播放旧 / 新任一侧（播放 / 暂停 + 进度定位，优先硬件解码、失败静默回落软解）。单侧超过 300 MB 不预览。" },
+			{ "zh-Hant", "視訊對比外掛：認領 .mp4 / .mkv / .mov / .webm / .avi / .m4v / .mpg / .mpeg / .wmv / .flv，以 FFmpeg 解碼後並排呈現中繼資料、關鍵影格影格條與單幀像素差異（沿用宿主「高亮差異像素」偏好），差異逐行標註；另有播放模式可就地播放舊 / 新任一側（播放 / 暫停 + 進度定位，優先硬體解碼、失敗靜默回落軟解）。單側超過 300 MB 不預覽。" },
+			{ "ja-JP", "ビデオ比較プラグイン: .mp4 / .mkv / .mov / .webm / .avi / .m4v / .mpg / .mpeg / .wmv / .flv を対象に、FFmpeg でデコードし、メタデータ・キーフレームのフィルムストリップ・単一フレームのピクセル差分（ホストの「差分ピクセルを強調」設定に連動）を並べて表示し、差分を行単位で注記します。さらに再生モードでは新旧どちらか一方をその場で再生できます（再生 / 一時停止 + シーク、ハードウェアデコードを優先し、失敗時はサイレントにソフトウェアへフォールバック）。片面が 300 MB を超える場合はプレビューしません。" },
+			{ "ko-KR", "비디오 비교 플러그인: .mp4 / .mkv / .mov / .webm / .avi / .m4v / .mpg / .mpeg / .wmv / .flv를 처리하여 FFmpeg로 디코딩하고 메타데이터, 키프레임 필름스트립, 단일 프레임 픽셀 차이(호스트의 '차이 픽셀 강조' 설정 연동)를 나란히 표시하며 차이를 행 단위로 표시합니다. 또한 재생 모드에서는 이전 / 이후 중 한쪽을 바로 재생할 수 있습니다(재생 / 일시정지 + 탐색, 하드웨어 디코딩 우선, 실패 시 소프트웨어로 조용히 대체). 한쪽이 300 MB를 넘으면 미리 보지 않습니다." },
+			{ "fr-FR", "Plugin de comparaison vidéo : prend en charge .mp4 / .mkv / .mov / .webm / .avi / .m4v / .mpg / .mpeg / .wmv / .flv, décode avec FFmpeg et affiche côte à côte métadonnées, bande de vignettes de keyframes et différence de pixels sur une image (lié au réglage hôte « surligner les pixels différents »), avec les différences ligne par ligne ; un mode Lecture permet de lire l'ancien ou le nouveau côté (lecture / pause + position, décodage matériel privilégié, repli silencieux sur le logiciel). Aucun aperçu si un côté dépasse 300 Mo." },
+			{ "de-DE", "Videovergleichs-Plugin: übernimmt .mp4 / .mkv / .mov / .webm / .avi / .m4v / .mpg / .mpeg / .wmv / .flv, dekodiert mit FFmpeg und zeigt Metadaten, Keyframe-Filmstreifen und Pixelunterschiede einzelner Frames nebeneinander (mit der Host-Einstellung „Unterschiedliche Pixel hervorheben“); ein Wiedergabemodus spielt die alte oder neue Seite ab (Wiedergabe / Pause + Position, Hardware-Dekodierung bevorzugt, stiller Rückfall auf Software). Keine Vorschau, wenn eine Seite 300 MB überschreitet." },
+			{ "es-ES", "Plugin de comparación de vídeo: admite .mp4 / .mkv / .mov / .webm / .avi / .m4v / .mpg / .mpeg / .wmv / .flv, decodifica con FFmpeg y muestra en paralelo metadatos, tira de fotogramas clave y diferencia de píxeles de un fotograma (ligado a la preferencia «resaltar píxeles distintos»), con las diferencias marcadas línea a línea; un modo Reproducción permite reproducir el lado antiguo o el nuevo (reproducir / pausar + posición, decodificación por hardware preferida, con retorno silencioso al software). Sin vista previa si un lado supera 300 MB." }
 		};
 
 		// ---- 界面文案（key = 英文原文；含 {0} 的走 F(...) 格式化） ----
@@ -60,6 +60,44 @@ namespace ForkPlus.Plugins.Video
 				{
 					{ "zh-Hans", "单帧对比" }, { "zh-Hant", "單幀對比" }, { "ja-JP", "単一フレーム比較" },
 					{ "ko-KR", "단일 프레임 비교" }, { "fr-FR", "Comparer une image" }, { "de-DE", "Einzelbild-Vergleich" }, { "es-ES", "Comparar fotograma" }
+				}
+			},
+			{ "Playback", new Dictionary<string, string>
+				{
+					{ "zh-Hans", "播放" }, { "zh-Hant", "播放" }, { "ja-JP", "再生" },
+					{ "ko-KR", "재생" }, { "fr-FR", "Lecture" }, { "de-DE", "Wiedergabe" }, { "es-ES", "Reproducción" }
+				}
+			},
+
+			// ---- 播放 / 试听（传输条） ----
+			{ "Play", new Dictionary<string, string>
+				{
+					{ "zh-Hans", "播放" }, { "zh-Hant", "播放" }, { "ja-JP", "再生" },
+					{ "ko-KR", "재생" }, { "fr-FR", "Lecture" }, { "de-DE", "Wiedergabe" }, { "es-ES", "Reproducir" }
+				}
+			},
+			{ "Pause", new Dictionary<string, string>
+				{
+					{ "zh-Hans", "暂停" }, { "zh-Hant", "暫停" }, { "ja-JP", "一時停止" },
+					{ "ko-KR", "일시정지" }, { "fr-FR", "Pause" }, { "de-DE", "Pause" }, { "es-ES", "Pausar" }
+				}
+			},
+			{ "Audition", new Dictionary<string, string>
+				{
+					{ "zh-Hans", "试听" }, { "zh-Hant", "試聽" }, { "ja-JP", "試聴" },
+					{ "ko-KR", "미리 보기" }, { "fr-FR", "Écoute" }, { "de-DE", "Anhören" }, { "es-ES", "Escuchar" }
+				}
+			},
+			{ "Hardware decoding", new Dictionary<string, string>
+				{
+					{ "zh-Hans", "硬件解码" }, { "zh-Hant", "硬體解碼" }, { "ja-JP", "ハードウェアデコード" },
+					{ "ko-KR", "하드웨어 디코딩" }, { "fr-FR", "Décodage matériel" }, { "de-DE", "Hardware-Dekodierung" }, { "es-ES", "Decodificación por hardware" }
+				}
+			},
+			{ "Audio output unavailable", new Dictionary<string, string>
+				{
+					{ "zh-Hans", "音频输出不可用" }, { "zh-Hant", "音訊輸出不可用" }, { "ja-JP", "オーディオ出力を利用できません" },
+					{ "ko-KR", "오디오 출력을 사용할 수 없음" }, { "fr-FR", "Sortie audio indisponible" }, { "de-DE", "Audioausgabe nicht verfügbar" }, { "es-ES", "Salida de audio no disponible" }
 				}
 			},
 

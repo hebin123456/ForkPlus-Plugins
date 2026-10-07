@@ -1,43 +1,45 @@
 {
   "component": "miniaudio",
-  "version": null,
-  "license": "public domain / MIT-0",
+  "version": "0.11.25",
+  "license": "Unlicense OR MIT-0",
   "licenseFile": "licenses/miniaudio/LICENSE.txt",
-  "upstream": "https://github.com/mackron/miniaudio",
+  "upstream": "https://miniaud.io/",
   "distributedBy": "ForkPlus.Plugins.Audio / ForkPlus.Plugins.Video",
-  "purpose": "跨平台音频输出后端（替代 WASAPI / CoreAudio / ALSA 三套原生代码）。只作输出，解码由 FFmpeg 负责。",
-  "artifacts": [
-    {
-      "rid": "win-x64",
-      "file": null,
-      "sha256": null,
-      "status": "pending"
-    },
-    {
-      "rid": "linux-x64",
-      "file": null,
-      "sha256": null,
-      "status": "pending"
-    },
-    {
-      "rid": "linux-arm64",
-      "file": null,
-      "sha256": null,
-      "status": "pending"
-    },
-    {
-      "rid": "osx-arm64",
-      "file": null,
-      "sha256": null,
-      "status": "pending"
-    }
+  "purpose": "跨平台音频输出后端（ALSA / PulseAudio / WASAPI / CoreAudio），替代 WASAPI / CoreAudio / ALSA 三套原生代码。只作输出，解码由 FFmpeg 负责；经自写的 C ABI 垫片 fpp_audio.c/.h 暴露给 .NET（MiniAudioNative 显式加载）。",
+  "buildConstraint": [
+    "只取上游单头 miniaudio.h 编译，不引入上游构建系统。",
+    "Linux 的 ALSA / PulseAudio 由 miniaudio 运行期 dlopen，产物不产生 libasound / libpulse 等第三方 DT_NEEDED。",
+    "C ABI 垫片句柄为不透明指针，C# 侧仅持有 IntPtr。"
   ],
+  "runtimeLibraries": [
+    "fpp_audio"
+  ],
+  "source": {
+    "repo": "hebin123456/ForkPlus-Plugins-Third_Party",
+    "component": "miniaudio",
+    "recipe": "miniaudio/manifest.json + miniaudio/build.sh + miniaudio/fpp_audio.c/.h（按锁定的上游 tag 自建，四个 RID 一套源码）",
+    "consume": [
+      "GET releases/latest/download/index.json → 取本 RID 的 asset / sha256 / libraries",
+      "GET releases/latest/download/<asset> → 校验 sha256 → 只解出运行期库"
+    ],
+    "note": "插件仓**不锁版本**：三方件仓发新 tag 即自动出包，下次构建自动消费；但哈希取自同一次 Release 的 index.json，取件仍强校验。要复现某次构建可钉 THIRD_PARTY_TAG=<tag>。"
+  },
+  "localLayout": {
+    "path": "third_party/miniaudio/<rid>/（二进制不入库，见 .gitignore）",
+    "note": "不带版本目录：版本由三方件仓的 index.json 决定并记在 <rid>/.source.json。"
+  },
+  "platforms": {
+    "win-x64": "三方件仓自建（MSYS2 MINGW64），产出 fpp_audio.dll",
+    "linux-x64": "三方件仓自建，产出 libfpp_audio.so.0",
+    "linux-arm64": "三方件仓自建，产出 libfpp_audio.so.0",
+    "osx-arm64": "三方件仓自建，产出 libfpp_audio.0.dylib（install_name 为 @loader_path/libfpp_audio.0.dylib）"
+  },
   "vendoring": {
-    "layout": "third_party/miniaudio/<version>/<rid>/",
+    "script": ".github/scripts/fetch-third-party.sh",
     "steps": [
-      "锁定上游 tag 后确定 version，并回填各 RID 的 file 与 sha256",
-      "在 licenses/miniaudio/LICENSE.txt 放许可全文",
-      "在插件的 third-party.json 登记，并重新生成 THIRD-PARTY-NOTICES.md"
+      "构建前运行 .github/scripts/fetch-third-party.sh <rid> 取件并校验到 third_party/miniaudio/<rid>/",
+      "licenses/miniaudio/LICENSE.txt 放许可全文（三方件仓交付件内也附有 LICENSE）",
+      "插件 third-party.json 登记，CI 的 collect-third-party-notices.py --check 拦住登记漂移"
     ]
   },
   "seeAlso": "design/audio-video-plugins.md §8、§12–§13"

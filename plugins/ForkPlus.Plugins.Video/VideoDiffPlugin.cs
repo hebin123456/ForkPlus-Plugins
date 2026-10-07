@@ -28,7 +28,7 @@ namespace ForkPlus.Plugins.Video
 		public string DisplayName => "Video Compare";
 
 		/// <summary>一句话描述插件能力（英文原文，同时作为多语言缺省值）。</summary>
-		public string Description => "Video compare view plugin: claims .mp4 / .mkv / .mov / .webm / .avi / .m4v / .mpg / .mpeg / .wmv / .flv, decodes (no playback) with FFmpeg and shows metadata, keyframe filmstrip and single-frame pixel difference (honours the host 'highlight changed pixels' preference) side by side, with row-level difference labels. Files larger than 300 MB per side are not previewed.";
+		public string Description => "Video compare view plugin: claims .mp4 / .mkv / .mov / .webm / .avi / .m4v / .mpg / .mpeg / .wmv / .flv, decodes with FFmpeg and shows metadata, keyframe filmstrip and single-frame pixel difference (honours the host 'highlight changed pixels' preference) side by side, with row-level difference labels; a Playback mode plays either side (play / pause + seek, hardware decoding preferred with silent fallback to software). Files larger than 300 MB per side are not previewed.";
 
 		/// <summary>按界面语言取显示名（未覆盖的语言回退英文原文）。</summary>
 		public string GetDisplayName(string language)

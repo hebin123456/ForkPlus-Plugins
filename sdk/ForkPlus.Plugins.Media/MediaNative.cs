@@ -104,8 +104,11 @@ namespace ForkPlus.Plugins.Media
 			}
 		}
 
-		/// <summary>按「显式指定 → 本程序集目录 → 宿主根目录」取第一个存在的目录；都不存在返回 null。</summary>
-		private static string ResolveDirectory()
+		/// <summary>
+		/// 按「显式指定 → 本程序集目录 → 宿主根目录」取第一个存在的目录；都不存在返回 null。
+		/// 供同程序集的其它原生绑定（如 <c>MiniAudioNative</c>）复用，保证两者从同一处解析。
+		/// </summary>
+		public static string ResolveDirectory()
 		{
 			foreach (string candidate in Candidates())
 			{

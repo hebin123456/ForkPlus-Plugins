@@ -28,7 +28,7 @@ namespace ForkPlus.Plugins.Audio
 		public string DisplayName => "Audio Compare";
 
 		/// <summary>一句话描述插件能力（英文原文，同时作为多语言缺省值）。</summary>
-		public string Description => "Audio compare view plugin: claims .mp3 / .wav / .flac / .ogg / .oga / .opus / .m4a / .aac / .wma, decodes (no playback) with FFmpeg and shows metadata, waveform envelope, spectrogram and embedded cover side by side, with row-level difference labels. Files larger than 300 MB per side are not previewed.";
+		public string Description => "Audio compare view plugin: claims .mp3 / .wav / .flac / .ogg / .oga / .opus / .m4a / .aac / .wma, decodes with FFmpeg and shows metadata, waveform envelope, spectrogram and embedded cover side by side, with row-level difference labels; audition either side (play / pause + seek) in the waveform / spectrum modes, audio output via miniaudio. Files larger than 300 MB per side are not previewed.";
 
 		/// <summary>v5.0.3：按界面语言取显示名（未覆盖的语言回退英文原文）。</summary>
 		public string GetDisplayName(string language)
