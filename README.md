@@ -2,6 +2,8 @@
 
 [![build passing](https://github.com/hebin123456/ForkPlus-Plugins/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/hebin123456/ForkPlus-Plugins/actions/workflows/build.yml)
 [![release](https://img.shields.io/github/v/release/hebin123456/ForkPlus-Plugins?label=release&color=blue)](https://github.com/hebin123456/ForkPlus-Plugins/releases)
+[![license: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/hebin123456/ForkPlus-Plugins/blob/master/LICENSE)
+[![third-party: FFmpeg LGPL-2.1-or-later](https://img.shields.io/badge/third--party-FFmpeg%20LGPL--2.1--or--later-lightgrey)](THIRD-PARTY-NOTICES.md)
 
 ForkPlus 对比视图插件仓库。
 
