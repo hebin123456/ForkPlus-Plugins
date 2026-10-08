@@ -1061,6 +1061,91 @@ print("  demo structured ->", target, "(" + version + ")")
 PY
 }
 
+# DBC（CAN 数据库）样本：三场景共用同一对 .dbc（旧 / 新两版），覆盖节点 / 报文 / 信号 /
+# 值表 / 属性等本插件解析的全部对象。
+#   v1：2 报文 / 3 信号——EngineData（EngineSpeed + EngineTemp，EngineTemp 带值表）、
+#       VehicleSpeed（WheelSpeed）；EngineData 挂 GenMsgCycleTime 属性，另有报文 / 信号注释。
+#   v2：改 EngineSpeed 的因子（0.25→0.5）与取值范围、给 EngineData 加 EngineLoad、
+#       删掉 WheelSpeed、新增报文 GearStatus（CurrentGear，带值表）与节点 Transmission——
+#       让「已变更 / 仅左 / 仅右」三类行都出现在截图里。
+write_demo_dbc() {
+	local repo="$1" version="$2"
+	python3 - "$repo" "$version" <<'PY'
+import os, sys
+repo, version = sys.argv[1], sys.argv[2]
+is_new = version == "v2"
+
+DBC_V1 = """VERSION ""
+
+NS_ :
+	CM_
+	BA_DEF_
+	BA_
+	VAL_
+	BA_DEF_DEF_
+
+BS_:
+
+BU_: Engine Gateway
+
+BO_ 256 EngineData: 8 Engine
+ SG_ EngineSpeed : 0|16@1+ (0.25,0) [0|16383.75] "rpm" Gateway
+ SG_ EngineTemp : 16|8@1+ (1,-40) [-40|215] "degC" Gateway
+
+BO_ 512 VehicleSpeed: 4 Gateway
+ SG_ WheelSpeed : 0|16@1+ (0.01,0) [0|655.35] "km/h" Engine
+
+CM_ BO_ 256 "Engine data frame";
+CM_ SG_ 256 EngineSpeed "Engine crank speed";
+
+BA_DEF_ BO_ "GenMsgCycleTime" INT 0 65535;
+BA_DEF_DEF_ "GenMsgCycleTime" 0;
+BA_ "GenMsgCycleTime" BO_ 256 10;
+
+VAL_ 256 EngineTemp -40 "Cold" 100 "Hot" ;
+"""
+
+DBC_V2 = """VERSION ""
+
+NS_ :
+	CM_
+	BA_DEF_
+	BA_
+	VAL_
+	BA_DEF_DEF_
+
+BS_:
+
+BU_: Engine Gateway Transmission
+
+BO_ 256 EngineData: 8 Engine
+ SG_ EngineSpeed : 0|16@1+ (0.5,0) [0|8191.875] "rpm" Gateway
+ SG_ EngineTemp : 16|8@1+ (1,-40) [-40|215] "degC" Gateway
+ SG_ EngineLoad : 24|8@1+ (0.5,0) [0|127.5] "%" Gateway
+
+BO_ 512 VehicleSpeed: 4 Gateway
+
+BO_ 768 GearStatus: 2 Transmission
+ SG_ CurrentGear : 0|8@1+ (1,0) [0|255] "" Engine
+
+CM_ BO_ 256 "Engine data frame";
+CM_ SG_ 256 EngineSpeed "Engine crank speed";
+
+BA_DEF_ BO_ "GenMsgCycleTime" INT 0 65535;
+BA_DEF_DEF_ "GenMsgCycleTime" 0;
+BA_ "GenMsgCycleTime" BO_ 256 10;
+
+VAL_ 256 EngineTemp -40 "Cold" 100 "Hot" ;
+VAL_ 768 CurrentGear 0 "Neutral" 1 "Drive" 2 "Reverse" ;
+"""
+
+target = os.path.join(repo, "sample.dbc")
+with open(target, "w", encoding="utf-8") as f:
+    f.write(DBC_V2 if is_new else DBC_V1)
+print("  demo dbc ->", target, "(" + version + ")")
+PY
+}
+
 # 字幕样本：三种场景各用一种格式，覆盖三条解析路径——
 #   modify → .srt / add → .vtt（WebVTT）/ remove → .ass（ASS）
 # v2 把第 2 句改写并后移、末尾新增一条 cue，让「已变 / 仅右」与时间轴上的挪动都可见。
@@ -1411,6 +1496,11 @@ prepare_repo_video remove avi
 prepare_repo_text structured modify "sample.yaml" write_demo_structured yaml
 prepare_repo_text structured add "sample.json" write_demo_structured json
 prepare_repo_text structured remove "sample.toml" write_demo_structured toml
+# DBC demo：三场景共用同一对 .dbc（旧：2 报文 / 3 信号带值表；新：改因子与取值范围、
+# 加一条信号与一条报文、删一条信号）；样本是纯文本，靠 .gitattributes 的 `-diff` 走插件路由。
+prepare_repo_text dbc modify "sample.dbc" write_demo_dbc
+prepare_repo_text dbc add "sample.dbc" write_demo_dbc
+prepare_repo_text dbc remove "sample.dbc" write_demo_dbc
 # 字幕 demo：三场景各用一种格式（modify=srt / add=vtt / remove=ass）
 prepare_repo_text subtitle modify "sample.srt" write_demo_subtitle srt
 prepare_repo_text subtitle add "sample.vtt" write_demo_subtitle vtt
@@ -1479,6 +1569,14 @@ done
 # 结构化数据插件另取结构树模式一张（modify 场景为样本）
 seed_settings
 capture_one "$WORK/repo-structured-modify" "StructuredDiffView.SetContent" "structured-tree.png" 4 "结构化数据插件 · 结构树" "tree"
+# DBC 插件三种场景各截一张（旧 / 新同一对 .dbc；默认结构化键路径模式）
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-dbc-$mode" "DbcDiffView.SetContent" "dbc-$mode.png" 4 "DBC 插件 · $mode"
+done
+# DBC 插件另取原文模式一张（modify 场景为样本）
+seed_settings
+capture_one "$WORK/repo-dbc-modify" "DbcDiffView.SetContent" "dbc-raw.png" 4 "DBC 插件 · 原文" "raw"
 # 字幕插件三种场景各截一张（srt / vtt / ass 各覆盖一种；默认字幕行表模式）
 for mode in modify add remove; do
 	seed_settings

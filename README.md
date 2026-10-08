@@ -128,6 +128,15 @@ ForkPlus-Plugins/
 │   │   │   └── StructuredStrings.cs      # 插件自带译文（8 语言）
 │   │   ├── third-party.json              # YamlDotNet（MIT）/ Tomlyn（BSD-2-Clause）登记
 │   │   └── ForkPlus.Plugins.Structured.csproj # 私有依赖 YamlDotNet / Tomlyn
+│   ├── ForkPlus.Plugins.Dbc/             # DBC（CAN 数据库）对比插件（键路径表 / 原文对照）
+│   │   ├── DbcDiffPlugin.cs
+│   │   ├── DbcDiffView.cs                # 两模式视图：键路径表 / 原文对照
+│   │   ├── DbcParser.cs                  # DbcParserLib 解析为统一数据树（节点 / 报文 / 信号 / 环境变量）
+│   │   ├── DbcData.cs                    # 统一数据模型 + 拍平 + 按键路径语义 diff
+│   │   ├── Localization/
+│   │   │   └── DbcStrings.cs             # 插件自带译文（8 语言）
+│   │   ├── third-party.json              # DbcParserLib（MIT）登记
+│   │   └── ForkPlus.Plugins.Dbc.csproj   # 私有依赖 DbcParserLib
 │   ├── ForkPlus.Plugins.Subtitle/        # 字幕 / 时间轴对比插件（字幕行表 / 等比时间轴）
 │   │   ├── SubtitleDiffPlugin.cs
 │   │   ├── SubtitleDiffView.cs           # 两模式视图：字幕行表 / 时间轴
@@ -173,7 +182,8 @@ ForkPlus-Plugins/
 │   ├── ffmpeg-autogen/LICENSE.txt        # FFmpeg.AutoGen 绑定（LGPL-3.0-or-later）
 │   ├── miniaudio/LICENSE.txt             # miniaudio 音频输出后端（Unlicense OR MIT-0）
 │   ├── yamldotnet/LICENSE.txt            # YamlDotNet（MIT）
-│   └── tomlyn/LICENSE.txt                # Tomlyn（BSD-2-Clause）
+│   ├── tomlyn/LICENSE.txt                # Tomlyn（BSD-2-Clause）
+│   └── dbcparserlib/LICENSE.txt          # DbcParserLib（MIT）
 ├── third_party/                          # 三方件「件与锁」：清单入库，二进制不入库（构建前取件）
 │   ├── ffmpeg/manifest.json              # FFmpeg 来源 / 许可 / 运行期库 / 各 RID 说明（版本以三方件仓为准）
 │   ├── ffmpeg/<rid>/*.dll|*.so.*|*.dylib# 实际原生件（由 fetch-third-party.sh 取入）
@@ -638,6 +648,39 @@ INI / `.cfg` / `.properties` 自写解析器。
 
 ---
 
+## DBC（CAN 数据库）对比插件
+
+[plugins/ForkPlus.Plugins.Dbc](plugins/ForkPlus.Plugins.Dbc) 认领 `.dbc`：CAN 数据库改了一版，
+差异往往在「某个报文 ID / DLC 变了、某个信号的起始位 / 因子 / 取值范围 / 值表改了、哪个节点 /
+报文 / 信号加了删了」——逐字符的文本 diff 读不出来。本插件用第三方库 **DbcParserLib** 把两侧各自
+解析成同一套数据模型后按键路径做**语义 diff**，并附带一份逐字符的原文对照。
+
+两种模式（自建工具条 `Structured / Raw text` 切换）：
+
+- **结构化**（默认）：把两侧数据各拍平成「键路径 → 标量」的列表，取并集逐行列出，每行按
+  `相同 / 已变更 / 仅左 / 仅右` 四色铺底，并附旧值 / 新值两列——报文 / 信号 / 节点的新增、删除、
+  改值一眼可见。
+- **原文**：左右两栏并排展示两侧原始文本（等宽字体、可滚动），便于对照上下文。
+
+解析覆盖：**节点**（名称 / 注释 / 属性）、**报文**（ID（十进制 / 十六进制 / 扩展帧）/ DLC / 发送方 /
+注释 / 属性 / 下属信号）、**信号**（起始位 / 长度 / 字节序（Motorola / Intel）/ 数值类型 /
+因子 / 偏移 / 取值范围 / 单位 / 初值 / 多路复用 / 接收方 / 值表 / 属性）、**环境变量**
+（类型 / 访问权限 / 单位 / 取值范围 / 初值 / 注释 / 值表 / 属性）、**全局属性**。报文按 ID、
+信号按起始位排序，保证两侧行序稳定。DbcParserLib 的语法告警不冒泡，转成树顶的 `Parse warnings`
+一行提示。
+
+> **路由说明（重要）**：宿主只对**二进制**差异查询插件路由，纯文本差异固定由内置文本编辑器渲染。
+> `.dbc` 是文本格式，因此**自动路由通常不会命中**；要使用本视图，需在宿主「偏好设置 → 扩展名绑定」
+> 里把 `.dbc` 绑定到本插件（用户绑定优先级最高）。
+
+依赖 DbcParserLib（MIT，纯托管、零传递依赖），登记在插件目录的 `third-party.json`，
+打包时合并成 `ForkPlus.Plugins.Dbc.THIRD-PARTY-NOTICES.txt`（见「第三方许可管理」）。
+
+插件实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「DBC 对比」（英文原文
+`DBC Compare`，8 语言译文见 `Localization/DbcStrings.cs`）、版本 `0.0.1` 与描述。
+
+---
+
 ## 音频对比插件
 
 [plugins/ForkPlus.Plugins.Audio](plugins/ForkPlus.Plugins.Audio) 认领主流音频容器
@@ -748,13 +791,14 @@ INI / `.cfg` / `.properties` 自写解析器。
   remove=`.p7b`；字体三场景用同一对系统字体（旧 DejaVu Sans → 新 DejaVu Serif）。
   这些依赖见 [pages.yml](.github/workflows/pages.yml) 的 `Install headless toolchain`
   （`fonts-dejavu` / `fonts-liberation` / `gcc` / `binutils` / `openssl`）。
-- **结构化数据 / 字幕 / SVG** 三类的 demo 素材都是**纯文本**，由采集脚本用纯 Python 标准库直接写出
-  （`write_demo_structured` / `write_demo_subtitle` / `write_demo_svg`）。因为宿主只对**二进制**差异
-  查询插件路由，这三类文本格式**自动路由不会命中**，采集脚本须在 demo 仓库里预置
-  「把对应扩展名绑定到本插件」的设置（用户绑定优先级最高），否则截图会落到内置文本编辑器上。
+- **结构化数据 / DBC / 字幕 / SVG** 四类的 demo 素材都是**纯文本**，由采集脚本用纯 Python 标准库
+  直接写出（`write_demo_structured` / `write_demo_dbc` / `write_demo_subtitle` / `write_demo_svg`）。
+  因为宿主只对**二进制**差异查询插件路由，这四类文本格式**自动路由不会命中**，采集脚本须在 demo
+  仓库里预置「把对应扩展名绑定到本插件」的设置（用户绑定优先级最高），否则截图会落到内置文本编辑器上。
   三张截图各覆盖一种格式形态：结构化数据 modify=`.yaml` / add=`.json` / remove=`.toml`（另用
-  `.ini` / `.xml` 体现解析广度），字幕 modify=`.srt` / add=`.vtt` / remove=`.ass`（另用 `.ssa` /
-  MicroDVD `.sub`），SVG 三场景共用同一对 `.svg`（旧：蓝底矩形 + 灰线；新：换色 + 挪位 + 多一笔）。
+  `.ini` / `.xml` 体现解析广度），DBC 三场景共用同一对 `.dbc`（旧：两报文 / 三信号带值表；新：改因子与
+  取值范围、加一条信号与一条报文、删一条信号），字幕 modify=`.srt` / add=`.vtt` / remove=`.ass`（另用
+  `.ssa` / MicroDVD `.sub`），SVG 三场景共用同一对 `.svg`（旧：蓝底矩形 + 灰线；新：换色 + 挪位 + 多一笔）。
 - **音频 / 视频**两类 demo 素材用 **系统 `ffmpeg` CLI** 现造（`write_demo_audio` / `write_demo_video`，
   pages.yml 装 `ffmpeg`）。注意分工：造样本用系统 ffmpeg，插件解码用随包分发的 FFmpeg 原生库，
   两者互不相干。音频三场景各用一种容器（modify=`.mp3` 有损 / add=`.wav` PCM 无损 / remove=`.flac`
@@ -771,8 +815,8 @@ INI / `.cfg` / `.properties` 自写解析器。
 
 插件分发的第三方组件（如 PDF 插件的 Docnet.Core / PDFium、Office 插件的 Open XML SDK、
 压缩包插件的 SharpCompress、证书插件的 System.Security.Cryptography.Pkcs、结构化数据插件的
-YamlDotNet / Tomlyn、音视频插件的 FFmpeg / FFmpeg.AutoGen / miniaudio）**统一登记、集中存放、
-按包合并**，单一事实来源是两处：
+YamlDotNet / Tomlyn、DBC 插件的 DbcParserLib、音视频插件的 FFmpeg / FFmpeg.AutoGen / miniaudio）
+**统一登记、集中存放、按包合并**，单一事实来源是两处：
 
 1. **`licenses/`** —— 各组件许可全文的中央仓库，按组件分目录（`licenses/<组件>/LICENSE.txt`）。
    全文原样落库（含三方文件自身的编码），不依赖构建时从 NuGet 缓存临时抓取。
@@ -894,6 +938,9 @@ workflow：[.github/workflows/build.yml](.github/workflows/build.yml)
       ├── YamlDotNet.dll                     # 结构化数据插件私有依赖
       ├── Tomlyn.dll                         # 结构化数据插件私有依赖
       ├── ForkPlus.Plugins.Structured.THIRD-PARTY-NOTICES.txt # 三方许可声明（YamlDotNet / Tomlyn）
+      ├── ForkPlus.Plugins.Dbc.dll
+      ├── DbcParserLib.dll                   # DBC 插件私有依赖
+      ├── ForkPlus.Plugins.Dbc.THIRD-PARTY-NOTICES.txt # 三方许可声明（DbcParserLib）
       ├── ForkPlus.Plugins.Subtitle.dll      # 字幕插件（零私有依赖）
       ├── ForkPlus.Plugins.Svg.dll           # SVG 插件（零私有依赖）
       ├── ForkPlus.Plugins.Audio.dll

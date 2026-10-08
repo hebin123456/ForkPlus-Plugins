@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- DBC 文件对比视图插件：认领 .dbc，用 DbcParserLib 把两侧 CAN 数据库解析成同一套数据树
+         （节点 / 报文 / 信号 / 环境变量），按键路径做语义 diff（结构化键路径表），并提供原文双栏
+         对照。报文 / 信号的 id / dlc / 起始位 / 长度 / 字节序 / 因子 / 偏移 / 取值范围 / 单位 /
+         接收方 / 多路复用 / 初值 / 值表 / 属性（BA_）逐项列出。
+         公共属性（net10.0 / AvaloniaVersion / 契约引用）见 ../Directory.Build.props。 -->
+    <AssemblyName>ForkPlus.Plugins.Dbc</AssemblyName>
+    <RootNamespace>ForkPlus.Plugins.Dbc</RootNamespace>
+
+    <!-- 插件自身版本（与宿主版本解耦）；偏好设置 → 插件页展示的 Version 与此一致。 -->
+    <Version>0.0.1</Version>
+
+    <!-- 本插件带私有依赖（DbcParserLib 及其托管传递依赖），需随插件产物拷贝出来。
+         类库工程默认不拷 PackageReference 资产，这里显式开启；打包脚本再排除宿主共享程序集。 -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 本插件视图用 Avalonia 控件纯代码构建（未使用 .axaml）。
+         运行期 Avalonia 由宿主提供，打包时不随插件分发（见 README「依赖与共享程序集」）。 -->
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+
+    <!-- DbcParserLib：MIT 许可，纯托管的 DBC（CAN 数据库）解析库，零传递依赖，
+         支持 net8.0（net10.0 直接消费）。随包分发的依赖与许可全文见本目录
+         third-party.json 与 licenses/dbcparserlib/。 -->
+    <PackageReference Include="DbcParserLib" Version="1.8.0" />
+  </ItemGroup>
+</Project>
