@@ -77,7 +77,10 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      # 版本号：标签 v1.2.3 → 1.2.3；手动触发 → 0.0.0-dev-<短 SHA>
+      # 版本号：标签 v1.2.3 → 1.2.3；手动触发 → 0.0.0-dev-<短 SHA>。
+      # 变量名刻意用 PLUGIN_VERSION 而非 VERSION：环境变量 VERSION 会被 MSBuild 当成 Version 属性，
+      # 连带改写契约程序集（ForkPlus.Plugins.Abstractions）的 AssemblyVersion，使其与宿主不一致而
+      # 导致插件在宿主中加载失败（见 sdk/ForkPlus.Plugins.Abstractions/*.csproj 的说明）。此变量只用于包名。
       - name: Resolve version
         shell: bash
         run: |
@@ -86,7 +89,7 @@ jobs:
           else
             version="0.0.0-dev-${GITHUB_SHA:0:7}"
           fi
-          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "PLUGIN_VERSION=$version" >> "$GITHUB_ENV"
           echo "packaging version: $version"
 
       # 三方件原生库：从三方件仓（hebin123456/ForkPlus-Plugins-Third_Party）的**最新 Release**
@@ -129,7 +132,7 @@ jobs:
             count=$((count + 1))
           done
           echo "packaged $count plugin(s)"
-          zip_name="ForkPlus-Plugins-${VERSION}-${{ matrix.name }}.zip"
+          zip_name="ForkPlus-Plugins-${PLUGIN_VERSION}-${{ matrix.name }}.zip"
           # 打包成 zip 统一走 python 的 zipfile，条目名一律用正斜杠（zip 规范）。此前 windows 走
           # PowerShell 的 Compress-Archive，它把条目分隔符写成反斜杠（plugins\xxx.dll），在 Linux /
           # macOS 上解压会得到带反斜杠字面量的文件名——交付件必须四平台都能正常解压。

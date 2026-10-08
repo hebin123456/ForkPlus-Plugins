@@ -8,6 +8,15 @@
          运行期宿主进程内已加载同名程序集（ForkPlus.Plugins.Abstractions.dll），
          插件不得把本 DLL 打进 plugins/ 分发；plugins/Directory.Build.props 已用
          Private=false 把它限定为编译期引用。 -->
+
+    <!-- v1.0.8：契约程序集版本钉死为 1.0.0.0，与宿主 src/ForkPlus.Plugins.Abstractions 严格一致。
+         此前 CI 把发布版本（如 1.0.7）经环境变量 VERSION 注入为 MSBuild 的 Version 属性，连带把
+         契约的 AssemblyVersion 抬到 1.0.7.0；而宿主进程内是 1.0.0.0，默认绑定要求「已加载版本 ≥
+         请求版本」，请求版本更高时绑定失败——插件的 IDiffViewPlugin 类型加载不了，宿主插件页里
+         插件仓的插件一个都看不见。此处显式钉死，杜绝环境变量渗入契约版本。 -->
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
   </PropertyGroup>
   <ItemGroup>
     <!-- 契约公开面上含 Avalonia 类型，版本须与宿主一致（AvaloniaVersion 见根 Directory.Build.props）。 -->
