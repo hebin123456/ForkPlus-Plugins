@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Torrent 种子文件对比视图插件：认领 .torrent，把两侧 bencode 各自解码拍平成键路径表，
+         取并集逐行按「相同 / 已变 / 仅左 / 仅右」四色标注，并附 info 摘要（名称 / 分片数 / 总长度）。
+         零第三方依赖：bencode 解码、拍平与 diff 全部自实现（TorrentParser / TorrentData）。
+         公共属性（net10.0 / AvaloniaVersion / 契约引用）见 ../Directory.Build.props。 -->
+    <AssemblyName>ForkPlus.Plugins.Torrent</AssemblyName>
+    <RootNamespace>ForkPlus.Plugins.Torrent</RootNamespace>
+
+    <!-- 插件自身版本（与宿主版本解耦）；偏好设置 → 插件页展示的 Version 与此一致。 -->
+    <Version>0.0.1</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 本插件视图用 Avalonia 控件纯代码构建（未使用 .axaml）。
+         运行期 Avalonia 由宿主提供，打包时不随插件分发（见 README「依赖与共享程序集」）。 -->
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+  </ItemGroup>
+</Project>

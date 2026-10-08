@@ -126,6 +126,11 @@ namespace ForkPlus.Plugins.Subtitle
 
 		private string _error;
 
+		/// <summary>左 / 右两侧各自的解析错误（侧存在但解析失败时用于区分「解析失败」与「不存在」）。</summary>
+		private string _srcParseError;
+
+		private string _dstParseError;
+
 		private string _srcFormat = "?";
 
 		private string _dstFormat = "?";
@@ -281,6 +286,8 @@ namespace ForkPlus.Plugins.Subtitle
 			_right = null;
 			_diff = null;
 			_error = null;
+			_srcParseError = null;
+			_dstParseError = null;
 			_tooLarge = false;
 			UpdateStatus();
 			_content.Content = null;
@@ -311,7 +318,8 @@ namespace ForkPlus.Plugins.Subtitle
 			{
 				SubtitleDocument left = null;
 				SubtitleDocument right = null;
-				string error = null;
+				string srcParseError = null;
+				string dstParseError = null;
 				try
 				{
 					string leftText = ReadText(src, hexSrc, cts.Token);
@@ -319,13 +327,11 @@ namespace ForkPlus.Plugins.Subtitle
 					cts.Token.ThrowIfCancellationRequested();
 					if (src != null)
 					{
-						left = SubtitleParser.Parse(leftText, srcFormat, out string leftError);
-						error = leftError;
+						left = SubtitleParser.Parse(leftText, srcFormat, out srcParseError);
 					}
 					if (dst != null)
 					{
-						right = SubtitleParser.Parse(rightText, dstFormat, out string rightError);
-						error = error ?? rightError;
+						right = SubtitleParser.Parse(rightText, dstFormat, out dstParseError);
 					}
 					if (cts.Token.IsCancellationRequested)
 					{
@@ -341,7 +347,8 @@ namespace ForkPlus.Plugins.Subtitle
 						_left = left;
 						_right = right;
 						_diff = diff;
-						_error = error;
+						_srcParseError = srcParseError;
+						_dstParseError = dstParseError;
 						UpdateStatus();
 						BuildContent();
 					});
@@ -489,6 +496,12 @@ namespace ForkPlus.Plugins.Subtitle
 			return extension.TrimStart('.').ToLowerInvariant();
 		}
 
+		/// <summary>优先展示的状态错误：意外异常 &gt; 左侧解析失败 &gt; 右侧解析失败。</summary>
+		private string DisplayError()
+		{
+			return _error ?? _srcParseError ?? _dstParseError;
+		}
+
 		private void UpdateStatus()
 		{
 			if (_tooLarge)
@@ -496,9 +509,10 @@ namespace ForkPlus.Plugins.Subtitle
 				_status.Text = SubtitleStrings.T("File too large to preview");
 				return;
 			}
-			if (_error != null)
+			string error = DisplayError();
+			if (error != null)
 			{
-				_status.Text = SubtitleStrings.F("Failed to parse: {0}", _error);
+				_status.Text = SubtitleStrings.F("Failed to parse: {0}", error);
 				return;
 			}
 			if (_diff == null)
@@ -548,11 +562,17 @@ namespace ForkPlus.Plugins.Subtitle
 				_content.Content = NoteText(SubtitleStrings.T("File too large to preview"));
 				return;
 			}
-			if (_diff == null)
-			{
-				_content.Content = NoteText(_error == null ? SubtitleStrings.T("Analyzing…") : SubtitleStrings.F("Failed to parse: {0}", _error));
-				return;
-			}
+		if (_diff == null)
+		{
+			_content.Content = NoteText(DisplayError() == null ? SubtitleStrings.T("Analyzing…") : SubtitleStrings.F("Failed to parse: {0}", DisplayError()));
+			return;
+		}
+		// 两侧都存在却都解析失败（如扩展名对但内容不是字幕）：给错误占位，不再渲染空表 / 空时间轴。
+		if (_left == null && _right == null && DisplayError() != null)
+		{
+			_content.Content = NoteText(SubtitleStrings.F("Failed to parse: {0}", DisplayError()));
+			return;
+		}
 			if (_mode == TimelineMode)
 			{
 				_content.Content = BuildTimelineContent();
@@ -663,7 +683,8 @@ namespace ForkPlus.Plugins.Subtitle
 			long totalMs = TotalDuration();
 			if (totalMs <= 0L)
 			{
-				return NoteText(SubtitleStrings.T("No cues"));
+				// 区分「没有字幕」与「有字幕但时间全为 0（无法铺开时间轴）」两种占位。
+				return NoteText(_diff.Total > 0 ? SubtitleStrings.T("No timeable cues") : SubtitleStrings.T("No cues"));
 			}
 			StackPanel stack = new StackPanel
 			{
@@ -925,7 +946,8 @@ namespace ForkPlus.Plugins.Subtitle
 			Button button = new Button
 			{
 				Content = text,
-				Padding = new Thickness(10.0, 4.0, 10.0, 4.0),
+				Padding = new Thickness(10.0, 0.0, 10.0, 0.0),
+				MinHeight = 28.0,
 				FontSize = 12.0
 			};
 			button.Click += delegate

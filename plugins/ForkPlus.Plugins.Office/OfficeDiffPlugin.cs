@@ -11,8 +11,8 @@ namespace ForkPlus.Plugins.Office
 	/// 不认领老格式 .doc/.ppt/.xls：宽松许可下没有能解析它们的 .NET 库（NPOI 仅覆盖 xls/xlsx/docx，
 	/// 其余可选项均为商业库），故本插件只做现代格式。
 	///
-	/// 注意：宿主只对**二进制差异**查询插件路由。Office 文档是 OOXML 包，git 一律判为二进制，
-	/// 因此会命中本插件而非文本差异或 Hex 兜底。
+	/// 注意：宿主对二进制与文本差异均查询插件路由（v5.0.4 起含文本）。Office 文档是
+	/// OOXML 包，git 一律判为二进制，因此会命中本插件而非 Hex 兜底。
 	///
 	/// 另实现 <see cref="IPluginMetadata"/>（可选）向宿主「偏好设置 → 插件」页提供名称/版本/描述。
 	/// </summary>

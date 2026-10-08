@@ -24,7 +24,7 @@ namespace ForkPlus.Plugins.Archive
 	/// 带密码的压缩包（如做了头部加密的 7z / rar）解不动时，状态行提示需要 / 密码错误，
 	/// 用户在密码框输入后点「应用」即可重新展开。
 	///
-	/// 字节来源：非图片二进制由宿主经 <c>HexSrc/HexDst</c> 预载（≤50MB）；LFS 侧走宿主
+	/// 字节来源：非图片二进制由宿主经 <c>HexSrc/HexDst</c> 预载（v5.0.4 起 ≤100MB）；LFS 侧走宿主
 	/// <see cref="IDiffViewHost"/> 的缓存 / smudge。展开在后台线程进行，控件构建回到 UI 线程。
 	/// </summary>
 	public sealed class ArchiveDiffView : IDiffView

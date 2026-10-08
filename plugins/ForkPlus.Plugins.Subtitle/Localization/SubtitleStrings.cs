@@ -258,17 +258,28 @@ namespace ForkPlus.Plugins.Subtitle
 					{ "es-ES", "Sin diferencias" }
 				}
 			},
-			{ "No cues", new Dictionary<string, string>
-				{
-					{ "zh-Hans", "没有字幕" },
-					{ "zh-Hant", "沒有字幕" },
-					{ "ja-JP", "字幕がありません" },
-					{ "ko-KR", "자막이 없습니다" },
-					{ "fr-FR", "Aucun cue" },
-					{ "de-DE", "Keine Cues" },
-					{ "es-ES", "Sin cues" }
-				}
-			},
+		{ "No cues", new Dictionary<string, string>
+			{
+				{ "zh-Hans", "没有字幕" },
+				{ "zh-Hant", "沒有字幕" },
+				{ "ja-JP", "字幕がありません" },
+				{ "ko-KR", "자막이 없습니다" },
+				{ "fr-FR", "Aucun cue" },
+				{ "de-DE", "Keine Cues" },
+				{ "es-ES", "Sin cues" }
+			}
+		},
+		{ "No timeable cues", new Dictionary<string, string>
+			{
+				{ "zh-Hans", "字幕时间全为 0，无法铺开时间轴" },
+				{ "zh-Hant", "字幕時間全為 0，無法鋪開時間軸" },
+				{ "ja-JP", "字幕の時間がすべて 0 のため、タイムラインを表示できません" },
+				{ "ko-KR", "자막 시간이 모두 0이라 타임라인을 표시할 수 없습니다" },
+				{ "fr-FR", "Cues sans durée exploitable : chronologie impossible" },
+				{ "de-DE", "Cues ohne nutzbare Zeiten: Zeitachse nicht darstellbar" },
+				{ "es-ES", "Cues sin tiempos utilizables: línea de tiempo no disponible" }
+			}
+		},
 			{ "MicroDVD frames converted at {0} fps", new Dictionary<string, string>
 				{
 					{ "zh-Hans", "MicroDVD 帧号按 {0} fps 换算" },

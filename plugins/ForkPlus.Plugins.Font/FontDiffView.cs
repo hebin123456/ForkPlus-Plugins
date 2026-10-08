@@ -369,7 +369,9 @@ namespace ForkPlus.Plugins.Font
 			Button button = new Button
 			{
 				Content = FontStrings.T(key),
-				Padding = new Thickness(12.0, 4.0, 12.0, 4.0),
+				// 宿主 Button 主题固定 Height=24，垂直 padding 合计须 ≤4px；加厚的观感交给 MinHeight 抬高。
+				Padding = new Thickness(12.0, 0.0, 12.0, 0.0),
+				MinHeight = 28.0,
 				Tag = mode,
 				VerticalAlignment = VerticalAlignment.Center,
 			};

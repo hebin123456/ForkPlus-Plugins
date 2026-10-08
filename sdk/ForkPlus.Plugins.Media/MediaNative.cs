@@ -132,13 +132,38 @@ namespace ForkPlus.Plugins.Media
 		{
 			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 			{
-				return new WindowsFunctionResolver();
+				return new WindowsAlteredSearchFunctionResolver();
 			}
 			if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
 			{
 				return new MacFunctionResolver();
 			}
 			return new LinuxFunctionResolver();
+		}
+
+		/// <summary>
+		/// Windows 专用解析器：FFmpeg 的 DLL 是按完整路径加载的，但它们的**非 FFmpeg 运行期依赖**
+		/// （随交付件一起平铺在插件目录的 <c>zlib1.dll</c> / <c>libwinpthread-1.dll</c> /
+		/// <c>libgcc_s_seh-1.dll</c>）不在 FFmpeg.AutoGen 的依赖预加载表里，默认的
+		/// <c>LoadLibrary</c> 只按「宿主可执行文件目录 + 系统目录 + PATH」找依赖，**不会看被加载
+		/// DLL 自己所在的目录**，于是 avformat 等一律加载失败——表现为「FFmpeg 解码不可用」，
+		/// 音频和视频都放不出来（Windows 尤其明显）。
+		///
+		/// 改用 <c>LOAD_WITH_ALTERED_SEARCH_PATH</c>：依赖优先在被加载 DLL 自己的目录里找，
+		/// 插件把原生件平铺在同一目录即可自洽。Linux / macOS 无此问题——前者靠基类的依赖预加载
+		/// 先命中已加载的 SONAME，后者的 install_name 是 <c>@loader_path</c>。
+		/// </summary>
+		private sealed class WindowsAlteredSearchFunctionResolver : WindowsFunctionResolver
+		{
+			private const uint LoadWithAlteredSearchPath = 0x00000008;
+
+			protected override IntPtr LoadNativeLibrary(string libraryName)
+			{
+				return LoadLibraryEx(libraryName, IntPtr.Zero, LoadWithAlteredSearchPath);
+			}
+
+			[DllImport("kernel32", CharSet = CharSet.Unicode, SetLastError = true)]
+			private static extern IntPtr LoadLibraryEx(string fileName, IntPtr file, uint flags);
 		}
 
 		private static string Describe(Exception ex)

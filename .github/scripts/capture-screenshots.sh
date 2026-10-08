@@ -1259,6 +1259,517 @@ print("  demo svg ->", target, "(" + version + ")")
 PY
 }
 
+# ── demo 素材：机器学习模型 / MIDI / Torrent / 抓包 / PSD / EPUB（二进制格式）────
+# 这六类样本由纯 Python 标准库现场构造最小合法文件（PSD 另借系统 ffmpeg 造缩略图）。
+# 文件里都夹带 NUL 字节，git 一律判为二进制——只有二进制差异才会走插件路由（见 README）。
+
+# 机器学习模型：三场景各用一种格式（modify=onnx / add=safetensors / remove=gguf），
+# 一次覆盖三种解析路径。样例按各自规范写出真实结构，且各含 NUL 字节。
+write_demo_mlmodel() {
+	local repo="$1" version="$2" ext="$3"
+	python3 - "$repo" "$version" "$ext" <<'PY'
+import json, os, struct, sys
+repo, version, ext = sys.argv[1], sys.argv[2], sys.argv[3]
+is_new = version == "v2"
+
+def _uvarint(n):
+    out = bytearray()
+    while True:
+        b = n & 0x7F
+        n >>= 7
+        if n:
+            out.append(b | 0x80)
+        else:
+            out.append(b)
+            return bytes(out)
+
+def _tag(field, wire):
+    return _uvarint((field << 3) | wire)
+
+def _vint(field, value):
+    return _tag(field, 0) + _uvarint(value)
+
+def _str(field, text):
+    data = text.encode("utf-8")
+    return _tag(field, 2) + _uvarint(len(data)) + data
+
+def _msg(field, payload):
+    return _tag(field, 2) + _uvarint(len(payload)) + payload
+
+def _onnx():
+    # NodeProto：3=name、4=op_type
+    def node(op, name):
+        return _str(3, name) + _str(4, op)
+    # TensorProto(initializer)：1=dims、2=data_type、8=name、9=raw_data（NUL 填充保证二进制判定）
+    def initializer(name, dims, dtype):
+        body = b"".join(_vint(1, d) for d in dims)
+        body += _vint(2, dtype) + _str(8, name)
+        body += _tag(9, 2) + _uvarint(16) + b"\x00" * 16
+        return body
+    # ValueInfoProto：1=name、2=TypeProto(Tensor：1=elem_type、2=shape)
+    def value_info(name, elem_type, dims):
+        shape = b"".join(_msg(1, _vint(1, d)) for d in dims)   # Dimension.dim_value
+        tensor_type = _vint(1, elem_type) + _msg(2, shape)
+        return _str(1, name) + _msg(2, _msg(1, tensor_type))
+    if is_new:
+        nodes = [node("Conv", "conv1"), node("Relu", "relu1"),
+                 node("MatMul", "fc1"), node("Add", "bias"), node("Softmax", "prob")]
+        inits = [initializer("conv1.weight", [16, 3, 3, 3], 1),
+                 initializer("fc1.weight", [10, 144], 1),
+                 initializer("fc1.bias", [10], 1)]
+        producer_version, model_version = "1.15.0", 2
+    else:
+        nodes = [node("Conv", "conv1"), node("Relu", "relu1"), node("MatMul", "fc1")]
+        inits = [initializer("conv1.weight", [8, 3, 3, 3], 1),
+                 initializer("fc1.weight", [10, 72], 1)]
+        producer_version, model_version = "1.14.0", 1
+    graph = b"".join(_msg(1, n) for n in nodes)
+    graph += _str(2, "forkplus_demo")
+    graph += b"".join(_msg(5, t) for t in inits)
+    graph += _msg(11, value_info("input", 1, [1, 3, 32, 32]))
+    graph += _msg(12, value_info("output", 1, [1, 10]))
+    model = _vint(1, 8) + _str(2, "forkplus-demo") + _str(3, producer_version)
+    model += _vint(5, model_version) + _msg(7, graph)
+    # doc_string（字段 14，解析器按未知字段跳过）：内容含 NUL，确保 git 判二进制
+    model += _str(14, "ForkPlus demo model\x00")
+    return model
+
+def _safetensors():
+    if is_new:
+        tensors = [("model.embed_tokens.weight", "F32", [32, 64]),
+                   ("model.layers.0.attn.q_proj.weight", "F16", [64, 64]),
+                   ("model.layers.1.attn.q_proj.weight", "F16", [64, 64])]
+        meta = {"format": "pt", "framework": "transformers", "revision": "v2"}
+    else:
+        tensors = [("model.embed_tokens.weight", "F32", [16, 32]),
+                   ("model.layers.0.attn.q_proj.weight", "F16", [32, 32])]
+        meta = {"format": "pt", "framework": "transformers", "revision": "v1"}
+    size_of = {"F32": 4, "F16": 2}
+    header = {"__metadata__": meta}
+    offset = 0
+    for name, dtype, shape in tensors:
+        count = 1
+        for d in shape:
+            count *= d
+        size = count * size_of[dtype]
+        header[name] = {"dtype": dtype, "shape": shape, "data_offsets": [offset, offset + size]}
+        offset += size
+    blob = json.dumps(header, separators=(",", ":")).encode("utf-8")
+    return struct.pack("<Q", len(blob)) + blob + b"\x00" * offset
+
+def _gguf():
+    def gstr(text):
+        data = text.encode("utf-8")
+        return struct.pack("<Q", len(data)) + data
+    if is_new:
+        kvs = [("general.architecture", 8, "llama"),
+               ("general.name", 8, "ForkPlus Demo v2"),
+               ("llama.context_length", 4, 4096),
+               ("llama.embedding_length", 4, 128)]
+        tensors = [("token_embd.weight", [64, 128], 0, 0),
+                   ("blk.0.attn_q.weight", [128, 128], 2, 8192),
+                   ("blk.1.attn_q.weight", [128, 128], 2, 16384)]
+    else:
+        kvs = [("general.architecture", 8, "llama"),
+               ("general.name", 8, "ForkPlus Demo v1"),
+               ("llama.context_length", 4, 2048),
+               ("llama.embedding_length", 4, 64)]
+        tensors = [("token_embd.weight", [32, 64], 0, 0),
+                   ("blk.0.attn_q.weight", [64, 64], 1, 4096)]
+    out = bytearray(b"GGUF") + struct.pack("<I", 3)
+    out += struct.pack("<Q", len(tensors)) + struct.pack("<Q", len(kvs))
+    for key, vtype, value in kvs:
+        out += gstr(key) + struct.pack("<I", vtype)
+        out += gstr(value) if vtype == 8 else struct.pack("<I", value)
+    for name, dims, ttype, offset in tensors:
+        out += gstr(name) + struct.pack("<I", len(dims))
+        for d in dims:
+            out += struct.pack("<Q", d)
+        out += struct.pack("<I", ttype) + struct.pack("<Q", offset)
+    return bytes(out)
+
+data = {"onnx": _onnx, "safetensors": _safetensors, "gguf": _gguf}[ext]()
+target = os.path.join(repo, "sample." + ext)
+with open(target, "wb") as f:
+    f.write(data)
+print("  demo mlmodel ->", target, "(" + version + " · " + ext + ")")
+PY
+}
+
+# MIDI：三场景共用同一对 .mid（旧：C 大调三音；新：加音 / 改力度 / 改 tempo），
+# varlen delta 与 note 字节天然含 NUL，git 判二进制。
+write_demo_midi() {
+	local repo="$1" version="$2"
+	python3 - "$repo" "$version" <<'PY'
+import os, struct, sys
+repo, version = sys.argv[1], sys.argv[2]
+is_new = version == "v2"
+
+def varlen(n):
+    out = bytearray([n & 0x7F])
+    n >>= 7
+    while n:
+        out.insert(0, (n & 0x7F) | 0x80)
+        n >>= 7
+    return bytes(out)
+
+def event(delta, payload):
+    return varlen(delta) + payload
+
+tempo = 600000 if is_new else 500000
+notes = [(60, 100, 0, 480), (64, 90, 480, 480), (67, 100, 960, 480)]
+if is_new:
+    notes = [(60, 110, 0, 480), (64, 90, 480, 480), (67, 100, 960, 480), (72, 120, 1440, 960)]
+
+events = [event(0, bytes([0xFF, 0x51, 0x03]) + tempo.to_bytes(3, "big"))]
+name = b"ForkPlus Demo v2" if is_new else b"ForkPlus Demo v1"
+events.append(event(0, bytes([0xFF, 0x03]) + varlen(len(name)) + name))
+
+flattened = []
+for pitch, vel, start, dur in notes:
+    flattened.append((start, bytes([0x90, pitch, vel])))
+    flattened.append((start + dur, bytes([0x80, pitch, 0x40])))
+flattened.sort(key=lambda item: item[0])
+last = 0
+for tick, payload in flattened:
+    events.append(event(tick - last, payload))
+    last = tick
+events.append(event(0, bytes([0xFF, 0x2F, 0x00])))
+
+body = b"".join(events)
+data = b"MThd" + struct.pack(">IHHH", 6, 1, 1, 480) + b"MTrk" + struct.pack(">I", len(body)) + body
+target = os.path.join(repo, "sample.mid")
+with open(target, "wb") as f:
+    f.write(data)
+print("  demo midi ->", target, "(" + version + ")")
+PY
+}
+
+# Torrent：三场景共用同一对 .torrent（旧：1 tracker / 4 分片；新：加 tracker、换分片数、改长度），
+# info.pieces 是二进制 SHA-1 串，含 NUL，git 判二进制。
+write_demo_torrent() {
+	local repo="$1" version="$2"
+	python3 - "$repo" "$version" <<'PY'
+import os, sys
+repo, version = sys.argv[1], sys.argv[2]
+is_new = version == "v2"
+
+def bencode(value):
+    if isinstance(value, bytes):
+        return str(len(value)).encode() + b":" + value
+    if isinstance(value, str):
+        return bencode(value.encode("utf-8"))
+    if isinstance(value, bool):
+        return bencode(1 if value else 0)
+    if isinstance(value, int):
+        return b"i" + str(value).encode() + b"e"
+    if isinstance(value, list):
+        return b"l" + b"".join(bencode(v) for v in value) + b"e"
+    if isinstance(value, dict):
+        out = b"d"
+        for k in sorted(value.keys()):
+            out += bencode(k) + bencode(value[k])
+        return out + b"e"
+    raise TypeError(type(value))
+
+def pieces(count, seed):
+    # 20 字节 × count 的伪分片串：含 NUL，且随版本变化
+    return bytes((seed + i * 37) % 256 for i in range(20 * count))
+
+if is_new:
+    name, length, count, seed = "forkplus-demo-v2", 33554432, 6, 200
+    announce_list = [["https://tracker.forkplus.local/announce"],
+                     ["udp://tracker2.forkplus.local:6969/announce"]]
+else:
+    name, length, count, seed = "forkplus-demo-v1", 16777216, 4, 10
+    announce_list = [["https://tracker.forkplus.local/announce"]]
+
+torrent = {
+    "announce": "https://tracker.forkplus.local/announce",
+    "announce-list": announce_list,
+    "comment": "ForkPlus demo torrent",
+    "created by": "ForkPlus Pages",
+    "encoding": "UTF-8",
+    "info": {
+        "name": name,
+        "length": length,
+        "piece length": 262144,
+        "pieces": pieces(count, seed),
+        "private": 1,
+        "source": "ForkPlus Demo " + version,
+    },
+}
+target = os.path.join(repo, "sample.torrent")
+with open(target, "wb") as f:
+    f.write(bencode(torrent))
+print("  demo torrent ->", target, "(" + version + ")")
+PY
+}
+
+# 网络抓包：三场景 modify/remove 用 .pcap、add 用 .pcapng。造 Ethernet + IPv4 + TCP/UDP/ICMP
+# 的真实帧，v2 多加一条 TCP 会话与一条 NTP 会话，让协议分布与 Top 会话都有差异。
+write_demo_pcap() {
+	local repo="$1" version="$2" ext="$3"
+	python3 - "$repo" "$version" "$ext" <<'PY'
+import os, struct, sys
+repo, version, ext = sys.argv[1], sys.argv[2], sys.argv[3]
+is_new = version == "v2"
+
+A, B, C, D, E, F = "10.0.0.5", "10.0.0.1", "8.8.8.8", "10.0.0.9", "10.0.0.7", "10.0.0.2"
+
+def mac_addr(text):
+    return bytes(int(b, 16) for b in text.split(":"))
+
+def ip_bytes(addr):
+    return bytes(int(b) for b in addr.split("."))
+
+def ipv4(proto, src, dst, payload):
+    total = 20 + len(payload)
+    return (bytes([0x45, 0x00]) + struct.pack(">H", total) + b"\x00\x01\x00\x00"
+            + bytes([64, proto]) + b"\x00\x00" + ip_bytes(src) + ip_bytes(dst) + payload)
+
+def tcp(src, dst, sport, dport, seq, flags, payload=b""):
+    seg = struct.pack(">HHIIBBHHH", sport, dport, seq, 0, 0x50, flags, 64240, 0, 0) + payload
+    return ipv4(6, src, dst, seg)
+
+def udp(src, dst, sport, dport, payload=b""):
+    return ipv4(17, src, dst, struct.pack(">HHHH", sport, dport, 8 + len(payload), 0) + payload)
+
+def icmp(src, dst):
+    return ipv4(1, src, dst, bytes([8, 0, 0, 0, 0x12, 0x34, 0x00, 0x01]))
+
+def frame(inner):
+    eth = mac_addr("02:00:00:00:00:01") + mac_addr("02:00:00:00:00:02") + b"\x08\x00" + inner
+    return eth + b"\x00" * max(0, 60 - len(eth))
+
+dns = b"\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00"
+if is_new:
+    packets = [(0, frame(tcp(A, B, 49152, 443, 3000, 0x02))),
+               (100000, frame(tcp(B, A, 443, 49152, 4000, 0x12))),
+               (200000, frame(tcp(A, B, 49152, 443, 3001, 0x10))),
+               (300000, frame(tcp(E, F, 52000, 80, 10, 0x02))),
+               (400000, frame(tcp(E, F, 52000, 80, 11, 0x10))),
+               (500000, frame(udp(A, C, 5353, 53, dns))),
+               (600000, frame(udp(E, C, 40000, 123, b"\x1b" + b"\x00" * 47))),
+               (700000, frame(icmp(A, D)))]
+else:
+    packets = [(0, frame(tcp(A, B, 49152, 443, 1000, 0x02))),
+               (120000, frame(tcp(B, A, 443, 49152, 2000, 0x12))),
+               (240000, frame(tcp(A, B, 49152, 443, 1001, 0x10))),
+               (360000, frame(udp(A, C, 5353, 53, dns))),
+               (480000, frame(icmp(A, D)))]
+
+def build_pcap():
+    out = bytearray(struct.pack("<IHHiIII", 0xA1B2C3D4, 2, 4, 0, 0, 262144, 1))
+    for offset_us, fr in packets:
+        out += struct.pack("<IIII", offset_us // 1000000, offset_us % 1000000, len(fr), len(fr)) + fr
+    return bytes(out)
+
+def build_pcapng():
+    def block(btype, body):
+        body += b"\x00" * ((4 - len(body) % 4) % 4)
+        total = 12 + len(body)
+        return struct.pack(">II", btype, total) + body + struct.pack(">I", total)
+    shb = block(0x0A0D0D0A, struct.pack(">IHHq", 0x1A2B3C4D, 1, 0, -1))
+    idb = block(0x00000001, struct.pack(">HHI", 1, 0, 262144) + struct.pack(">HH", 9, 1) + b"\x06\x00\x00\x00" + struct.pack(">HH", 0, 0))
+    out = bytearray(shb + idb)
+    for offset_us, fr in packets:
+        high, low = divmod(offset_us, 1 << 32)
+        body = struct.pack(">IIIII", 0, high, low, len(fr), len(fr)) + fr
+        out += block(0x00000006, body)
+    return bytes(out)
+
+data = build_pcapng() if ext == "pcapng" else build_pcap()
+target = os.path.join(repo, "sample." + ext)
+with open(target, "wb") as f:
+    f.write(data)
+print("  demo pcap ->", target, "(" + version + " · " + ext + ")")
+PY
+}
+
+# PSD / PSB：三场景 modify/remove 用 .psd、add 用 .psb。头部 + 图像资源段（1036 缩略图，
+# 用系统 ffmpeg 造的小 JPEG）+ 图层与蒙版段（图层记录带 luni / LSct）+ 图像数据段压缩标记。
+# v2 改缩略图颜色 / 挪图层 / 改混合模式与不透明度 / 增删图层 / 把分组改成闭合。
+write_demo_psd() {
+	local repo="$1" version="$2" ext="$3"
+	local color thumb
+	if [ "$version" = "v2" ]; then color=0xe67e22; else color=0x3366cc; fi
+	thumb="$repo/.thumb-$version.jpg"
+	ffmpeg -hide_banner -loglevel error -f lavfi -i "color=c=$color:s=96x96" -frames:v 1 -y "$thumb" 2>/dev/null || rm -f "$thumb"
+	python3 - "$repo" "$version" "$ext" "$thumb" <<'PY'
+import os, struct, sys
+repo, version, ext, thumb = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+is_new = version == "v2"
+psb = ext == "psb"
+W = H = 256
+
+def u16(v):
+    return struct.pack(">H", v & 0xFFFF)
+
+def i16(v):
+    return struct.pack(">h", v)
+
+def u32(v):
+    return struct.pack(">I", v & 0xFFFFFFFF)
+
+def i32(v):
+    return struct.pack(">i", v)
+
+def section_len(v):
+    return struct.pack(">Q", v) if psb else u32(v)
+
+def pascal_name(name):
+    data = name.encode("latin-1", "replace")
+    out = bytes([len(data)]) + data
+    align = 4 if psb else 2
+    while len(out) % align != 0:
+        out += b"\x00"
+    return out
+
+def additional_block(key, payload):
+    return b"8BIM" + key + u32(len(payload)) + payload
+
+def luni(name):
+    return additional_block(b"luni", i32(len(name)) + name.encode("utf-16-be"))
+
+def lsct(kind):
+    return additional_block(b"LSct", i32(kind))
+
+def layer_record(name, rect, blend, opacity, visible, channels, section=None):
+    top, left, bottom, right = rect
+    rec = i32(top) + i32(left) + i32(bottom) + i32(right) + u16(len(channels))
+    for cid in channels:
+        rec += i16(cid) + section_len(2)   # 通道数据长度（解析器只跳过）
+    rec += b"8BIM" + blend + bytes([opacity, 0, 0 if visible else 2, 0])
+    extra = u32(0) + u32(0) + pascal_name(name) + luni(name)
+    if section is not None:
+        extra += lsct(section)
+    return rec + section_len(len(extra)) + extra
+
+if is_new:
+    layers = [
+        layer_record("</Layer group>", (0, 0, H, W), b"norm", 100, True, [0, 1, 2], 3),
+        layer_record("Effects", (0, 0, H, W), b"norm", 100, True, [0, 1, 2], 2),
+        layer_record("Watermark", (96, 96, 224, 224), b"norm", 40, False, [0, 1, 2]),
+        layer_record("Logo", (48, 48, 176, 176), b"mult", 100, True, [0, 1, 2]),
+        layer_record("Background", (0, 0, H, W), b"norm", 100, True, [0, 1, 2]),
+    ]
+else:
+    layers = [
+        layer_record("</Layer group>", (0, 0, H, W), b"norm", 100, True, [0, 1, 2], 3),
+        layer_record("Glow", (64, 64, 192, 192), b"scrn", 60, True, [0, 1, 2]),
+        layer_record("Effects", (0, 0, H, W), b"norm", 100, True, [0, 1, 2], 1),
+        layer_record("Logo", (32, 32, 160, 160), b"norm", 80, True, [0, 1, 2]),
+        layer_record("Background", (0, 0, H, W), b"norm", 100, True, [0, 1, 2]),
+    ]
+
+def resource(rid, payload):
+    out = b"8BIM" + u16(rid) + b"\x00\x00" + u32(len(payload)) + payload
+    if len(payload) % 2 == 1:
+        out += b"\x00"
+    return out
+
+resources = b""
+jfif = open(thumb, "rb").read() if os.path.exists(thumb) else b""
+if jfif:
+    resources += resource(1036, u32(1) + u32(96) + u32(96) + b"\x00" * 16 + jfif)
+if is_new:
+    resources += resource(1005, struct.pack(">HHHHI", 72, 1, 72, 1, 1))   # ResolutionInfo
+
+layer_info = i16(len(layers)) + b"".join(layers)
+layer_mask = section_len(len(layer_info)) + layer_info
+
+header = (b"8BPS" + struct.pack(">H", 2 if psb else 1) + b"\x00" * 6
+          + u16(3) + u32(H) + u32(W) + u16(8) + u16(3))
+data = (header + u32(0)                                   # 文件头 + 颜色模式数据段
+        + u32(len(resources)) + resources                 # 图像资源段
+        + section_len(len(layer_mask)) + layer_mask       # 图层与蒙版段
+        + u16(0))                                         # 图像数据段压缩标记（none）
+target = os.path.join(repo, "sample." + ext)
+with open(target, "wb") as f:
+    f.write(data)
+print("  demo psd ->", target, "(" + version + " · " + ext + ")")
+PY
+	rm -f "$thumb"
+}
+
+# EPUB：三场景共用同一对 .epub（ZIP 容器：mimetype → META-INF/container.xml → OPF + nav + 章节）。
+# v2 改书名 / 加作者 / 改标识与日期 / 改章节标题并新增一章；内嵌 cover.png 含 NUL，git 判二进制。
+write_demo_epub() {
+	local repo="$1" version="$2"
+	python3 - "$repo" "$version" <<'PY'
+import base64, os, sys, zipfile
+repo, version = sys.argv[1], sys.argv[2]
+is_new = version == "v2"
+
+COVER_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
+
+def chapter_xhtml(title, body):
+    return ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+            "<html xmlns=\"http://www.w3.org/1999/xhtml\"><head><title>" + title + "</title></head>"
+            "<body><h1>" + title + "</h1><p>" + body + "</p></body></html>\n")
+
+if is_new:
+    meta = {"title": "ForkPlus Handbook, 2nd Edition",
+            "creators": ["Alice Author", "Bob Editor"],
+            "identifier": "urn:uuid:forkplus-demo-v2",
+            "date": "2026-06-01",
+            "modified": "2026-06-01T00:00:00Z"}
+    chapters = [("chap1.xhtml", "Chapter 1: Getting Started", "Install ForkPlus and open a repository."),
+                ("chap2.xhtml", "Chapter 2: Comparing Models", "Compare ONNX, GGUF and SafeTensors side by side."),
+                ("chap3.xhtml", "Chapter 3: Sharing Results", "Export the diff view and share the pages.")]
+else:
+    meta = {"title": "ForkPlus Handbook",
+            "creators": ["Alice Author"],
+            "identifier": "urn:uuid:forkplus-demo-v1",
+            "date": "2026-01-01",
+            "modified": "2026-01-01T00:00:00Z"}
+    chapters = [("chap1.xhtml", "Chapter 1: Getting Started", "Install ForkPlus and open a repository."),
+                ("chap2.xhtml", "Chapter 2: Comparing Files", "Compare PDF, Office and images side by side.")]
+
+creators = "".join("<dc:creator>" + c + "</dc:creator>" for c in meta["creators"])
+manifest = '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>\n'
+manifest += "".join('<item id="%s" href="%s" media-type="application/xhtml+xml"/>\n' % (name[:-6], name)
+                    for name, _, _ in chapters)
+manifest += '<item id="cover" href="images/cover.png" media-type="image/png" properties="cover-image"/>'
+spine = "".join('<itemref idref="%s"/>' % (name[:-6]) for name, _, _ in chapters)
+links = "".join('<li><a href="%s">%s</a></li>' % (name, title) for name, title, _ in chapters)
+
+container = ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+             "<container version=\"1.0\" xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\">"
+             "<rootfiles><rootfile full-path=\"OEBPS/content.opf\" "
+             "media-type=\"application/oebps-package+xml\"/></rootfiles></container>\n")
+opf = ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+       "<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\" unique-identifier=\"bookid\">"
+       "<metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\">"
+       "<dc:title>" + meta["title"] + "</dc:title>" + creators +
+       "<dc:language>en</dc:language>"
+       "<dc:identifier id=\"bookid\">" + meta["identifier"] + "</dc:identifier>"
+       "<dc:date>" + meta["date"] + "</dc:date>"
+       "<dc:publisher>ForkPlus Press</dc:publisher>"
+       "<dc:description>A short demo book used by the ForkPlus Pages screenshots.</dc:description>"
+       "<meta property=\"dcterms:modified\">" + meta["modified"] + "</meta>"
+       "</metadata><manifest>" + manifest + "</manifest>"
+       "<spine>" + spine + "</spine></package>\n")
+nav = ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+       "<html xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:epub=\"http://www.idpf.org/2007/ops\">"
+       "<head><title>Contents</title></head><body>"
+       "<nav epub:type=\"toc\"><ol>" + links + "</ol></nav></body></html>\n")
+
+target = os.path.join(repo, "sample.epub")
+with zipfile.ZipFile(target, "w") as zf:
+    zf.writestr(zipfile.ZipInfo("mimetype"), "application/epub+zip", compress_type=zipfile.ZIP_STORED)
+    zf.writestr("META-INF/container.xml", container)
+    zf.writestr("OEBPS/content.opf", opf)
+    zf.writestr("OEBPS/nav.xhtml", nav)
+    for name, title, body in chapters:
+        zf.writestr("OEBPS/" + name, chapter_xhtml(title, body))
+    zf.writestr("OEBPS/images/cover.png", COVER_PNG)
+print("  demo epub ->", target, "(" + version + ")")
+PY
+}
+
 # 三类文本格式 demo 仓库共用一套骨架：
 #   ① 写 .gitattributes 给样本加 `-diff`——宿主只对二进制差异查询插件路由，这样样本虽仍是
 #      合法文本，差异却会走插件（否则截图会落到内置文本编辑器上）；
@@ -1295,6 +1806,42 @@ prepare_repo_text() {
 		;;
 	esac
 	echo "  $repo ($mode · $sample)"
+}
+
+# 二进制格式 demo 仓库骨架：与 prepare_repo_text 同构，但样本自带 NUL 字节，git 自动判为二进制，
+# 无需 .gitattributes 干预（宿主只对二进制差异查询插件路由）。样本名固定 sample.<ext>，
+# 仓库名 repo-<kind>-<mode>；一次覆盖「改 / 增 / 删」三种变更场景。
+prepare_repo_binary() {
+	local kind="$1" mode="$2" writer="$3" ext="$4"
+	local repo="$WORK/repo-$kind-$mode"
+	init_demo_repo "$repo"
+	case "$mode" in
+	add)
+		printf 'baseline\n' >"$repo/readme.txt"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: baseline"
+		"$writer" "$repo" v2 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "add: sample.$ext"
+		;;
+	remove)
+		printf 'baseline\n' >"$repo/readme.txt"
+		"$writer" "$repo" v1 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: add sample.$ext"
+		git -C "$repo" rm -q "sample.$ext"
+		git -C "$repo" commit -q -m "remove: delete sample.$ext"
+		;;
+	*)
+		"$writer" "$repo" v1 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "initial: add sample.$ext"
+		"$writer" "$repo" v2 "$ext"
+		git -C "$repo" add -A
+		git -C "$repo" commit -q -m "update: modify sample.$ext"
+		;;
+	esac
+	echo "  $repo ($mode · .$ext)"
 }
 
 seed_settings() {
@@ -1390,7 +1937,9 @@ capture_one() {
 	mkdir -p "$OUT"
 	# plugin_mode 非空时经 FORKPLUS_PLUGIN_VIEW_MODE 指定插件的初始视图模式
 	# （音频 波形 / 频谱 / 封面，视频 帧条 / 单帧对比 / 播放，
-	#  结构化数据 tree，字幕 timeline，SVG structure）；不设则走各插件默认模式。
+	#  结构化数据 tree，字幕 timeline，SVG structure，
+	#  机器学习模型 tensors，MIDI pianoroll，抓包 packets，PSD layers / header，EPUB chapters）；
+	# 不设则走各插件默认模式。
 	( cd "$APPDIR" && DISPLAY="$DISPLAY_NUM" FORKPLUS_PLUGIN_VIEW_MODE="$plugin_mode" \
 		./ForkPlus "$repo" >"$WORK/forkplus.log" 2>&1 & )
 
@@ -1509,6 +2058,31 @@ prepare_repo_text subtitle remove "sample.ass" write_demo_subtitle ass
 prepare_repo_text svg modify "sample.svg" write_demo_svg
 prepare_repo_text svg add "sample.svg" write_demo_svg
 prepare_repo_text svg remove "sample.svg" write_demo_svg
+# 机器学习模型 demo：三场景各用一种格式（modify=onnx / add=safetensors / remove=gguf），
+# 一次覆盖三条解析路径；样本自带 NUL，git 判二进制，自动走插件路由。
+prepare_repo_binary mlmodel modify write_demo_mlmodel onnx
+prepare_repo_binary mlmodel add write_demo_mlmodel safetensors
+prepare_repo_binary mlmodel remove write_demo_mlmodel gguf
+# MIDI demo：三场景共用同一对 .mid（旧：C 大调三音；新：加音 / 改力度 / 改 tempo）
+prepare_repo_binary midi modify write_demo_midi mid
+prepare_repo_binary midi add write_demo_midi mid
+prepare_repo_binary midi remove write_demo_midi mid
+# Torrent demo：三场景共用同一对 .torrent（旧：1 tracker / 4 分片；新：加 tracker、换分片数、改长度）
+prepare_repo_binary torrent modify write_demo_torrent torrent
+prepare_repo_binary torrent add write_demo_torrent torrent
+prepare_repo_binary torrent remove write_demo_torrent torrent
+# 抓包 demo：三场景 modify/remove 用 .pcap、add 用 .pcapng
+prepare_repo_binary pcap modify write_demo_pcap pcap
+prepare_repo_binary pcap add write_demo_pcap pcapng
+prepare_repo_binary pcap remove write_demo_pcap pcap
+# PSD demo：三场景 modify/remove 用 .psd、add 用 .psb（缩略图借系统 ffmpeg 造）
+prepare_repo_binary psd modify write_demo_psd psd
+prepare_repo_binary psd add write_demo_psd psb
+prepare_repo_binary psd remove write_demo_psd psd
+# EPUB demo：三场景共用同一对 .epub（ZIP 容器 + OPF 元数据 + 章节）
+prepare_repo_binary epub modify write_demo_epub epub
+prepare_repo_binary epub add write_demo_epub epub
+prepare_repo_binary epub remove write_demo_epub epub
 start_x
 # PDF 插件三种场景各截一张：修改 / 新增 / 删除
 for mode in modify add remove; do
@@ -1593,5 +2167,52 @@ done
 # SVG 插件另取结构差异模式一张（modify 场景为样本）
 seed_settings
 capture_one "$WORK/repo-svg-modify" "SvgDiffView.SetContent" "svg-structure.png" 4 "SVG 插件 · 结构差异" "structure"
+# 机器学习模型插件三种场景各截一张（onnx / safetensors / gguf 各覆盖一种；默认元数据模式）
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-mlmodel-$mode" "MlModelDiffView.SetContent" "mlmodel-$mode.png" 4 "机器学习模型插件 · $mode"
+done
+# 机器学习模型插件另取张量模式一张（modify 场景为样本）
+seed_settings
+capture_one "$WORK/repo-mlmodel-modify" "MlModelDiffView.SetContent" "mlmodel-tensors.png" 4 "机器学习模型插件 · 张量" "tensors"
+# MIDI 插件三种场景各截一张（旧 / 新同一对 .mid；默认音符表模式）
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-midi-$mode" "MidiDiffView.SetContent" "midi-$mode.png" 4 "MIDI 插件 · $mode"
+done
+# MIDI 插件另取钢琴卷帘模式一张（modify 场景为样本）
+seed_settings
+capture_one "$WORK/repo-midi-modify" "MidiDiffView.SetContent" "midi-pianoroll.png" 4 "MIDI 插件 · 钢琴卷帘" "pianoroll"
+# Torrent 插件三种场景各截一张（旧 / 新同一对 .torrent；单一键路径表模式）
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-torrent-$mode" "TorrentDiffView.SetContent" "torrent-$mode.png" 4 "Torrent 插件 · $mode"
+done
+# 抓包插件三种场景各截一张（modify/remove=pcap、add=pcapng；默认统计模式）
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-pcap-$mode" "PcapDiffView.SetContent" "pcap-$mode.png" 4 "抓包插件 · $mode"
+done
+# 抓包插件另取包列表模式一张（modify 场景为样本）
+seed_settings
+capture_one "$WORK/repo-pcap-modify" "PcapDiffView.SetContent" "pcap-packets.png" 4 "抓包插件 · 包列表" "packets"
+# PSD 插件三种场景各截一张（modify/remove=psd、add=psb；默认预览模式）
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-psd-$mode" "PsdDiffView.SetContent" "psd-$mode.png" 4 "PSD 插件 · $mode"
+done
+# PSD 插件另取图层 / 头部两模式各一张（modify 场景为样本）
+for m in "layers:图层" "header:头部"; do
+	seed_settings
+	capture_one "$WORK/repo-psd-modify" "PsdDiffView.SetContent" "psd-${m%%:*}.png" 4 "PSD 插件 · ${m##*:}" "${m%%:*}"
+done
+# EPUB 插件三种场景各截一张（旧 / 新同一对 .epub；默认元数据模式）
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-epub-$mode" "EpubDiffView.SetContent" "epub-$mode.png" 4 "EPUB 插件 · $mode"
+done
+# EPUB 插件另取章节目录模式一张（modify 场景为样本）
+seed_settings
+capture_one "$WORK/repo-epub-modify" "EpubDiffView.SetContent" "epub-chapters.png" 4 "EPUB 插件 · 章节目录" "chapters"
 write_metadata
 log "完成：截图已输出到 $OUT"

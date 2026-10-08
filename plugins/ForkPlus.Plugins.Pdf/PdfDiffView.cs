@@ -27,7 +27,7 @@ namespace ForkPlus.Plugins.Pdf
 	/// （进度 / 错误），再下是单一 <see cref="ScrollViewer"/> —— 内部是一个两列、逐页一行的
 	/// <see cref="Grid"/>，因此两侧纵向滚动天然同步、同页号的两页顶对齐，正是 PDF 对比要看的形态。
 	///
-	/// 字节来源：非图片二进制由宿主经 <c>HexSrc/HexDst</c> 预载（≤50MB）；LFS 侧走宿主
+	/// 字节来源：非图片二进制由宿主经 <c>HexSrc/HexDst</c> 预载（v5.0.4 起 ≤100MB）；LFS 侧走宿主
 	/// <see cref="IDiffViewHost"/> 的缓存 / smudge。渲染在后台线程逐页进行，位图创建回到 UI 线程。
 	/// </summary>
 	public sealed class PdfDiffView : IDiffView

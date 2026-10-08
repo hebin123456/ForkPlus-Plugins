@@ -25,10 +25,12 @@ namespace ForkPlus.Plugins.Office
 	/// Excel 工作表网格、PPT 幻灯片文字。
 	///
 	/// 呈现上尽量「像文档」而不是一坨纯文字：每栏顶部一个类型徽章（Word / Excel / PowerPoint），
-	/// 标题做成左侧色条卡片，段落保留加粗 / 斜体 / 下划线 / 删除线等 run 格式，表格首行做表头、
-	/// 隔行浅底色，Excel 网格额外补上列字母与行号。
+	/// 标题做成左侧色条卡片，段落按 run 保留加粗 / 斜体 / 下划线 / 删除线 / 前景色 / 字号
+	/// （字符级样式经 docDefaults → 段落样式 → 字符样式 → 直接 rPr 逐层解析，行内混排各自生效），
+	/// 表格首行做表头、隔行浅底色，Excel 网格额外补上列字母与行号；Excel 多工作表时顶部出现
+	/// sheet 标签页，两侧联动切换（某一侧没有对应工作表时显示占位提示）。
 	///
-	/// 字节来源：非图片二进制由宿主经 <c>HexSrc/HexDst</c> 预载（≤50MB）；LFS 侧走宿主
+	/// 字节来源：非图片二进制由宿主经 <c>HexSrc/HexDst</c> 预载（v5.0.4 起 ≤100MB）；LFS 侧走宿主
 	/// <see cref="IDiffViewHost"/> 的缓存 / smudge。提取在后台线程进行，控件构建回到 UI 线程。
 	/// </summary>
 	public sealed class OfficeDiffView : IDiffView
@@ -59,6 +61,20 @@ namespace ForkPlus.Plugins.Office
 		private readonly StackPanel _srcPanel;
 
 		private readonly StackPanel _dstPanel;
+
+		/// <summary>sheet 标签条（Excel 多工作表时可见）：一排切换按钮，两侧联动切换。</summary>
+		private readonly StackPanel _sheetButtons;
+
+		private readonly ScrollViewer _sheetStrip;
+
+		/// <summary>当前渲染轮次的标签按钮（与 _sheetButtons 同步维护，供切换时重刷选中态）。</summary>
+		private readonly List<Button> _sheetTabs = new List<Button>();
+
+		private OfficeDocumentModel _srcModel;
+
+		private OfficeDocumentModel _dstModel;
+
+		private int _sheetIndex;
 
 		private DiffViewContext _context;
 
@@ -104,6 +120,20 @@ namespace ForkPlus.Plugins.Office
 				Margin = new Thickness(10.0, 0.0, 12.0, 12.0),
 			};
 
+			_sheetButtons = new StackPanel
+			{
+				Orientation = Orientation.Horizontal,
+				Spacing = 4.0,
+			};
+			_sheetStrip = new ScrollViewer
+			{
+				Content = _sheetButtons,
+				HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+				VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+				Margin = new Thickness(12.0, 0.0, 12.0, 6.0),
+				IsVisible = false,
+			};
+
 			Grid columns = new Grid
 			{
 				ColumnDefinitions = new ColumnDefinitions("*,*"),
@@ -117,13 +147,15 @@ namespace ForkPlus.Plugins.Office
 
 			_root = new Grid
 			{
-				RowDefinitions = new RowDefinitions("Auto,Auto,*"),
+				RowDefinitions = new RowDefinitions("Auto,Auto,Auto,*"),
 			};
 			Grid.SetRow(header, 0);
 			_root.Children.Add(header);
 			Grid.SetRow(_status, 1);
 			_root.Children.Add(_status);
-			Grid.SetRow(columns, 2);
+			Grid.SetRow(_sheetStrip, 2);
+			_root.Children.Add(_sheetStrip);
+			Grid.SetRow(columns, 3);
 			_root.Children.Add(columns);
 
 			PluginEnvironment.ApplyLocalization(_root);
@@ -180,6 +212,12 @@ namespace ForkPlus.Plugins.Office
 			CancelRender();
 			_srcPanel.Children.Clear();
 			_dstPanel.Children.Clear();
+			_srcModel = null;
+			_dstModel = null;
+			_sheetIndex = 0;
+			_sheetTabs.Clear();
+			_sheetButtons.Children.Clear();
+			_sheetStrip.IsVisible = false;
 			UpdateTitles();
 			_status.Text = OfficeStrings.T("Extracting Office content…");
 
@@ -223,6 +261,12 @@ namespace ForkPlus.Plugins.Office
 			CancelRender();
 			_context = null;
 			_host = null;
+			_srcModel = null;
+			_dstModel = null;
+			_sheetIndex = 0;
+			_sheetTabs.Clear();
+			_sheetButtons.Children.Clear();
+			_sheetStrip.IsVisible = false;
 			_srcPanel.Children.Clear();
 			_dstPanel.Children.Clear();
 			_srcTitle.Text = string.Empty;
@@ -251,8 +295,8 @@ namespace ForkPlus.Plugins.Office
 				{
 					return;
 				}
-				PostBlocks(generation, 0, srcModel, _srcAccent);
-				PostBlocks(generation, 1, dstModel, _dstAccent);
+			PostBlocks(generation, 0, srcModel);
+			PostBlocks(generation, 1, dstModel);
 				PostStatus(generation, OfficeStrings.F("Office compare: {0} / {1} blocks", srcModel?.Blocks.Count ?? 0, dstModel?.Blocks.Count ?? 0));
 			}
 			catch (OperationCanceledException)
@@ -393,7 +437,9 @@ namespace ForkPlus.Plugins.Office
 			};
 		}
 
-		/// <summary>段落：有 run 格式时走 Inlines 保留加粗 / 斜体 / 下划线 / 删除线，否则直接渲染纯文本。</summary>
+		/// <summary>段落：有 run 格式时走 Inlines 逐 run 保留加粗 / 斜体 / 下划线 / 删除线 / 前景色 / 字号
+		///（行内混排各自生效），否则直接渲染纯文本。段落存在放大 / 缩小的 run 时放开固定行高，
+		/// 避免大字号 run 被 19.5px 行槽裁掉。</summary>
 		private static Control BuildParagraph(OfficeParagraphBlock paragraph)
 		{
 			if (paragraph.Text.Length == 0)
@@ -409,9 +455,19 @@ namespace ForkPlus.Plugins.Office
 			};
 			if (paragraph.HasFormatting)
 			{
+				bool mixedSizes = false;
+				double baseSizePt = paragraph.BaseSizePt ?? 0.0;
 				foreach (OfficeInline inline in paragraph.Runs)
 				{
-					text.Inlines.Add(ToRun(inline));
+					if (inline.SizePt != null)
+					{
+						mixedSizes = true;
+					}
+					text.Inlines.Add(ToRun(inline, baseSizePt));
+				}
+				if (mixedSizes)
+				{
+					text.LineHeight = double.NaN;
 				}
 			}
 			else
@@ -421,7 +477,9 @@ namespace ForkPlus.Plugins.Office
 			return text;
 		}
 
-		private static Run ToRun(OfficeInline inline)
+		/// <summary>run → Avalonia <see cref="Run"/>：前景色按十六进制上色；字号按「run 磅值 / 文档默认磅值」
+		/// 的比例缩放视图基准字号（13px），保持行内相对大小关系且与无格式段落的观感衔接。</summary>
+		private static Run ToRun(OfficeInline inline, double baseSizePt)
 		{
 			Run run = new Run
 			{
@@ -446,7 +504,45 @@ namespace ForkPlus.Plugins.Office
 			{
 				run.TextDecorations = decorations;
 			}
+			IBrush foreground = ParseColorBrush(inline.ColorHex);
+			if (foreground != null)
+			{
+				run.Foreground = foreground;
+			}
+			if (inline.SizePt != null && baseSizePt > 0.0)
+			{
+				run.FontSize = 13.0 * inline.SizePt.Value / baseSizePt;
+			}
 			return run;
+		}
+
+		/// <summary>RRGGBB / AARRGGBB 十六进制 → 画刷；null 或无效返回 null（跟随视图默认前景色）。</summary>
+		private static IBrush ParseColorBrush(string hex)
+		{
+			if (string.IsNullOrEmpty(hex))
+			{
+				return null;
+			}
+			string value = hex.TrimStart('#');
+			if (value.Length == 6)
+			{
+				value = "FF" + value;
+			}
+			if (value.Length != 8)
+			{
+				return null;
+			}
+			byte a = ParseByteHex(value, 0);
+			byte r = ParseByteHex(value, 2);
+			byte g = ParseByteHex(value, 4);
+			byte b = ParseByteHex(value, 6);
+			return new SolidColorBrush(Color.FromArgb(a, r, g, b));
+		}
+
+		/// <summary>两位十六进制 → 字节；输入保证已通过十六进制校验（提取端 NormalizeColor）。</summary>
+		private static byte ParseByteHex(string value, int offset)
+		{
+			return byte.Parse(value.Substring(offset, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 		}
 
 		/// <summary>
@@ -629,31 +725,161 @@ namespace ForkPlus.Plugins.Office
 		/// <summary>
 		/// 把一侧的提取模型挂到栏内。
 		/// 控件必须在 UI 线程构建（后台线程构建的 Avalonia 控件不会渲染出来），因此这里只投递
-		/// 纯数据模型，在 UI 线程里再 <see cref="BuildBlock"/> 成控件后挂载。
+		/// 纯数据模型，在 UI 线程里再 <see cref="BuildBlock"/> 成控件后挂载。模型先存字段再走
+		/// <see cref="RenderSides"/>：Excel 多工作表时两侧按当前 sheet 标签页联动重挂。
 		/// </summary>
-		private void PostBlocks(int generation, int column, OfficeDocumentModel model, IBrush accent)
+		private void PostBlocks(int generation, int column, OfficeDocumentModel model)
 		{
 			if (model == null)
 			{
 				return;
 			}
-			StackPanel panel = column == 0 ? _srcPanel : _dstPanel;
 			Dispatcher.UIThread.Post(delegate
 			{
 				if (_released || generation != _renderGeneration)
 				{
 					return;
 				}
-				panel.Children.Add(BuildKindBadge(model, accent));
-				foreach (OfficeBlock block in model.Blocks)
+				if (column == 0)
 				{
-					Control control = BuildBlock(block, accent, model.Kind);
-					if (control != null)
-					{
-						panel.Children.Add(control);
-					}
+					_srcModel = model;
 				}
+				else
+				{
+					_dstModel = model;
+				}
+				RenderSides();
 			});
+		}
+
+		/// <summary>
+		/// 按当前 sheet 标签页重挂两侧内容（UI 线程）：非 Excel 或单工作表时平铺全部块；
+		/// 多工作表时只挂两侧当前索引的工作表，某一侧没有该索引（两侧 sheet 数不同）时给占位提示。
+		/// 标签条按两侧 sheet 名的并集构建（两侧重名工作表时以新侧名字为准）。
+		/// </summary>
+		private void RenderSides()
+		{
+			int sheetCount = Math.Max(SheetCount(_srcModel), SheetCount(_dstModel));
+			bool tabbed = sheetCount > 1;
+			_sheetTabs.Clear();
+			_sheetButtons.Children.Clear();
+			_sheetStrip.IsVisible = tabbed;
+			if (tabbed)
+			{
+				if (_sheetIndex < 0 || _sheetIndex >= sheetCount)
+				{
+					_sheetIndex = 0;
+				}
+				for (int i = 0; i < sheetCount; i++)
+				{
+					string name = SheetName(_dstModel, i) ?? SheetName(_srcModel, i) ?? (i + 1).ToString(CultureInfo.InvariantCulture);
+					Button tab = NewSheetTab(name, i);
+					_sheetTabs.Add(tab);
+					_sheetButtons.Children.Add(tab);
+				}
+				UpdateTabStyles();
+			}
+			RenderSide(0, _srcModel, _srcAccent, tabbed);
+			RenderSide(1, _dstModel, _dstAccent, tabbed);
+		}
+
+		/// <summary>重挂一侧：模型为 null 时保留原样（缺失 / 解析失败的提示由 PostMessage 挂上，别被切换清掉）。</summary>
+		private void RenderSide(int column, OfficeDocumentModel model, IBrush accent, bool tabbed)
+		{
+			if (model == null)
+			{
+				return;
+			}
+			StackPanel panel = column == 0 ? _srcPanel : _dstPanel;
+			panel.Children.Clear();
+			panel.Children.Add(BuildKindBadge(model, accent));
+			if (tabbed && model.Sheets != null)
+			{
+				if (_sheetIndex >= model.Sheets.Count)
+				{
+					panel.Children.Add(new TextBlock
+					{
+						Text = OfficeStrings.T("not present"),
+						TextWrapping = TextWrapping.Wrap,
+						Margin = new Thickness(0.0, 4.0, 0.0, 8.0),
+						Opacity = 0.7,
+					});
+					return;
+				}
+				AddBlocks(panel, model.Sheets[_sheetIndex].Blocks, accent, model.Kind);
+				return;
+			}
+			AddBlocks(panel, model.Blocks, accent, model.Kind);
+		}
+
+		private static void AddBlocks(StackPanel panel, IReadOnlyList<OfficeBlock> blocks, IBrush accent, string kind)
+		{
+			foreach (OfficeBlock block in blocks)
+			{
+				Control control = BuildBlock(block, accent, kind);
+				if (control != null)
+				{
+					panel.Children.Add(control);
+				}
+			}
+		}
+
+		private static int SheetCount(OfficeDocumentModel model)
+		{
+			return model?.Sheets?.Count ?? 0;
+		}
+
+		private static string SheetName(OfficeDocumentModel model, int index)
+		{
+			IReadOnlyList<OfficeSheetSection> sheets = model?.Sheets;
+			if (sheets != null && index < sheets.Count)
+			{
+				return sheets[index].Name;
+			}
+			return null;
+		}
+
+		/// <summary>sheet 标签按钮：观感沿用各视图的模式切换按钮；垂直 Padding 为 0——宿主按钮主题
+		/// 固定 Height=24，垂直 Padding 会把内容槽挤到文字行高以下裁掉文字。</summary>
+		private Button NewSheetTab(string text, int index)
+		{
+			Button button = new Button
+			{
+				Content = text,
+				Padding = new Thickness(10.0, 0.0, 10.0, 0.0),
+				FontSize = 12.0,
+				MaxWidth = 160.0,
+			};
+			button.Click += delegate
+			{
+				SelectSheet(index);
+			};
+			return button;
+		}
+
+		private void SelectSheet(int index)
+		{
+			if (index == _sheetIndex)
+			{
+				return;
+			}
+			_sheetIndex = index;
+			UpdateTabStyles();
+			RenderSides();
+		}
+
+		private void UpdateTabStyles()
+		{
+			for (int i = 0; i < _sheetTabs.Count; i++)
+			{
+				StyleSheetTab(_sheetTabs[i], i == _sheetIndex);
+			}
+		}
+
+		private static void StyleSheetTab(Button button, bool active)
+		{
+			button.FontWeight = active ? FontWeight.SemiBold : FontWeight.Normal;
+			button.Background = active ? new SolidColorBrush(Color.FromArgb(0x33, 0x2F, 0x6F, 0xED)) : null;
 		}
 
 		private void PostMessage(int generation, int column, string text)

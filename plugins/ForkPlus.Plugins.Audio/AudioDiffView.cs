@@ -267,7 +267,9 @@ namespace ForkPlus.Plugins.Audio
 			_playButton = new Button
 			{
 				Content = AudioStrings.T("Play"),
-				Padding = new Thickness(12.0, 4.0, 12.0, 4.0),
+				// 垂直 padding 交给 MinHeight：本地主题下 4px 上下边距会把文字裁掉。
+				Padding = new Thickness(12.0, 0.0, 12.0, 0.0),
+				MinHeight = 28.0,
 				MinWidth = 72.0,
 				VerticalAlignment = VerticalAlignment.Center
 			};
@@ -452,7 +454,9 @@ namespace ForkPlus.Plugins.Audio
 			Button button = new Button
 			{
 				Content = AudioStrings.T(key),
-				Padding = new Thickness(12.0, 4.0, 12.0, 4.0),
+				// 垂直 padding 交给 MinHeight：本地主题下 4px 上下边距会把文字裁掉。
+				Padding = new Thickness(12.0, 0.0, 12.0, 0.0),
+				MinHeight = 28.0,
 				Tag = mode,
 				VerticalAlignment = VerticalAlignment.Center
 			};
@@ -529,7 +533,9 @@ namespace ForkPlus.Plugins.Audio
 			Button button = new Button
 			{
 				Content = PluginEnvironment.Translate(RoleKey(role)),
-				Padding = new Thickness(10.0, 3.0, 10.0, 3.0),
+				// 垂直 padding 交给 MinHeight：本地主题下 3px 上下边距会把文字裁掉。
+				Padding = new Thickness(10.0, 0.0, 10.0, 0.0),
+				MinHeight = 28.0,
 				Tag = isSrc,
 				VerticalAlignment = VerticalAlignment.Center
 			};
@@ -645,8 +651,10 @@ namespace ForkPlus.Plugins.Audio
 					_playbackSideIsSrc = isSrc;
 					created.PositionChanged += OnPlaybackPosition;
 					created.Ended += OnPlaybackEnded;
-					_playbackError = created.AudioOutputError;
+					// 先 Play 再取 AudioOutputError：该属性在 Play→EnsureAudioDevice 里才赋值，
+					// 早读恒为 null，静音降级提示就永远不显示（看不出在“无声播放”）。
 					created.Play();
+					_playbackError = created.AudioOutputError;
 					UpdateTransport();
 				});
 			});

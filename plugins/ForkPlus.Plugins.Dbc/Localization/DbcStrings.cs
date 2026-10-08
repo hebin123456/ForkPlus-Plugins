@@ -57,17 +57,28 @@ namespace ForkPlus.Plugins.Dbc
 					{ "es-ES", "Estructurado" }
 				}
 			},
-			{ "Raw text", new Dictionary<string, string>
-				{
-					{ "zh-Hans", "原文" },
-					{ "zh-Hant", "原文" },
-					{ "ja-JP", "原文" },
-					{ "ko-KR", "원문" },
-					{ "fr-FR", "Texte brut" },
-					{ "de-DE", "Klartext" },
-					{ "es-ES", "Texto sin formato" }
-				}
-			},
+		{ "Raw text", new Dictionary<string, string>
+			{
+				{ "zh-Hans", "原文" },
+				{ "zh-Hant", "原文" },
+				{ "ja-JP", "原文" },
+				{ "ko-KR", "원문" },
+				{ "fr-FR", "Texte brut" },
+				{ "de-DE", "Klartext" },
+				{ "es-ES", "Texto sin formato" }
+			}
+		},
+		{ "Only differences", new Dictionary<string, string>
+			{
+				{ "zh-Hans", "仅差异" },
+				{ "zh-Hant", "僅差異" },
+				{ "ja-JP", "差分のみ" },
+				{ "ko-KR", "차이만" },
+				{ "fr-FR", "Différences uniquement" },
+				{ "de-DE", "Nur Unterschiede" },
+				{ "es-ES", "Solo diferencias" }
+			}
+		},
 			// 表头
 			{ "Key path", new Dictionary<string, string>
 				{

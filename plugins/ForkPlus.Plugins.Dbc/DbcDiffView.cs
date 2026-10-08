@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -20,13 +21,17 @@ namespace ForkPlus.Plugins.Dbc
 	/// 「新增 / 删除 / 改值」。
 	///
 	/// 布局：顶部两栏标题（角色 + 文件名 + 大小，取宿主注入的主题画刷着色），其下状态行、
-	/// 自带的分段模式工具条（结构化 / 原文），最下是内容区。
+	/// 自带的分段模式工具条（结构化 / 原文 + 「仅差异」开关），最下是内容区。
 	///
-	/// 两个模式：
+	/// 三个模式 / 开关：
 	/// <list type="bullet">
 	/// <item>结构化（默认）：一张四列表——「键路径 | 旧值 | 新值 | 状态」，逐行按
-	/// 相同 / 已变更 / 仅左 / 仅右 四色标注底色，是看 DBC 改动的首选。</item>
-	/// <item>原文：左右两栏并排展示两侧原始文本，便于对照上下文。</item>
+	/// 相同 / 已变更 / 仅左 / 仅右 四色标注底色，是看 DBC 改动的首选；表格经
+	/// <see cref="VirtualizingStackPanel"/> 虚拟化，只物化视口内的行（大文件 formerly 一次性
+	/// 物化数千行 TextBlock 会把 UI 线程拖住数秒）。</item>
+	/// <item>「仅差异」（默认开）：Same 行不进表格（计数仍全量，状态行可见），需要全量时关掉即后台重算。</item>
+	/// <item>原文：左右两栏并排展示两侧原始文本（按行拆分 + 虚拟化；单行超长截断展示，
+	/// 不影响结构化 diff），便于对照上下文。</item>
 	/// </list>
 	///
 	/// 解析与 diff 在后台线程执行，控件只在 UI 线程构建；每次刷新用代次 + CancellationToken 取消上一轮。
@@ -53,11 +58,19 @@ namespace ForkPlus.Plugins.Dbc
 		/// <summary>单侧超过此大小不解析（与其它插件同口径）。</summary>
 		private const long MaxSideBytes = 300L * 1024L * 1024L;
 
-		/// <summary>渲染上限：避免超大文件把 UI 拖死。</summary>
-		private const int MaxRows = 4000;
+		/// <summary>表格行物化上限（虚拟化只是「不全部创建控件」，行对象 / 键路径串仍要占内存，
+		/// 20 万行级的极端对比按此封顶，状态行提示总数）。</summary>
+		private const int MaxRows = 20000;
 
 		/// <summary>单元格里单值最大展示长度，超出截断（不影响 diff 比较）。</summary>
 		private const int MaxValueChars = 300;
+
+		/// <summary>原文模式单行展示长度上限：巨型 VAL_ 行可达百万字符，原样塞进 TextBlock
+		/// 会让单次文本排版卡死 UI（截断只影响原文展示，不影响结构化 diff）。</summary>
+		private const int MaxRawLineChars = 2000;
+
+		/// <summary>状态列固定像素宽：各行独立 Grid 靠相同列定义对齐，Auto 列会逐行漂移。</summary>
+		private const string TableColumns = "2*,2*,2*,96";
 
 		private static readonly IBrush GridLine = Brushes.Gainsboro;
 
@@ -77,6 +90,11 @@ namespace ForkPlus.Plugins.Dbc
 
 		private static readonly FontFamily MonoFont = new FontFamily("Consolas, Menlo, DejaVu Sans Mono, Courier New, monospace");
 
+		private static readonly FuncTemplate<Panel> VirtualizingPanel = new FuncTemplate<Panel>(delegate
+		{
+			return new VirtualizingStackPanel();
+		});
+
 		private readonly Grid _root;
 
 		private readonly TextBlock _srcTitle;
@@ -88,6 +106,8 @@ namespace ForkPlus.Plugins.Dbc
 		private readonly Button _keysButton;
 
 		private readonly Button _rawButton;
+
+		private readonly Button _onlyDiffsButton;
 
 		private readonly ContentControl _content;
 
@@ -101,15 +121,19 @@ namespace ForkPlus.Plugins.Dbc
 
 		private string _mode = InitialMode;
 
+		/// <summary>「仅差异」开关：开 = Same 行不进表格（计数照常）。默认开——大文件 99% 的行
+		/// 是 Same，全量表格既慢又淹没真正的差异。</summary>
+		private bool _onlyDiffs = true;
+
 		private DataNode _left;
 
 		private DataNode _right;
 
 		private DiffSummary _summary;
 
-		private string _leftText = string.Empty;
+		private List<string> _leftLines;
 
-		private string _rightText = string.Empty;
+		private List<string> _rightLines;
 
 		private string _error;
 
@@ -141,6 +165,10 @@ namespace ForkPlus.Plugins.Dbc
 			{
 				SetMode(RawMode);
 			});
+			_onlyDiffsButton = NewModeButton(DbcStrings.T("Only differences"), delegate
+			{
+				SetOnlyDiffs(!_onlyDiffs);
+			});
 			_content = new ContentControl
 			{
 				Margin = new Thickness(12.0, 0.0, 12.0, 12.0)
@@ -164,6 +192,7 @@ namespace ForkPlus.Plugins.Dbc
 			};
 			modes.Children.Add(_keysButton);
 			modes.Children.Add(_rawButton);
+			modes.Children.Add(_onlyDiffsButton);
 
 			_root = new Grid
 			{
@@ -180,6 +209,7 @@ namespace ForkPlus.Plugins.Dbc
 
 			StyleModeButton(_keysButton, _mode == KeysMode);
 			StyleModeButton(_rawButton, _mode == RawMode);
+			StyleModeButton(_onlyDiffsButton, _onlyDiffs);
 			PluginEnvironment.ApplyLocalization(_root);
 		}
 
@@ -239,6 +269,7 @@ namespace ForkPlus.Plugins.Dbc
 		{
 			_keysButton.Content = DbcStrings.T("Structured");
 			_rawButton.Content = DbcStrings.T("Raw text");
+			_onlyDiffsButton.Content = DbcStrings.T("Only differences");
 			PluginEnvironment.ApplyLocalization(_root);
 			UpdateTitles();
 			UpdateStatus();
@@ -253,8 +284,8 @@ namespace ForkPlus.Plugins.Dbc
 			_left = null;
 			_right = null;
 			_summary = null;
-			_leftText = string.Empty;
-			_rightText = string.Empty;
+			_leftLines = null;
+			_rightLines = null;
 			_content.Content = null;
 			_status.Text = string.Empty;
 		}
@@ -267,8 +298,8 @@ namespace ForkPlus.Plugins.Dbc
 			_left = null;
 			_right = null;
 			_summary = null;
-			_leftText = string.Empty;
-			_rightText = string.Empty;
+			_leftLines = null;
+			_rightLines = null;
 			_error = null;
 			_tooLarge = false;
 			_messageCount = 0;
@@ -300,30 +331,34 @@ namespace ForkPlus.Plugins.Dbc
 			{
 				DataNode left = null;
 				DataNode right = null;
-				string leftText = string.Empty;
-				string rightText = string.Empty;
+				List<string> leftLines = null;
+				List<string> rightLines = null;
 				string error = null;
 				try
 				{
-					leftText = ReadText(src, hexSrc, cts.Token);
-					rightText = ReadText(dst, hexDst, cts.Token);
+					string leftText = ReadText(src, hexSrc, cts.Token);
+					string rightText = ReadText(dst, hexDst, cts.Token);
 					cts.Token.ThrowIfCancellationRequested();
 					if (src != null)
 					{
-						left = DbcParser.Parse(leftText, out string leftError);
+						left = DbcParser.Parse(leftText, cts.Token, out string leftError);
 						error = leftError;
 					}
+					cts.Token.ThrowIfCancellationRequested();
 					if (dst != null)
 					{
 						string rightError;
-						right = DbcParser.Parse(rightText, out rightError);
+						right = DbcParser.Parse(rightText, cts.Token, out rightError);
 						error = error ?? rightError;
 					}
 					if (cts.Token.IsCancellationRequested)
 					{
 						return;
 					}
-					DiffSummary summary = DataDiff.Compute(left, right);
+					// 开关状态在计算时读取：解析期间切换「仅差异」无需重算。
+					DiffSummary summary = DataDiff.Compute(left, right, MaxRows, !_onlyDiffs);
+					leftLines = src == null ? null : SplitLines(leftText);
+					rightLines = dst == null ? null : SplitLines(rightText);
 					CountDbc(right ?? left, out int messages, out int signals);
 					Dispatcher.UIThread.Post(delegate
 					{
@@ -333,8 +368,8 @@ namespace ForkPlus.Plugins.Dbc
 						}
 						_left = left;
 						_right = right;
-						_leftText = leftText;
-						_rightText = rightText;
+						_leftLines = leftLines;
+						_rightLines = rightLines;
 						_summary = summary;
 						_messageCount = messages;
 						_signalCount = signals;
@@ -360,6 +395,55 @@ namespace ForkPlus.Plugins.Dbc
 					});
 				}
 			}, cts.Token);
+		}
+
+		/// <summary>切换「仅差异」：树已在时只重算 diff（毫秒级），不重新解析。</summary>
+		private void SetOnlyDiffs(bool only)
+		{
+			if (only == _onlyDiffs)
+			{
+				return;
+			}
+			_onlyDiffs = only;
+			StyleModeButton(_onlyDiffsButton, _onlyDiffs);
+			if (_summary == null)
+			{
+				// 解析仍在途：渲染任务计算时会读最新开关，无需补算。
+				UpdateStatus();
+				return;
+			}
+			DataNode left = _left;
+			DataNode right = _right;
+			CancellationTokenSource cts = _cts;
+			if (cts == null)
+			{
+				return;
+			}
+			int generation = _generation;
+			Task.Run(delegate
+			{
+				try
+				{
+					DiffSummary summary = DataDiff.Compute(left, right, MaxRows, !_onlyDiffs);
+					Dispatcher.UIThread.Post(delegate
+					{
+						if (_generation != generation || _cts != cts)
+						{
+							return;
+						}
+						_summary = summary;
+						UpdateStatus();
+						if (_mode == KeysMode)
+						{
+							BuildContent();
+						}
+					});
+				}
+				catch (Exception ex)
+				{
+					PluginLog.Error("DbcDiffView 重算 diff 失败", ex);
+				}
+			});
 		}
 
 		private void CancelRender()
@@ -427,6 +511,43 @@ namespace ForkPlus.Plugins.Dbc
 				{
 				}
 			}
+		}
+
+		/// <summary>按行拆分（去行尾 \r，超长行截断展示）——原文模式虚拟化列表的数据源。</summary>
+		private static List<string> SplitLines(string text)
+		{
+			List<string> lines = new List<string>();
+			if (string.IsNullOrEmpty(text))
+			{
+				return lines;
+			}
+			int start = 0;
+			while (start <= text.Length)
+			{
+				int newline = text.IndexOf('\n', start);
+				int end = newline < 0 ? text.Length : newline;
+				int lineEnd = end;
+				if (lineEnd > start && text[lineEnd - 1] == '\r')
+				{
+					lineEnd--;
+				}
+				lines.Add(TruncateLine(text.Substring(start, lineEnd - start)));
+				if (newline < 0)
+				{
+					break;
+				}
+				start = newline + 1;
+			}
+			return lines;
+		}
+
+		private static string TruncateLine(string line)
+		{
+			if (line.Length <= MaxRawLineChars)
+			{
+				return line;
+			}
+			return line.Substring(0, MaxRawLineChars) + "…";
 		}
 
 		/// <summary>统计报文集里的报文数与信号数，供状态行展示规模。</summary>
@@ -560,25 +681,68 @@ namespace ForkPlus.Plugins.Dbc
 			}
 		}
 
+		/// <summary>表头标记行：作为列表第一项与数据行同列定义，保证跨行列对齐（各行独立 Grid）。</summary>
+		private sealed class HeaderRow
+		{
+			internal static readonly HeaderRow Instance = new HeaderRow();
+		}
+
+		/// <summary>行模板：按需物化（仅视口内），表头 / 数据行共用一套列定义。</summary>
+		private sealed class RowTemplate : IDataTemplate
+		{
+			public bool Match(object data)
+			{
+				return data is DiffRow || data is HeaderRow;
+			}
+
+			public Control Build(object param)
+			{
+				return param is HeaderRow ? BuildHeaderRow() : BuildDataRow((DiffRow)param);
+			}
+		}
+
+		/// <summary>原文行模板：item 即行文本。</summary>
+		private sealed class RawLineTemplate : IDataTemplate
+		{
+			public bool Match(object data)
+			{
+				return data is string;
+			}
+
+			public Control Build(object param)
+			{
+				return new TextBlock
+				{
+					Text = (string)param,
+					FontFamily = MonoFont,
+					FontSize = 12.0,
+					TextWrapping = TextWrapping.NoWrap,
+					Foreground = Brushes.Black
+				};
+			}
+		}
+
 		private Control BuildKeyPathContent()
 		{
-			Grid table = new Grid
+			object[] items = new object[_summary.Rows.Count + 1];
+			items[0] = HeaderRow.Instance;
+			for (int i = 0; i < _summary.Rows.Count; i++)
 			{
-				ColumnDefinitions = new ColumnDefinitions("2*,2*,2*,Auto")
-			};
-			int row = 0;
-			AddTableRow(table, ref row, DbcStrings.T("Key path"), DbcStrings.T("Old"), DbcStrings.T("New"), DbcStrings.T("State"), null, null, true);
-
-			int shown = 0;
-			foreach (DiffRow item in _summary.Rows)
-			{
-				if (shown >= MaxRows)
-				{
-					break;
-				}
-				shown++;
-				AddTableRow(table, ref row, item.Path, Display(item.Left, item.LeftPresent), Display(item.Right, item.RightPresent), StateLabel(item.State), TintOf(item.State), StateBrush(item.State), false);
+				items[i + 1] = _summary.Rows[i];
 			}
+			ItemsControl table = new ItemsControl
+			{
+				ItemsSource = items,
+				ItemsPanel = VirtualizingPanel,
+				ItemTemplate = new RowTemplate()
+			};
+			ScrollViewer scroll = new ScrollViewer
+			{
+				Content = table,
+				// 星号列宽依赖有限宽度约束；开横向滚动会退化成无限宽。
+				HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+				VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+			};
 
 			StackPanel stack = new StackPanel
 			{
@@ -591,106 +755,105 @@ namespace ForkPlus.Plugins.Dbc
 				CornerRadius = new CornerRadius(6.0),
 				Background = Subtle,
 				Padding = new Thickness(2.0),
-				Child = table
+				Child = scroll
 			};
 			stack.Children.Add(card);
-			if (_summary.Total > shown)
+			int relevantTotal = _summary.IncludeSame
+				? _summary.Total
+				: _summary.Changed + _summary.LeftOnly + _summary.RightOnly;
+			if (_summary.Rows.Count < relevantTotal)
 			{
-				stack.Children.Add(NoteText(DbcStrings.F("Showing first {0} of {1} rows", shown, _summary.Total)));
+				stack.Children.Add(NoteText(DbcStrings.F("Showing first {0} of {1} rows", _summary.Rows.Count, relevantTotal)));
 			}
 			if (_srcAbsent || _dstAbsent)
 			{
 				stack.Children.Add(NoteText(DbcStrings.T("One side is not present; values shown for the other side only.")));
 			}
-			return new ScrollViewer
+			return stack;
+		}
+
+		private static Control BuildHeaderRow()
+		{
+			Grid header = new Grid
 			{
-				Content = stack,
-				HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-				VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+				ColumnDefinitions = new ColumnDefinitions(TableColumns)
+			};
+			AddCell(header, 0, DbcStrings.T("Key path"), true, null, false);
+			AddCell(header, 1, DbcStrings.T("Old"), false, null, false);
+			AddCell(header, 2, DbcStrings.T("New"), false, null, false);
+			AddCell(header, 3, DbcStrings.T("State"), false, null, false);
+			return header;
+		}
+
+		private static Control BuildDataRow(DiffRow row)
+		{
+			Grid grid = new Grid
+			{
+				ColumnDefinitions = new ColumnDefinitions(TableColumns)
+			};
+			AddCell(grid, 0, Truncate(row.Path), true, Brushes.Gray, true);
+			AddCell(grid, 1, Display(row.Left, row.LeftPresent), false, null, true);
+			AddCell(grid, 2, Display(row.Right, row.RightPresent), false, null, true);
+			AddCell(grid, 3, StateLabel(row.State), false, StateBrush(row.State), false);
+			return new Border
+			{
+				Background = TintOf(row.State),
+				CornerRadius = new CornerRadius(3.0),
+				Child = grid
 			};
 		}
 
-		private void AddTableRow(Grid table, ref int row, string keyPath, string left, string right, string state, IBrush tint, IBrush stateBrush, bool header)
-		{
-			table.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-			int current = row++;
-			if (tint != null)
-			{
-				Border background = new Border
-				{
-					Background = tint,
-					CornerRadius = new CornerRadius(3.0)
-				};
-				Grid.SetRow(background, current);
-				Grid.SetColumn(background, 0);
-				Grid.SetColumnSpan(background, 4);
-				table.Children.Add(background);
-			}
-			AddCell(table, current, 0, keyPath, header, true, header ? null : Brushes.Gray);
-			AddCell(table, current, 1, left, header, false, null);
-			AddCell(table, current, 2, right, header, false, null);
-			AddCell(table, current, 3, state, header, false, stateBrush);
-		}
-
-		private static void AddCell(Grid table, int row, int column, string text, bool header, bool mono, IBrush foreground)
+		private static void AddCell(Grid grid, int column, string text, bool mono, IBrush foreground, bool wrap)
 		{
 			TextBlock block = new TextBlock
 			{
 				Text = text ?? string.Empty,
 				Margin = new Thickness(8.0, 3.0, 8.0, 3.0),
-				TextWrapping = header ? TextWrapping.NoWrap : TextWrapping.Wrap,
-				FontWeight = header ? FontWeight.SemiBold : FontWeight.Normal,
+				TextWrapping = wrap ? TextWrapping.Wrap : TextWrapping.NoWrap,
 				FontFamily = mono ? MonoFont : FontFamily.Default,
 				Foreground = foreground ?? Brushes.Black,
 				VerticalAlignment = VerticalAlignment.Top
 			};
-			Grid.SetRow(block, row);
 			Grid.SetColumn(block, column);
-			table.Children.Add(block);
+			grid.Children.Add(block);
 		}
 
-		/// <summary>原文模式：左右两栏并排，各自一整段原始文本（等宽字体、可滚动）。</summary>
+		/// <summary>原文模式：左右两栏并排，各自虚拟化行列表（等宽字体、可滚动）。</summary>
 		private Control BuildRawContent()
 		{
 			Grid panes = new Grid
 			{
 				ColumnDefinitions = new ColumnDefinitions("*,*")
 			};
-			Border leftCard = RawCard(_srcAbsent ? null : _leftText);
-			Border rightCard = RawCard(_dstAbsent ? null : _rightText);
+			Border leftCard = RawCard(_srcAbsent ? null : _leftLines);
+			Border rightCard = RawCard(_dstAbsent ? null : _rightLines);
 			Grid.SetColumn(leftCard, 0);
 			Grid.SetColumn(rightCard, 1);
 			panes.Children.Add(leftCard);
 			panes.Children.Add(rightCard);
-			return new ScrollViewer
-			{
-				Content = panes,
-				HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-				VerticalScrollBarVisibility = ScrollBarVisibility.Auto
-			};
+			return panes;
 		}
 
-		private static Border RawCard(string text)
+		private static Border RawCard(List<string> lines)
 		{
 			Control body;
-			if (text == null)
+			if (lines == null)
 			{
 				body = NoteText(DbcStrings.T("not present"));
 			}
-			else if (text.Length == 0)
+			else if (lines.Count == 0)
 			{
 				body = NoteText(DbcStrings.T("empty"));
 			}
 			else
 			{
-				body = new TextBlock
+				ItemsControl list = new ItemsControl
 				{
-					Text = text,
-					FontFamily = MonoFont,
-					FontSize = 12.0,
-					TextWrapping = TextWrapping.NoWrap,
-					Foreground = Brushes.Black
+					ItemsSource = lines,
+					ItemsPanel = VirtualizingPanel,
+					ItemTemplate = new RawLineTemplate()
 				};
+				body = list;
 			}
 			return new Border
 			{
@@ -793,7 +956,9 @@ namespace ForkPlus.Plugins.Dbc
 			Button button = new Button
 			{
 				Content = text,
-				Padding = new Thickness(10.0, 4.0, 10.0, 4.0),
+				// 宿主 Button 主题固定 Height=24，垂直 Padding 合计必须 ≤4px；要更厚用 MinHeight。
+				Padding = new Thickness(10.0, 0.0, 10.0, 0.0),
+				MinHeight = 28.0,
 				FontSize = 12.0
 			};
 			button.Click += delegate

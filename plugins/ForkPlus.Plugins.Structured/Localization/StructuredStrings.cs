@@ -68,6 +68,40 @@ namespace ForkPlus.Plugins.Structured
 					{ "es-ES", "Árbol de estructura" }
 				}
 			},
+			// 树工具条（v5.0.4 可折叠树）
+			{ "Expand all", new Dictionary<string, string>
+				{
+					{ "zh-Hans", "全部展开" },
+					{ "zh-Hant", "全部展開" },
+					{ "ja-JP", "すべて展開" },
+					{ "ko-KR", "모두 펼치기" },
+					{ "fr-FR", "Tout développer" },
+					{ "de-DE", "Alle ausklappen" },
+					{ "es-ES", "Expandir todo" }
+				}
+			},
+			{ "Collapse all", new Dictionary<string, string>
+				{
+					{ "zh-Hans", "全部折叠" },
+					{ "zh-Hant", "全部摺疊" },
+					{ "ja-JP", "すべて折りたたむ" },
+					{ "ko-KR", "모두 접기" },
+					{ "fr-FR", "Tout réduire" },
+					{ "de-DE", "Alle einklappen" },
+					{ "es-ES", "Contraer todo" }
+				}
+			},
+			{ "Node limit reached ({0}); not all nodes are shown.", new Dictionary<string, string>
+				{
+					{ "zh-Hans", "已达节点上限（{0}），未显示全部节点。" },
+					{ "zh-Hant", "已達節點上限（{0}），未顯示全部節點。" },
+					{ "ja-JP", "ノード上限（{0}）に達したため、一部のノードは表示されていません。" },
+					{ "ko-KR", "노드 한도({0})에 도달하여 일부 노드는 표시되지 않습니다." },
+					{ "fr-FR", "Limite de nœuds atteinte ({0}) ; certains nœuds ne sont pas affichés." },
+					{ "de-DE", "Knotengrenzwert erreicht ({0}); nicht alle Knoten werden angezeigt." },
+					{ "es-ES", "Se alcanzó el límite de nodos ({0}); no se muestran todos." }
+				}
+			},
 			// 表头
 			{ "Old", new Dictionary<string, string>
 				{

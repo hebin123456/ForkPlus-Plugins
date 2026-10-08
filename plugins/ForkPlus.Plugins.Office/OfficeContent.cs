@@ -27,13 +27,15 @@ namespace ForkPlus.Plugins.Office
 	/// <summary>段落内的一段文字及基础字符格式（Word / PowerPoint 的 run 投影）。</summary>
 	internal sealed class OfficeInline
 	{
-		public OfficeInline(string text, bool bold, bool italic, bool underline, bool strike)
+		public OfficeInline(string text, bool bold, bool italic, bool underline, bool strike, string colorHex, double? sizePt)
 		{
 			Text = text ?? string.Empty;
 			Bold = bold;
 			Italic = italic;
 			Underline = underline;
 			Strike = strike;
+			ColorHex = colorHex;
+			SizePt = sizePt;
 		}
 
 		public string Text { get; }
@@ -46,23 +48,33 @@ namespace ForkPlus.Plugins.Office
 
 		public bool Strike { get; }
 
-		/// <summary>是否带任何可见字符格式（全 false 时可省掉 Inlines，直接渲染纯文本）。</summary>
-		public bool HasFormat => Bold || Italic || Underline || Strike;
+		/// <summary>前景色（RRGGBB / AARRGGBB 十六进制，大写）；null 表示跟随视图默认前景色。</summary>
+		public string ColorHex { get; }
+
+		/// <summary>字号（磅）；null 表示与文档默认字号一致（渲染端按段落块的 BaseSizePt 归一）。</summary>
+		public double? SizePt { get; }
+
+		/// <summary>是否带任何可见字符格式（全空时可省掉 Inlines，直接渲染纯文本）。</summary>
+		public bool HasFormat => Bold || Italic || Underline || Strike || ColorHex != null || SizePt != null;
 	}
 
 	/// <summary>段落块：Word 正文段落、PPT 文本框里的一行文字。空文本用于保留段间距。</summary>
 	internal sealed class OfficeParagraphBlock : OfficeBlock
 	{
-		public OfficeParagraphBlock(string text, IReadOnlyList<OfficeInline> runs = null)
+		public OfficeParagraphBlock(string text, IReadOnlyList<OfficeInline> runs = null, double? baseSizePt = null)
 		{
 			Text = text ?? string.Empty;
 			Runs = runs;
+			BaseSizePt = baseSizePt;
 		}
 
 		public string Text { get; }
 
 		/// <summary>带字符格式的 run 序列；为 null 表示整段无特殊格式（按 <see cref="Text"/> 渲染）。</summary>
 		public IReadOnlyList<OfficeInline> Runs { get; }
+
+		/// <summary>文档默认字号（磅），用于把 run 的 <see cref="OfficeInline.SizePt"/> 换算成视图内相对字号；null 时视图按内置基准渲染。</summary>
+		public double? BaseSizePt { get; }
 
 		/// <summary>是否值得走 Inlines 渲染（至少一段带格式，或含多段不同格式）。</summary>
 		public bool HasFormatting
@@ -97,18 +109,36 @@ namespace ForkPlus.Plugins.Office
 		public IReadOnlyList<IReadOnlyList<string>> Rows { get; }
 	}
 
+	/// <summary>Excel 单个工作表的分区：工作表名 + 该表专属的标题 / 表格块（供视图做 sheet 标签页切换）。</summary>
+	internal sealed class OfficeSheetSection
+	{
+		public OfficeSheetSection(string name, IReadOnlyList<OfficeBlock> blocks)
+		{
+			Name = name ?? string.Empty;
+			Blocks = blocks ?? (IReadOnlyList<OfficeBlock>)new List<OfficeBlock>();
+		}
+
+		public string Name { get; }
+
+		public IReadOnlyList<OfficeBlock> Blocks { get; }
+	}
+
 	/// <summary>一侧文档的提取结果：Kind 为 "Word" / "Excel" / "PowerPoint"，Blocks 为按序排列的内容块。</summary>
 	internal sealed class OfficeDocumentModel
 	{
-		public OfficeDocumentModel(string kind, IReadOnlyList<OfficeBlock> blocks)
+		public OfficeDocumentModel(string kind, IReadOnlyList<OfficeBlock> blocks, IReadOnlyList<OfficeSheetSection> sheets = null)
 		{
 			Kind = kind ?? string.Empty;
 			Blocks = blocks ?? (IReadOnlyList<OfficeBlock>)new List<OfficeBlock>();
+			Sheets = sheets;
 		}
 
 		public string Kind { get; }
 
 		public IReadOnlyList<OfficeBlock> Blocks { get; }
+
+		/// <summary>Excel 的按工作表分区（配合视图的 sheet 标签页切换）；Word / PowerPoint 为 null（按 Blocks 平铺）。</summary>
+		public IReadOnlyList<OfficeSheetSection> Sheets { get; }
 
 		/// <summary>粗略的字数统计（所有可见文本字符数），用于视图顶部的摘要徽章。</summary>
 		public int TextLength

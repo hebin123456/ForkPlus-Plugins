@@ -163,15 +163,63 @@ ForkPlus-Plugins/
 │   │   │   └── AudioStrings.cs           # 插件自带译文（8 语言）
 │   │   ├── third-party.json              # FFmpeg / FFmpeg.AutoGen（LGPL）登记
 │   │   └── ForkPlus.Plugins.Audio.csproj # 私有依赖共享解码核心 + 按 RID 的 FFmpeg 原生件
-│   └── ForkPlus.Plugins.Video/           # 视频对比插件（元数据 / 关键帧帧条 / 单帧像素差异 / 播放）
-│       ├── VideoDiffPlugin.cs
-│       ├── VideoDiffView.cs              # 四模式视图 + 单帧时间轴拖动条 + 播放传输条
-│       ├── MediaRender.cs                # 像素差异比 / 变更像素高亮
-│       ├── MediaImage.cs                 # BGRA 字节 → Avalonia Bitmap
+│   ├── ForkPlus.Plugins.Video/           # 视频对比插件（元数据 / 关键帧帧条 / 单帧像素差异 / 播放）
+│   │   ├── VideoDiffPlugin.cs
+│   │   ├── VideoDiffView.cs              # 四模式视图 + 单帧时间轴拖动条 + 播放传输条
+│   │   ├── MediaRender.cs                # 像素差异比 / 变更像素高亮
+│   │   ├── MediaImage.cs                 # BGRA 字节 → Avalonia Bitmap
+│   │   ├── Localization/
+│   │   │   └── VideoStrings.cs           # 插件自带译文（8 语言）
+│   │   ├── third-party.json              # FFmpeg / FFmpeg.AutoGen（LGPL）登记
+│   │   └── ForkPlus.Plugins.Video.csproj # 私有依赖共享解码核心 + 按 RID 的 FFmpeg 原生件
+│   ├── ForkPlus.Plugins.MlModel/         # 机器学习模型对比插件（.onnx/.safetensors/.gguf 键路径表）
+│   │   ├── MlModelDiffPlugin.cs
+│   │   ├── MlModelDiffView.cs            # 两模式视图：元数据 / 张量
+│   │   ├── MlModelParser.cs              # ONNX protobuf wire / SafeTensors JSON 头 / GGUF v2/v3 自解析
+│   │   ├── MlModelData.cs                # 统一键路径行模型（Meta / Tensor）+ 语义 diff
+│   │   ├── Localization/
+│   │   │   └── MlModelStrings.cs         # 插件自带译文（8 语言）
+│   │   └── ForkPlus.Plugins.MlModel.csproj # 零第三方依赖
+│   ├── ForkPlus.Plugins.Midi/            # MIDI 对比插件（音符表 / 钢琴卷帘时间轴）
+│   │   ├── MidiDiffPlugin.cs
+│   │   ├── MidiDiffView.cs               # 两模式视图：音符表 / 钢琴卷帘
+│   │   ├── MidiParser.cs                 # SMF（.mid/.midi）事件流解析为音符模型
+│   │   ├── MidiModel.cs                  # 音符模型 + 按通道 / 音高 / 起始时间配对 diff
+│   │   ├── Localization/
+│   │   │   └── MidiStrings.cs            # 插件自带译文（8 语言）
+│   │   └── ForkPlus.Plugins.Midi.csproj  # 零第三方依赖
+│   ├── ForkPlus.Plugins.Torrent/         # Torrent 种子对比插件（bencode 键路径表）
+│   │   ├── TorrentDiffPlugin.cs
+│   │   ├── TorrentDiffView.cs            # 键路径表视图（tracker / info / pieces 逐行四色）
+│   │   ├── TorrentParser.cs              # bencode 解码为键路径行（含 pieces 分片哈希）
+│   │   ├── TorrentData.cs                # 种子行模型 + 语义 diff（长度 + FNV-1a 哈希）
+│   │   ├── Localization/
+│   │   │   └── TorrentStrings.cs         # 插件自带译文（8 语言）
+│   │   └── ForkPlus.Plugins.Torrent.csproj # 零第三方依赖
+│   ├── ForkPlus.Plugins.Pcap/            # 网络抓包对比插件（统计概览 / 包列表）
+│   │   ├── PcapDiffPlugin.cs
+│   │   ├── PcapDiffView.cs               # 两模式视图：统计概览 / 包列表
+│   │   ├── PcapParser.cs                 # pcap（含纳秒变体）/ pcapng 解析 + Ethernet/IP/TCP/UDP 剥包
+│   │   ├── PcapData.cs                   # 抓包文档模型（统计行 + 包列表）+ 语义 diff
+│   │   ├── Localization/
+│   │   │   └── PcapStrings.cs            # 插件自带译文（8 语言）
+│   │   └── ForkPlus.Plugins.Pcap.csproj  # 零第三方依赖
+│   ├── ForkPlus.Plugins.Psd/             # Photoshop 图层对比插件（缩略图并排 / 图层表 / 头部字段）
+│   │   ├── PsdDiffPlugin.cs
+│   │   ├── PsdDiffView.cs                # 三模式视图：缩略图并排 / 图层表 / 头部字段
+│   │   ├── PsdParser.cs                  # PSD / PSB 头部 + 图层记录 + 1036 缩略图 JFIF 解析
+│   │   ├── PsdData.cs                    # 文档 / 图层模型 + 头部与图层 diff
+│   │   ├── Localization/
+│   │   │   └── PsdStrings.cs             # 插件自带译文（8 语言）
+│   │   └── ForkPlus.Plugins.Psd.csproj   # 零私有依赖（SkiaSharp 由宿主共享）
+│   └── ForkPlus.Plugins.Epub/            # EPUB 电子书对比插件（元数据 / 章节目录）
+│       ├── EpubDiffPlugin.cs
+│       ├── EpubDiffView.cs               # 两模式视图：元数据 / 章节目录
+│       ├── EpubParser.cs                 # ZIP 容器 + container.xml + OPF（元数据 / 清单 / 书脊）解析
+│       ├── EpubData.cs                   # 书籍 / 章节模型 + 元数据与章节 diff
 │       ├── Localization/
-│       │   └── VideoStrings.cs           # 插件自带译文（8 语言）
-│       ├── third-party.json              # FFmpeg / FFmpeg.AutoGen（LGPL）登记
-│       └── ForkPlus.Plugins.Video.csproj # 私有依赖共享解码核心 + 按 RID 的 FFmpeg 原生件
+│       │   └── EpubStrings.cs            # 插件自带译文（8 语言）
+│       └── ForkPlus.Plugins.Epub.csproj  # 零第三方依赖（内置 System.IO.Compression）
 ├── licenses/                             # 第三方许可全文仓库（按组件分目录，集中管理）
 │   ├── docnet-core/LICENSE.txt           # Docnet.Core（MIT）
 │   ├── open-xml-sdk/LICENSE.txt          # Open XML SDK（MIT）
@@ -756,6 +804,111 @@ INI / `.cfg` / `.properties` 自写解析器。
 
 ---
 
+## 机器学习模型对比插件
+
+[plugins/ForkPlus.Plugins.MlModel](plugins/ForkPlus.Plugins.MlModel) 认领
+`.onnx` / `.safetensors` / `.gguf`：量化、微调、重导出之后，并排看清两版模型的差异——
+元数据、张量构成、参数量。
+
+- 三种格式解析成同一套键路径行模型（`Meta` / `Tensor` 两类）：safetensors 读 JSON 头
+  （dtype / shape / 元数据键值），GGUF v2/v3 读元数据键值与张量目录，ONNX 用自写
+  protobuf wire 读取器抽出图输入输出、producer、节点列表与算子直方图、initializer 参数量。
+- 两模式（自建模式按钮 `Metadata / Tensors` 切换，默认元数据）：
+  - **元数据**：格式徽章、张量数、参数量、dtype / shape / 元数据键值逐行四色标注；
+  - **张量**：张量目录键路径表，只看张量维度的增删改。
+- diff 一次算全、模式只过滤展示；300 MB 阈值同取方案 A，后台解析 + 代次取消。
+- **零第三方依赖**，随包进 `plugins/` 的只有插件自身主 DLL。
+- 插件实现 `IPluginMetadata`，名称「机器学习模型对比」（`ML Model Compare`，
+  译文见 `Localization/MlModelStrings.cs`）、版本 `0.0.1` 与描述。
+
+---
+
+## MIDI 对比插件
+
+[plugins/ForkPlus.Plugins.Midi](plugins/ForkPlus.Plugins.Midi) 认领 `.mid` / `.midi`：
+改配器、挪音符之后，并排看清两版 MIDI 的差异——音符表与钢琴卷帘时间轴。
+
+- 解析 SMF（标准 MIDI 文件）事件流（`MThd` / `MTrk`，running status、tempo 变换），
+  抽成统一音符模型（通道 / 音高 / 起止毫秒 / 力度）。
+- 两模式（`Notes / Piano roll` 切换，默认音符表）：
+  - **音符表**：音符按（通道、音高、起始时间）配对，逐音符四色标注（时长 / 力度变了即 changed）；
+  - **钢琴卷帘**：两侧按同一时间刻度上下并排的卷帘条，音块四色染色，直观看哪里挪了 / 加了 / 删了。
+- **零第三方依赖**，随包进 `plugins/` 的只有插件自身主 DLL。
+- 插件实现 `IPluginMetadata`，名称「MIDI 对比」（`MIDI Compare`，
+  译文见 `Localization/MidiStrings.cs`）、版本 `0.0.1` 与描述。
+
+---
+
+## Torrent 种子对比插件
+
+[plugins/ForkPlus.Plugins.Torrent](plugins/ForkPlus.Plugins.Torrent) 认领 `.torrent`：
+换 tracker、重打包之后，并排看清两版种子文件的差异——tracker 列表、info 字典、分片。
+
+- bencode 自解析成键路径行（`announce` / `announce-list` / `info.name` / `info.length` /
+  `info.files` / `piece length` / `pieces` 等），逐行四色标注。
+- 值按语义比较：字符串 / 整数直接比，`pieces` 这类长二进制按「分片数 + FNV-1a 哈希」摘要比，
+  避免 `{N} bytes` 字面相同把真的改动了误判成相同。
+- **零第三方依赖**，随包进 `plugins/` 的只有插件自身主 DLL。
+- 插件实现 `IPluginMetadata`，名称「种子文件对比」（`Torrent Compare`，
+  译文见 `Localization/TorrentStrings.cs`）、版本 `0.0.1` 与描述。
+
+---
+
+## 网络抓包对比插件
+
+[plugins/ForkPlus.Plugins.Pcap](plugins/ForkPlus.Plugins.Pcap) 认领 `.pcap` / `.pcapng`：
+重抓包、换过滤条件之后，并排看清两版抓包的差异——统计概览与包列表。
+
+- 容器解析：pcap（四种魔数变体：微秒 / 纳秒 × 大端 / 小端）与 pcapng（块循环 + IDB `if_tsresol`
+  时间分辨率 + EPB / SPB 出包）；链路层支持 Ethernet（含 VLAN）/ raw IP / Linux SLL，
+  剥出 IPv4 的协议与五元组，解析不出的包归 `Other`，不让整体失败。
+- 两模式（`Statistics / Packets` 切换，默认统计）：
+  - **统计**：包数 / 字节数 / 时长 / 首末包时间 / 协议分布（TCP / UDP / Other…）/
+    Top 会话（`ip:port → ip:port`），逐行四色标注；
+  - **包列表**：相对首包的时间、长度、协议与摘要行，逐包对齐四色。
+- 单侧包数上限 200000（超出记 Truncated）、包列表保留 2000 条，统计仍按全部包计算。
+- **零第三方依赖**，随包进 `plugins/` 的只有插件自身主 DLL。
+- 插件实现 `IPluginMetadata`，名称「网络抓包对比」（`Packet Capture Compare`，
+  译文见 `Localization/PcapStrings.cs`）、版本 `0.0.1` 与描述。
+
+---
+
+## Photoshop 图层对比插件
+
+[plugins/ForkPlus.Plugins.Psd](plugins/ForkPlus.Plugins.Psd) 认领 `.psd` / `.psb`：
+改稿、调图层之后，并排看清两版 PSD 的差异——缩略图、图层记录、头部字段。
+
+- 解析头部（尺寸 / 通道 / 位深 / 颜色模式 / 压缩）、图像资源段（捕获 1036 缩略图资源的
+  JFIF 数据，SkiaSharp 后台转 PNG 显示）与图层记录（名称 / 矩形 / 通道构成 /
+  混合模式 / 不透明度 / 可见性）；PSB 差异（u64 长度、Pascal 名 pad 4）由版本位分派。
+- 三模式（`Preview / Layers / Header` 切换，默认预览）：
+  - **预览**：两侧内嵌缩略图并排（无缩略图给出占位提示），一眼看出画面差异；
+  - **图层**：图层按名称配对，逐图层四色标注（任一呈现属性不同即 changed），分组带 ▸/▾/— 前缀；
+  - **头部**：头部 / 资源统计键路径表。
+- 不做像素级合成，只解析骨架与缩略图，大文件也能秒开；300 MB 阈值同取方案 A。
+- SkiaSharp 由宿主共享（与字体插件同口径），随包进 `plugins/` 的只有插件自身主 DLL。
+- 插件实现 `IPluginMetadata`，名称「PSD 图层对比」（`PSD Compare`，
+  译文见 `Localization/PsdStrings.cs`）、版本 `0.0.1` 与描述。
+
+---
+
+## EPUB 电子书对比插件
+
+[plugins/ForkPlus.Plugins.Epub](plugins/ForkPlus.Plugins.Epub) 认领 `.epub`：
+改版、重排版之后，并排看清两版电子书的差异——元数据与章节目录。
+
+- 用内置 `System.IO.Compression` 解 ZIP 容器，走 `META-INF/container.xml` 找到 OPF，
+  解析其元数据（书名 / 作者 / 语言 / 标识 / 日期）、manifest（文档清单）与 spine（书脊顺序）。
+- 两模式（`Metadata / Chapters` 切换，默认元数据；CI 截图可用环境变量
+  `FORKPLUS_PLUGIN_VIEW_MODE` 预选 `chapters`）：
+  - **元数据**：OPF 元数据键路径表，逐行四色标注；
+  - **章节**：spine 章节按序号对齐，逐章四色标注（manifest 缺项 / 顺序调整一目了然）。
+- **零第三方依赖**，随包进 `plugins/` 的只有插件自身主 DLL。
+- 插件实现 `IPluginMetadata`，名称「EPUB 电子书对比」（`EPUB Compare`，
+  译文见 `Localization/EpubStrings.cs`）、版本 `0.0.1` 与描述。
+
+---
+
 ## Pages 截图约定
 
 插件对比视图的截图由 CI 在真实 ForkPlus 中现场采集（无头 X + 整屏截图），并随 Pages 一起发布上线；
@@ -774,8 +927,10 @@ INI / `.cfg` / `.properties` 自写解析器。
   Office 插件即 `office-modify.png` / `office-add.png` / `office-remove.png`，
   压缩包插件即 `archive-modify.png` / `archive-add.png` / `archive-remove.png`，
   字体插件即 `font-*.png`，可执行文件插件即 `executable-*.png`，证书插件即 `certificate-*.png`，
-  结构化数据插件即 `structured-*.png`，字幕插件即 `subtitle-*.png`，SVG 插件即 `svg-*.png`，
-  音频插件即 `audio-*.png`，视频插件即 `video-*.png`）；
+  结构化数据插件即 `structured-*.png`，DBC 插件即 `dbc-*.png`，字幕插件即 `subtitle-*.png`，
+  SVG 插件即 `svg-*.png`，音频插件即 `audio-*.png`，视频插件即 `video-*.png`，
+  机器学习模型插件即 `mlmodel-*.png`，MIDI 插件即 `midi-*.png`，Torrent 插件即 `torrent-*.png`，
+  抓包插件即 `pcap-*.png`，PSD 插件即 `psd-*.png`，EPUB 插件即 `epub-*.png`）；
 - 截图规格：整屏 `1920×1280`，完整软件界面，不做局部裁切；
 - 缺任一场景视为截图不完整；插件新增变更形态时，同步补对应场景截图与 `plugins.json` 登记。
 - demo 素材由采集脚本现场构造（PDF 用 `write_demo_pdf`，Office 用 `write_demo_office`，
@@ -806,6 +961,14 @@ INI / `.cfg` / `.properties` 自写解析器。
   modify=`.mp4`(H.264) / add=`.mkv`(H.264) / remove=`.avi`(MPEG-4 Part 2)，旧 `testsrc` 2 s、
   新 `testsrc2` 3 s 并做 90° 色相旋转，让帧条与单帧对比里的画面明显不同。三张截图都停在默认的
   元数据模式。
+- **机器学习模型 / MIDI / Torrent / 抓包 / PSD / EPUB** 六类 demo 素材同样是**二进制**，由采集脚本用
+  纯 Python 标准库现场构造（`write_demo_mlmodel` / `write_demo_midi` / `write_demo_torrent` /
+  `write_demo_pcap` / `write_demo_psd` / `write_demo_epub`；PSD 的缩略图另借系统 `ffmpeg` 造一张小 JPEG）。
+  样本都夹带 NUL 字节，git 一律判为二进制、自动走插件路由，无需 `.gitattributes` 干预。
+  三张截图各覆盖一种形态：机器学习模型 modify=`.onnx` / add=`.safetensors` / remove=`.gguf`（另取张量模式一张），
+  MIDI 三场景共用同一对 `.mid` 并另取钢琴卷帘一张，Torrent 三场景共用同一对 `.torrent`，
+  抓包 modify/remove=`.pcap` / add=`.pcapng` 并另取包列表一张，PSD modify/remove=`.psd` / add=`.psb`
+  并另取图层 / 头部两张，EPUB 三场景共用同一对 `.epub` 并另取章节目录一张。
 - 采集脚本在构建插件前先跑 [fetch-third-party.sh](.github/scripts/fetch-third-party.sh) 从三方件仓
   最新 Release 取原生件并校验 sha256，否则音视频插件按 RID 拷不出原生库。
 

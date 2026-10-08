@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- PSD 图层对比视图插件：认领 .psd / .psb，自解析文件头、图像资源与图层记录，对头部字段
+         与图层结构（名称 / 矩形 / 混合模式 / 不透明度 / 可见性 / 通道）做语义 diff，并排显示
+         内嵌缩略图（图像资源 1036 的 JFIF 数据）。
+         公共属性（net10.0 / AvaloniaVersion / 契约引用）见 ../Directory.Build.props。 -->
+    <AssemblyName>ForkPlus.Plugins.Psd</AssemblyName>
+    <RootNamespace>ForkPlus.Plugins.Psd</RootNamespace>
+
+    <!-- 插件自身版本（与宿主版本解耦）；偏好设置 → 插件页展示的 Version 与此一致。 -->
+    <Version>0.0.1</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 本插件视图用 Avalonia 控件纯代码构建（未使用 .axaml）。
+         运行期 Avalonia 由宿主提供，打包时不随插件分发（见 README「依赖与共享程序集」）。 -->
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+
+    <!-- SkiaSharp：宿主共享程序集（与 Avalonia / HarfBuzzSharp 同列，见
+         .github/scripts/install-plugin-artifacts.sh 的 is_shared 清单），本插件只用其
+         SKBitmap / SKImage 解码 PSD 内嵌的 JFIF 缩略图并转 PNG，运行期由宿主提供同一
+         程序集，故不随包拷贝。版本必须与宿主严格一致（3.119.4，即 Avalonia.Skia
+         12.1.1 所依赖的版本）。 -->
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
+  </ItemGroup>
+</Project>

@@ -12,8 +12,8 @@ namespace ForkPlus.Plugins.Executable
 	/// PE 走共享框架内置的 System.Reflection.Metadata / System.Reflection.PortableExecutable，
 	/// 其余自解析（详见 <see cref="ExecutableParser"/>）。
 	///
-	/// 注意：宿主只对**二进制差异**查询插件路由；可执行文件与库一律为二进制，因此会命中本插件，
-	/// 而非文本差异或 Hex 兜底。已知限制：版本化 .so（libfoo.so.1.2.3）扩展名是 .3，路由不到。
+	/// 注意：宿主对二进制与文本差异均查询插件路由（v5.0.4 起含文本）；可执行文件与库一律为
+	/// 二进制，因此会命中本插件而非 Hex 兜底。已知限制：版本化 .so（libfoo.so.1.2.3）扩展名是 .3，路由不到。
 	///
 	/// 另实现 <see cref="IPluginMetadata"/>（可选）向宿主「偏好设置 → 插件」页提供名称/版本/描述。
 	/// </summary>

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- 网络抓包对比视图插件：认领 .pcap / .pcapng，把两侧抓包各自聚合出统计
+         （包数 / 字节数 / 时长 / 协议分布 / 会话 Top）与包列表，再做语义 diff。
+         零第三方依赖：pcap / pcapng 的解析与聚合全在插件内自实现（PcapParser / PcapData）。
+         公共属性（net10.0 / AvaloniaVersion / 契约引用）见 ../Directory.Build.props。 -->
+    <AssemblyName>ForkPlus.Plugins.Pcap</AssemblyName>
+    <RootNamespace>ForkPlus.Plugins.Pcap</RootNamespace>
+
+    <!-- 插件自身版本（与宿主版本解耦）；偏好设置 → 插件页展示的 Version 与此一致。 -->
+    <Version>0.0.1</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 本插件视图用 Avalonia 控件纯代码构建（未使用 .axaml）。
+         运行期 Avalonia 由宿主提供，打包时不随插件分发（见 README「依赖与共享程序集」）。 -->
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+  </ItemGroup>
+</Project>

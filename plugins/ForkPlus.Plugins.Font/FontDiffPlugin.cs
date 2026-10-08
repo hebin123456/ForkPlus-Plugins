@@ -9,8 +9,8 @@ namespace ForkPlus.Plugins.Font
 	/// diff——元数据（head / name / OS/2 / maxp / hhea）与 cmap 码位覆盖。.woff2 一期不支持
 	/// （Brotli 解压后还有 glyf / loca 变换需重建）。
 	///
-	/// 注意：宿主只对**二进制差异**查询插件路由。字体一律为二进制，因此会命中本插件，
-	/// 而非文本差异或 Hex 兜底。
+	/// 注意：宿主对二进制与文本差异均查询插件路由（v5.0.4 起含文本）。字体一律为二进制，
+	/// 因此会命中本插件，而非 Hex 兜底。
 	///
 	/// 另实现 <see cref="IPluginMetadata"/>（可选）向宿主「偏好设置 → 插件」页提供名称/版本/描述。
 	/// </summary>

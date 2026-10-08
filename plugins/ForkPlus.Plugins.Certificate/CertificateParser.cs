@@ -16,8 +16,10 @@ namespace ForkPlus.Plugins.Certificate
 	///
 	/// 支持范围：
 	/// <list type="bullet">
-	/// <item>.der / 二进制 .cer：<see cref="X509CertificateLoader.LoadCertificate(byte[])"/> 单证书，
-	/// 失败再按证书集合兜底（多证书串联 / PKCS#7）。</item>
+	/// <item>.der / .cer：二进制 DER 用 <see cref="X509CertificateLoader.LoadCertificate(byte[])"/> 单证书，
+	/// 失败再按证书集合兜底（多证书串联 / PKCS#7）；PEM 文本（宿主 v5.0.4 起文本差异同样路由到本插件）
+	/// 先按 <c>-----BEGIN CERTIFICATE-----</c> 嗅探，剥出 base64 正文转 DER 后逐块加载，
+	/// 直接把 PEM 字节喂给加载器只会得到「找不到申请的对象」。</item>
 	/// <item>.p12 / .pfx：PKCS#12 证书链。为守住安全边界，加载时设置
 	/// <see cref="Pkcs12LoaderLimits.IgnorePrivateKeys"/> = true 且用
 	/// <see cref="X509KeyStorageFlags.EphemeralKeySet"/>——只读证书链与别名，绝不导入私钥、
@@ -160,10 +162,27 @@ namespace ForkPlus.Plugins.Certificate
 			return certificates;
 		}
 
-		/// <summary>DER 单证书（失败再按证书集合兜底）。</summary>
+		/// <summary>DER 单证书（失败再按证书集合兜底）；PEM 文本先剥 base64 转 DER 再加载。</summary>
 		private static List<X509Certificate2> LoadDer(byte[] bytes, ref CertificateError error, ref string detail)
 		{
 			List<X509Certificate2> certificates = new List<X509Certificate2>();
+			if (LooksLikePem(bytes))
+			{
+				List<PemBlock> blocks = DecodePemBlocks(bytes);
+				if (blocks.Count == 0)
+				{
+					// 嗅探到 PEM 形态但剥不出任何完整块（截断 / 垃圾字节混入）：直接判畸形。
+					error = CertificateError.Malformed;
+					return certificates;
+				}
+				LoadPemCertificates(blocks, certificates, ref error, ref detail);
+				if (certificates.Count > 0 || error != CertificateError.None)
+				{
+					return certificates;
+				}
+				// 块剥得出但没认出证书标签（私钥 / 请求等）：交给下方二进制路径兜底——
+				// 宽松的运行时加载器或许能直接消化整段文本，保持修复前的行为下限。
+			}
 			try
 			{
 				certificates.Add(X509CertificateLoader.LoadCertificate(bytes));
@@ -196,6 +215,151 @@ namespace ForkPlus.Plugins.Certificate
 			return certificates;
 		}
 
+		/// <summary>一个剥出的 PEM 块：标签（CERTIFICATE / PKCS7 等）+ base64 解码出的 DER 字节。</summary>
+		private sealed class PemBlock
+		{
+			public string Label { get; set; }
+
+			public byte[] Der { get; set; }
+		}
+
+		/// <summary>嗅探 PEM：开头一段里（只允许前置空白）出现 “-----BEGIN ” 即按 PEM 文本处理。</summary>
+		private static bool LooksLikePem(byte[] bytes)
+		{
+			string head = DecodeTextBytes(bytes, Math.Min(bytes.Length, 512));
+			int index = head.IndexOf("-----BEGIN ", StringComparison.Ordinal);
+			if (index < 0)
+			{
+				return false;
+			}
+			for (int i = 0; i < index; i++)
+			{
+				if (!char.IsWhiteSpace(head[i]))
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+
+		/// <summary>
+		/// 按 BOM 探测文本编码并解码（UTF-16LE / BE / UTF-8 / 缺省 ASCII），BOM 剥掉。
+		/// Windows 工具导出的 PEM 常带 BOM（PowerShell 的 UTF-8 / UTF-16、certutil 等），
+		/// 按单一 ASCII 解码会让 “-----BEGIN” 标记对不上而误判成二进制。
+		/// </summary>
+		private static string DecodeTextBytes(byte[] bytes, int count)
+		{
+			if (count >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
+			{
+				return Encoding.Unicode.GetString(bytes, 2, count - 2);
+			}
+			if (count >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
+			{
+				return Encoding.BigEndianUnicode.GetString(bytes, 2, count - 2);
+			}
+			if (count >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
+			{
+				return Encoding.UTF8.GetString(bytes, 3, count - 3);
+			}
+			return Encoding.ASCII.GetString(bytes, 0, count);
+		}
+
+		/// <summary>
+		/// 把 PEM 文本按 “-----BEGIN label----- … -----END label-----” 逐块剥出 base64 正文并解码为 DER；
+		/// 单块 base64 非法只跳过该块，不影响其余块。
+		/// </summary>
+		private static List<PemBlock> DecodePemBlocks(byte[] bytes)
+		{
+			List<PemBlock> blocks = new List<PemBlock>();
+			string text = DecodeTextBytes(bytes, bytes.Length);
+			int cursor = 0;
+			while (cursor < text.Length)
+			{
+				int begin = text.IndexOf("-----BEGIN ", cursor, StringComparison.Ordinal);
+				if (begin < 0)
+				{
+					break;
+				}
+				int labelStart = begin + 11;
+				int labelEnd = text.IndexOf("-----", labelStart, StringComparison.Ordinal);
+				if (labelEnd <= labelStart)
+				{
+					break;
+				}
+				string label = text.Substring(labelStart, labelEnd - labelStart).Trim();
+				int endMarker = text.IndexOf("-----END " + label + "-----", labelEnd + 5, StringComparison.Ordinal);
+				if (endMarker < 0)
+				{
+					break;
+				}
+				byte[] der = DecodeBase64Body(text, labelEnd + 5, endMarker);
+				if (der != null && der.Length > 0)
+				{
+					blocks.Add(new PemBlock
+					{
+						Label = label,
+						Der = der
+					});
+				}
+				cursor = endMarker + label.Length + 14;
+			}
+			return blocks;
+		}
+
+		/// <summary>剥出 base64 正文（忽略块内空白）并解码；非法 base64 返回 null。</summary>
+		private static byte[] DecodeBase64Body(string text, int start, int end)
+		{
+			StringBuilder builder = new StringBuilder(end - start);
+			for (int i = start; i < end; i++)
+			{
+				char c = text[i];
+				if (!char.IsWhiteSpace(c))
+				{
+					builder.Append(c);
+				}
+			}
+			try
+			{
+				return Convert.FromBase64String(builder.ToString());
+			}
+			catch (FormatException)
+			{
+				return null;
+			}
+		}
+
+		/// <summary>PEM 文本的证书加载：证书标签块逐张转 DER 加载，PKCS7 块按证书袋兜底；单块失败只记错误不中断。</summary>
+		private static void LoadPemCertificates(List<PemBlock> blocks, List<X509Certificate2> certificates, ref CertificateError error, ref string detail)
+		{
+			foreach (PemBlock block in blocks)
+			{
+				if (IsCertificateLabel(block.Label))
+				{
+					try
+					{
+						certificates.Add(X509CertificateLoader.LoadCertificate(block.Der));
+					}
+					catch (CryptographicException ex)
+					{
+						error = CertificateError.Malformed;
+						detail = ex.Message;
+					}
+				}
+				else if (string.Equals(block.Label, "PKCS7", StringComparison.OrdinalIgnoreCase))
+				{
+					certificates.AddRange(LoadPkcs7(block.Der, ref error, ref detail));
+				}
+			}
+		}
+
+		/// <summary>CERTIFICATE / 旧式 X509 CERTIFICATE / CA 包的 TRUSTED CERTIFICATE 标签，正文都以证书 DER 打头。</summary>
+		private static bool IsCertificateLabel(string label)
+		{
+			return string.Equals(label, "CERTIFICATE", StringComparison.OrdinalIgnoreCase)
+				|| string.Equals(label, "X509 CERTIFICATE", StringComparison.OrdinalIgnoreCase)
+				|| string.Equals(label, "TRUSTED CERTIFICATE", StringComparison.OrdinalIgnoreCase);
+		}
+
 		/// <summary>
 		/// PKCS#7 证书袋：只解析结构取证书，不调 CheckSignature、不验签、不解密内容。
 		/// 注意不能用 <c>new SignedCms(new ContentInfo(bytes), detached)</c>——那个重载把入参当作
@@ -204,6 +368,17 @@ namespace ForkPlus.Plugins.Certificate
 		private static List<X509Certificate2> LoadPkcs7(byte[] bytes, ref CertificateError error, ref string detail)
 		{
 			List<X509Certificate2> certificates = new List<X509Certificate2>();
+			if (LooksLikePem(bytes))
+			{
+				// PEM 包装的 PKCS#7（-----BEGIN PKCS7-----）：剥出 base64 正文后按二进制结构解码。
+				List<PemBlock> blocks = DecodePemBlocks(bytes);
+				if (blocks.Count == 0)
+				{
+					error = CertificateError.Malformed;
+					return certificates;
+				}
+				bytes = blocks[0].Der;
+			}
 			try
 			{
 				SignedCms cms = new SignedCms();

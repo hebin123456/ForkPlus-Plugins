@@ -6,8 +6,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using ForkPlus.Plugins.Abstractions;
 
@@ -24,7 +26,10 @@ namespace ForkPlus.Plugins.Structured
 	/// <list type="bullet">
 	/// <item>键路径（默认）：一张四列表——「键路径 | 旧值 | 新值 | 状态」，逐行按
 	/// 相同 / 已变更 / 仅左 / 仅右 四色标注底色，是看配置改动的首选。</item>
-	/// <item>结构树：左右两栏按原文档结构缩进展开，逐节点按同一套四色标注，
+	/// <item>结构树：左右两栏按原文档结构呈现。v5.0.4 起为宿主树控件同款的可折叠树——
+	/// 16×16 chevron（复用宿主 <c>ExpandCollapseToggleStyle</c> 主题）、10px/层缩进、行高 20、
+	/// 主题前景色与悬停高亮；子级懒构建（首次展开才实化，超大文档只建可见部分），
+	/// 命中变更的分支自动展开，另附「全部展开 / 全部折叠」工具按钮。逐节点按同一套四色标注，
 	/// 便于顺着嵌套层级看改动落在哪一支。</item>
 	/// </list>
 	///
@@ -52,8 +57,10 @@ namespace ForkPlus.Plugins.Structured
 		/// <summary>单侧超过此大小不解析（与音视频插件同口径）。</summary>
 		private const long MaxSideBytes = 300L * 1024L * 1024L;
 
-		/// <summary>渲染上限：避免超大文件把 UI 拖死。</summary>
-		private const int MaxRows = 4000;
+		/// <summary>渲染上限：键路径表是非虚拟化 Grid（每行多个控件一次性布局），
+		/// 行数过万的多文档合集直接铺 4000 行会拖死 UI——上限压到 500，
+		/// 底部「仅显示前 N 行」提示兜底，完整导航走结构树（懒展开 + 节点预算）。</summary>
+		private const int MaxRows = 500;
 
 		private const int MaxTreeNodes = 4000;
 
@@ -110,6 +117,11 @@ namespace ForkPlus.Plugins.Structured
 
 		private string _error;
 
+		/// <summary>左 / 右两侧各自的解析错误（侧存在但解析失败时用于区分「解析失败」与「不存在」）。</summary>
+		private string _srcParseError;
+
+		private string _dstParseError;
+
 		private string _srcFormat = "?";
 
 		private string _dstFormat = "?";
@@ -119,6 +131,14 @@ namespace ForkPlus.Plugins.Structured
 		private bool _dstAbsent;
 
 		private bool _tooLarge;
+
+		private readonly Button _expandAllButton;
+
+		private readonly Button _collapseAllButton;
+
+		/// <summary>树模式当前实化的全部行（两侧合计），供「全部展开 / 全部折叠」遍历；
+		/// 懒展开会向里追加，遍历必须用下标 for。</summary>
+		private readonly List<TreeRow> _treeRows = new List<TreeRow>();
 
 		public StructuredDiffView()
 		{
@@ -138,6 +158,17 @@ namespace ForkPlus.Plugins.Structured
 			{
 				SetMode(TreeMode);
 			});
+		_expandAllButton = NewModeButton(StructuredStrings.T("Expand all"), delegate
+			{
+				ExpandAllTreeRows();
+			});
+		_collapseAllButton = NewModeButton(StructuredStrings.T("Collapse all"), delegate
+			{
+				CollapseAllTreeRows();
+			});
+		_expandAllButton.Margin = new Thickness(10.0, 2.0, 4.0, 2.0);
+		_expandAllButton.IsVisible = _mode == TreeMode;
+		_collapseAllButton.IsVisible = _mode == TreeMode;
 			_content = new ContentControl
 			{
 				Margin = new Thickness(12.0, 0.0, 12.0, 12.0)
@@ -161,6 +192,8 @@ namespace ForkPlus.Plugins.Structured
 			};
 			modes.Children.Add(_keysButton);
 			modes.Children.Add(_treeButton);
+			modes.Children.Add(_expandAllButton);
+			modes.Children.Add(_collapseAllButton);
 
 			_root = new Grid
 			{
@@ -222,6 +255,8 @@ namespace ForkPlus.Plugins.Structured
 			_mode = modeId;
 			StyleModeButton(_keysButton, _mode == KeysMode);
 			StyleModeButton(_treeButton, _mode == TreeMode);
+			_expandAllButton.IsVisible = modeId == TreeMode;
+			_collapseAllButton.IsVisible = modeId == TreeMode;
 			UpdateStatus();
 			BuildContent();
 		}
@@ -238,6 +273,8 @@ namespace ForkPlus.Plugins.Structured
 		{
 			_keysButton.Content = StructuredStrings.T("Key path");
 			_treeButton.Content = StructuredStrings.T("Structure tree");
+			_expandAllButton.Content = StructuredStrings.T("Expand all");
+			_collapseAllButton.Content = StructuredStrings.T("Collapse all");
 			PluginEnvironment.ApplyLocalization(_root);
 			UpdateTitles();
 			UpdateStatus();
@@ -252,6 +289,7 @@ namespace ForkPlus.Plugins.Structured
 			_left = null;
 			_right = null;
 			_summary = null;
+			_treeRows.Clear();
 			_content.Content = null;
 			_status.Text = string.Empty;
 		}
@@ -265,6 +303,8 @@ namespace ForkPlus.Plugins.Structured
 			_right = null;
 			_summary = null;
 			_error = null;
+			_srcParseError = null;
+			_dstParseError = null;
 			_tooLarge = false;
 			UpdateStatus();
 			_content.Content = null;
@@ -295,7 +335,8 @@ namespace ForkPlus.Plugins.Structured
 			{
 				DataNode left = null;
 				DataNode right = null;
-				string error = null;
+				string srcParseError = null;
+				string dstParseError = null;
 				try
 				{
 					string leftText = ReadText(src, hexSrc, cts.Token);
@@ -303,14 +344,11 @@ namespace ForkPlus.Plugins.Structured
 					cts.Token.ThrowIfCancellationRequested();
 					if (src != null)
 					{
-						left = StructuredParser.Parse(leftText, srcFormat, out string leftError);
-						error = leftError;
+						left = StructuredParser.Parse(leftText, srcFormat, out srcParseError);
 					}
 					if (dst != null)
 					{
-						string rightError;
-						right = StructuredParser.Parse(rightText, dstFormat, out rightError);
-						error = error ?? rightError;
+						right = StructuredParser.Parse(rightText, dstFormat, out dstParseError);
 					}
 					if (cts.Token.IsCancellationRequested)
 					{
@@ -326,7 +364,8 @@ namespace ForkPlus.Plugins.Structured
 						_left = left;
 						_right = right;
 						_summary = summary;
-						_error = error;
+						_srcParseError = srcParseError;
+						_dstParseError = dstParseError;
 						UpdateStatus();
 						BuildContent();
 					});
@@ -472,6 +511,12 @@ namespace ForkPlus.Plugins.Structured
 			return extension.TrimStart('.').ToLowerInvariant();
 		}
 
+		/// <summary>优先展示的状态错误：意外异常 &gt; 左侧解析失败 &gt; 右侧解析失败。</summary>
+		private string DisplayError()
+		{
+			return _error ?? _srcParseError ?? _dstParseError;
+		}
+
 		private void UpdateStatus()
 		{
 			if (_tooLarge)
@@ -479,9 +524,10 @@ namespace ForkPlus.Plugins.Structured
 				_status.Text = StructuredStrings.T("File too large to preview");
 				return;
 			}
-			if (_error != null)
+			string error = DisplayError();
+			if (error != null)
 			{
-				_status.Text = StructuredStrings.F("Failed to parse: {0}", _error);
+				_status.Text = StructuredStrings.F("Failed to parse: {0}", error);
 				return;
 			}
 			if (_summary == null)
@@ -511,11 +557,11 @@ namespace ForkPlus.Plugins.Structured
 				_content.Content = NoteText(StructuredStrings.T("File too large to preview"));
 				return;
 			}
-			if (_summary == null)
-			{
-				_content.Content = NoteText(_error == null ? StructuredStrings.T("Analyzing…") : StructuredStrings.F("Failed to parse: {0}", _error));
-				return;
-			}
+		if (_summary == null)
+		{
+			_content.Content = NoteText(DisplayError() == null ? StructuredStrings.T("Analyzing…") : StructuredStrings.F("Failed to parse: {0}", DisplayError()));
+			return;
+		}
 			if (_mode == TreeMode)
 			{
 				_content.Content = BuildTreeContent();
@@ -633,23 +679,42 @@ namespace ForkPlus.Plugins.Structured
 			{
 				Spacing = 0.0
 			};
-			int budget = MaxTreeNodes;
-			if (_left != null)
+			_treeRows.Clear();
+			TreeSide leftSide = new TreeSide
 			{
-				AddTreeNodes(leftColumn, _left, string.Empty, string.Empty, 0, true, states, ref budget);
-			}
-			else
+				Panel = leftColumn,
+				Budget = MaxTreeNodes
+			};
+			TreeSide rightSide = new TreeSide
 			{
-				leftColumn.Children.Add(NoteText(StructuredStrings.T("not present")));
-			}
-			if (_right != null)
-			{
-				AddTreeNodes(rightColumn, _right, string.Empty, string.Empty, 0, false, states, ref budget);
-			}
-			else
-			{
-				rightColumn.Children.Add(NoteText(StructuredStrings.T("not present")));
-			}
+				Panel = rightColumn,
+				Budget = MaxTreeNodes
+			};
+		// 占位三态：解析成功 → 折叠树；侧存在但解析失败 → 错误占位；侧缺失 → 「不存在」。
+		if (_left != null)
+		{
+			AddChildRows(leftSide, _left, string.Empty, 0, states, null);
+		}
+		else if (_context?.Src != null)
+		{
+			leftColumn.Children.Add(NoteText(StructuredStrings.F("Failed to parse: {0}", _srcParseError ?? "?")));
+		}
+		else
+		{
+			leftColumn.Children.Add(NoteText(StructuredStrings.T("not present")));
+		}
+		if (_right != null)
+		{
+			AddChildRows(rightSide, _right, string.Empty, 0, states, null);
+		}
+		else if (_context?.Dst != null)
+		{
+			rightColumn.Children.Add(NoteText(StructuredStrings.F("Failed to parse: {0}", _dstParseError ?? "?")));
+		}
+		else
+		{
+			rightColumn.Children.Add(NoteText(StructuredStrings.T("not present")));
+		}
 			Grid panes = new Grid
 			{
 				ColumnDefinitions = new ColumnDefinitions("*,*")
@@ -685,27 +750,27 @@ namespace ForkPlus.Plugins.Structured
 			};
 		}
 
-		private void AddTreeNodes(Panel panel, DataNode node, string key, string path, int depth, bool isLeft, Dictionary<string, DiffState> states, ref int budget)
+		/// <summary>把 node 的**一层**子项各建一行（根层传 parentRow = null，直接挂侧栏面板）；
+		/// 容器行的子级懒构建——首次展开才实化，超大文档只建可见部分。
+		/// 命中变更的分支自动展开，顺着改动脉络一路亮到改动点。</summary>
+		private void AddChildRows(TreeSide side, DataNode node, string path, int depth, Dictionary<string, DiffState> states, TreeRow parentRow)
 		{
 			if (node == null)
 			{
 				return;
 			}
+			Panel panel = ((parentRow != null && parentRow.Children != null) ? parentRow.Children : side.Panel);
 			if (node.Kind == DataKind.Map)
 			{
 				foreach (DataEntry entry in node.Entries)
 				{
-					if (budget <= 0)
+					if (!TryBudgetTreeRow(side, panel))
 					{
 						return;
 					}
-					budget--;
 					string childPath = string.IsNullOrEmpty(path) ? entry.Key : path + "." + entry.Key;
-					panel.Children.Add(BuildTreeRow(entry.Key, entry.Node, childPath, depth, states));
-					if (entry.Node.Kind == DataKind.Map || entry.Node.Kind == DataKind.Seq)
-					{
-						AddTreeNodes(panel, entry.Node, entry.Key, childPath, depth + 1, isLeft, states, ref budget);
-					}
+					TreeRow row = NewTreeRow(entry.Key, entry.Node, childPath, depth, states);
+					AddTreeRow(side, panel, row, entry.Node, childPath, depth + 1, states);
 				}
 				return;
 			}
@@ -713,23 +778,63 @@ namespace ForkPlus.Plugins.Structured
 			{
 				for (int index = 0; index < node.Items.Count; index++)
 				{
-					if (budget <= 0)
+					if (!TryBudgetTreeRow(side, panel))
 					{
 						return;
 					}
-					budget--;
 					DataNode item = node.Items[index];
 					string childPath = path + "[" + index + "]";
-					panel.Children.Add(BuildTreeRow("[" + index + "]", item, childPath, depth, states));
-					if (item.Kind == DataKind.Map || item.Kind == DataKind.Seq)
-					{
-						AddTreeNodes(panel, item, null, childPath, depth + 1, isLeft, states, ref budget);
-					}
+					TreeRow row = NewTreeRow("[" + index + "]", item, childPath, depth, states);
+					AddTreeRow(side, panel, row, item, childPath, depth + 1, states);
 				}
 			}
 		}
 
-		private Control BuildTreeRow(string key, DataNode node, string path, int depth, Dictionary<string, DiffState> states)
+		private void AddTreeRow(TreeSide side, Panel panel, TreeRow row, DataNode childNode, string childPath, int childDepth, Dictionary<string, DiffState> states)
+		{
+			panel.Children.Add(row.RowBorder);
+			// 子级容器必须与行本体同挂到面板（行下方、下一兄弟行之前），
+			// 否则懒构建出的子行落在游离面板里——展开后什么都看不见
+			if (row.Children != null)
+			{
+				panel.Children.Add(row.Children);
+			}
+			_treeRows.Add(row);
+			if (row.Children != null)
+			{
+				row.BuildChildren = delegate
+				{
+					AddChildRows(side, childNode, childPath, childDepth, states, row);
+				};
+				if (row.State != DiffState.Same)
+				{
+					// 命中变更的分支自动展开（触发懒构建，改动脉络逐级亮下去）
+					row.Chevron.IsChecked = true;
+				}
+			}
+		}
+
+		/// <summary>预算扣减；耗尽时在当前面板补一条截断提示（每侧至多一次）。</summary>
+		private static bool TryBudgetTreeRow(TreeSide side, Panel panel)
+		{
+			if (side.Budget > 0)
+			{
+				side.Budget--;
+				return true;
+			}
+			if (!side.NotedTruncation)
+			{
+				side.NotedTruncation = true;
+				panel.Children.Add(NoteText(StructuredStrings.F("Node limit reached ({0}); not all nodes are shown.", MaxTreeNodes)));
+			}
+			return false;
+		}
+
+		/// <summary>建一行树节点：宿主 TreeViewControlItem 同款视觉——行高 20、10px/层缩进、
+		/// 16×16 chevron（复用宿主 <c>ExpandCollapseToggleStyle</c> 主题）、主题前景色；
+		/// 相同行悬停取宿主 <c>TreeViewItem.MouseOver.Background</c>，diff 四色行保持底色不悬停。
+		/// 双击整行亦可展开 / 折叠。叶子行 chevron 隐藏但保留占位列，键名纵向对齐。</summary>
+		private TreeRow NewTreeRow(string key, DataNode node, string path, int depth, Dictionary<string, DiffState> states)
 		{
 			DiffState state = ResolveState(path, states);
 			string value;
@@ -745,35 +850,245 @@ namespace ForkPlus.Plugins.Structured
 			{
 				value = " {" + node.Entries.Count + "}";
 			}
-			StackPanel line = new StackPanel
+			TextBlock keyBlock = new TextBlock
 			{
-				Orientation = Orientation.Horizontal,
-				Margin = new Thickness(depth * 14.0, 1.0, 0.0, 1.0)
+				Text = key ?? string.Empty,
+				FontFamily = MonoFont,
+				FontWeight = FontWeight.SemiBold,
+				TextTrimming = TextTrimming.CharacterEllipsis,
+				VerticalAlignment = VerticalAlignment.Center
 			};
-			if (key != null)
-			{
-				line.Children.Add(new TextBlock
-				{
-					Text = key,
-					FontFamily = MonoFont,
-					FontWeight = FontWeight.SemiBold,
-					Foreground = Brushes.Black
-				});
-			}
-			line.Children.Add(new TextBlock
+			BindThemeBrush(keyBlock, TextBlock.ForegroundProperty, "ForegroundBrush", Brushes.Black);
+			TextBlock valueBlock = new TextBlock
 			{
 				Text = value,
 				FontFamily = MonoFont,
-				Foreground = Brushes.Black
-			});
-			Border row = new Border
-			{
-				Background = TintOf(state),
-				CornerRadius = new CornerRadius(3.0),
-				Padding = new Thickness(4.0, 1.0, 4.0, 1.0),
-				Child = line
+				Opacity = 0.75,
+				TextTrimming = TextTrimming.CharacterEllipsis,
+				Margin = new Thickness(4.0, 0.0, 0.0, 0.0),
+				VerticalAlignment = VerticalAlignment.Center
 			};
+			BindThemeBrush(valueBlock, TextBlock.ForegroundProperty, "ForegroundBrush", Brushes.Black);
+			StackPanel line = new StackPanel
+			{
+				Orientation = Orientation.Horizontal,
+				VerticalAlignment = VerticalAlignment.Center,
+				Margin = new Thickness(2.0, 0.0, 0.0, 0.0)
+			};
+			line.Children.Add(keyBlock);
+			line.Children.Add(valueBlock);
+
+			TreeRow row = new TreeRow
+			{
+				State = state
+			};
+			bool isContainer = node.Kind == DataKind.Map || node.Kind == DataKind.Seq;
+			ToggleButton chevron = NewChevron();
+			chevron.IsVisible = isContainer;
+			chevron.IsCheckedChanged += delegate
+			{
+				ApplyExpanded(row);
+			};
+			row.Chevron = chevron;
+
+			Grid rowGrid = new Grid
+			{
+				ColumnDefinitions = new ColumnDefinitions("16,*"),
+				Margin = new Thickness(depth * 10.0, 0.0, 0.0, 0.0)
+			};
+			Grid.SetColumn(chevron, 0);
+			Grid.SetColumn(line, 1);
+			rowGrid.Children.Add(chevron);
+			rowGrid.Children.Add(line);
+
+			Border border = new Border
+			{
+				MinHeight = 20.0,
+				Padding = new Thickness(0.0, 1.0, 4.0, 1.0),
+				CornerRadius = new CornerRadius(3.0),
+				Background = TintOf(state),
+				Child = rowGrid
+			};
+			if (state == DiffState.Same)
+			{
+				border.PointerEntered += delegate
+				{
+					IBrush hover = FindThemeBrush(border, "TreeViewItem.MouseOver.Background");
+					if (hover != null)
+					{
+						border.Background = hover;
+					}
+				};
+				border.PointerExited += delegate
+				{
+					border.Background = null;
+				};
+			}
+			border.DoubleTapped += delegate
+			{
+				if (row.Chevron != null)
+				{
+					row.Chevron.IsChecked = !(row.Chevron.IsChecked == true);
+				}
+			};
+			row.RowBorder = border;
+			if (isContainer)
+			{
+				row.Children = new StackPanel
+				{
+					IsVisible = false
+				};
+			}
 			return row;
+		}
+
+		/// <summary>宿主同款 chevron：直接复用宿主 <c>ExpandCollapseToggleStyle</c> ControlTheme
+		///（16×16、右向箭头，选中时下指——几何切换由该主题的 :checked 样式完成）。
+		/// 资源不可达时（无宿主样式的测试环境）退回默认 ToggleButton 外观，功能不受影响。</summary>
+		private static ToggleButton NewChevron()
+		{
+			ToggleButton toggle = new ToggleButton
+			{
+				Width = 16.0,
+				Height = 16.0,
+				Focusable = false,
+				HorizontalAlignment = HorizontalAlignment.Left,
+				VerticalAlignment = VerticalAlignment.Center
+			};
+			toggle.Bind(TemplatedControl.ThemeProperty, new CastSource<ControlTheme>(toggle.GetResourceObservable("ExpandCollapseToggleStyle")));
+			return toggle;
+		}
+
+		/// <summary>按 chevron 勾选态切换子级：首次展开才实化（懒构建），折叠只藏不销毁。</summary>
+		private static void ApplyExpanded(TreeRow row)
+		{
+			if (row.Chevron == null || row.Children == null)
+			{
+				return;
+			}
+			bool expanded = row.Chevron.IsChecked == true;
+			if (expanded && !row.Built)
+			{
+				row.Built = true;
+				row.BuildChildren?.Invoke();
+			}
+			row.Children.IsVisible = expanded;
+		}
+
+		/// <summary>全部展开。懒展开会向 _treeRows 追加新行，必须用下标 for 遍历。</summary>
+		private void ExpandAllTreeRows()
+		{
+			for (int i = 0; i < _treeRows.Count; i++)
+			{
+				TreeRow row = _treeRows[i];
+				if (row.Chevron != null)
+				{
+					row.Chevron.IsChecked = true;
+				}
+			}
+		}
+
+		private void CollapseAllTreeRows()
+		{
+			for (int i = _treeRows.Count - 1; i >= 0; i--)
+			{
+				TreeRow row = _treeRows[i];
+				if (row.Chevron != null)
+				{
+					row.Chevron.IsChecked = false;
+				}
+			}
+		}
+
+		/// <summary>把控件属性绑到宿主应用级主题资源（插件与宿主同进程，DynamicResource 语义可达）；
+		/// 资源缺失时落到 fallback（无宿主样式的测试环境）。</summary>
+		private static void BindThemeBrush(StyledElement element, AvaloniaProperty property, string resourceKey, IBrush fallback)
+		{
+			element.Bind(property, new CastSource<IBrush>(element.GetResourceObservable(resourceKey), fallback));
+		}
+
+		/// <summary>事件时点取宿主主题资源（悬停高亮这类一次性取用，不做常驻绑定）。</summary>
+		private static IBrush FindThemeBrush(StyledElement element, string resourceKey)
+		{
+			if (element.TryFindResource(resourceKey, element.ActualThemeVariant, out object value))
+			{
+				return value as IBrush;
+			}
+			return null;
+		}
+
+		/// <summary>IObservable&lt;object&gt;（宿主资源，可能为 null）→ 类型化取值的小适配器；
+		/// Avalonia 的响应式链没有 LINQ 组合子，这里手写 cast + fallback。</summary>
+		private sealed class CastSource<T> : IObservable<T> where T : class
+		{
+			private readonly IObservable<object> _source;
+
+			private readonly T _fallback;
+
+			public CastSource(IObservable<object> source, T fallback = null)
+			{
+				_source = source;
+				_fallback = fallback;
+			}
+
+			public IDisposable Subscribe(IObserver<T> observer)
+			{
+				return _source.Subscribe(new CastObserver<T>(observer, _fallback));
+			}
+		}
+
+		private sealed class CastObserver<T> : IObserver<object> where T : class
+		{
+			private readonly IObserver<T> _target;
+
+			private readonly T _fallback;
+
+			public CastObserver(IObserver<T> target, T fallback)
+			{
+				_target = target;
+				_fallback = fallback;
+			}
+
+			void IObserver<object>.OnNext(object value)
+			{
+				_target.OnNext((value as T) ?? _fallback);
+			}
+
+			void IObserver<object>.OnError(Exception error)
+			{
+				_target.OnError(error);
+			}
+
+			void IObserver<object>.OnCompleted()
+			{
+				_target.OnCompleted();
+			}
+		}
+
+		/// <summary>树模式的一行：行控件 + chevron + 懒构建的子级容器（叶子行 Children 为 null）。</summary>
+		private sealed class TreeRow
+		{
+			public Border RowBorder;
+
+			public ToggleButton Chevron;
+
+			public Panel Children;
+
+			public Action BuildChildren;
+
+			public bool Built;
+
+			public DiffState State;
+		}
+
+		/// <summary>一侧的构建上下文：容器面板 + 节点预算（懒展开持续扣减）。</summary>
+		private sealed class TreeSide
+		{
+			public Panel Panel;
+
+			public int Budget;
+
+			public bool NotedTruncation;
 		}
 
 		/// <summary>取该路径的状态；容器节点只要任一后代有变更就按变更显示。</summary>
@@ -883,7 +1198,8 @@ namespace ForkPlus.Plugins.Structured
 			Button button = new Button
 			{
 				Content = text,
-				Padding = new Thickness(10.0, 4.0, 10.0, 4.0),
+				Padding = new Thickness(10.0, 0.0, 10.0, 0.0),
+				MinHeight = 28.0,
 				FontSize = 12.0
 			};
 			button.Click += delegate

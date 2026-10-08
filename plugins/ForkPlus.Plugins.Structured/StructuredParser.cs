@@ -16,7 +16,8 @@ namespace ForkPlus.Plugins.Structured
 	/// 分工：
 	/// <list type="bullet">
 	/// <item>JSON / JSONC —— <c>System.Text.Json</c>（<c>JsonDocument</c>，允许注释与尾逗号）；</item>
-	/// <item>YAML —— YamlDotNet 的表示模型（保序），只取首文档；</item>
+	/// <item>YAML —— YamlDotNet 的表示模型（保序）；多文档（<c>---</c> 分隔）跳过空文档后按
+	/// 非空序号合成 <c>doc[0]</c>、<c>doc[1]</c>…，单文档保持原样；</item>
 	/// <item>TOML —— Tomlyn 的 <c>ToModel</c>，表与数组表递归转换，键按名排序保证顺序稳定；</item>
 	/// <item>XML —— <c>System.Xml.Linq</c>：元素为键、属性前缀 <c>@</c>、文本节点为 <c>#text</c>，
 	/// 同名子元素按出现次序加 <c>[i]</c>；</item>
@@ -28,23 +29,34 @@ namespace ForkPlus.Plugins.Structured
 	/// </summary>
 	internal static class StructuredParser
 	{
-		/// <summary>按扩展名分派解析器。成功返回数据树，失败返回 null 并回填 error。</summary>
-		internal static DataNode Parse(string text, string extension, out string error)
+	/// <summary>按扩展名分派解析器。成功返回数据树，失败返回 null 并回填 error。
+	/// 扩展名带不带前导点都接受（视图侧 FormatOf 产出无点形式，此处归一成小写含点）。</summary>
+	internal static DataNode Parse(string text, string extension, out string error)
+	{
+		error = null;
+		if (text == null)
 		{
-			error = null;
-			if (text == null)
+			text = string.Empty;
+		}
+		// 去 BOM：UTF-8 BOM 会让 JSON / TOML 解析器在首字符报错。
+		if (text.Length > 0 && text[0] == '\uFEFF')
+		{
+			text = text.Substring(1);
+		}
+		// 空内容（新建空文件等）按空文档处理，给空树占位而不是解析报错。
+		if (text.Trim().Length == 0)
+		{
+			return DataNode.Map();
+		}
+		try
+		{
+			string ext = (extension ?? string.Empty).Trim().ToLowerInvariant();
+			if (ext.Length > 0 && ext[0] != '.')
 			{
-				text = string.Empty;
+				ext = "." + ext;
 			}
-			// 去 BOM：UTF-8 BOM 会让 JSON / TOML 解析器在首字符报错。
-			if (text.Length > 0 && text[0] == '\uFEFF')
+			switch (ext)
 			{
-				text = text.Substring(1);
-			}
-			try
-			{
-				switch ((extension ?? string.Empty).ToLowerInvariant())
-				{
 				case ".json":
 				case ".jsonc":
 					return ParseJson(text);
@@ -124,6 +136,10 @@ namespace ForkPlus.Plugins.Structured
 
 		// ---- YAML ----
 
+		/// <summary>多文档 YAML（<c>---</c> 分隔，如 cert-manager.crds.yaml 一类的 CRD 合集）
+		/// 不能只取首文档——首个常是纯注释段（表示模型里是 null 标量），实际内容全在后续文档里。
+		/// 这里跳过空文档后按「非空序号」合成 <c>doc[0]</c>、<c>doc[1]</c>…：注释段增删不影响
+		/// 两侧文档序号对齐，diff 语义稳定；单文档文件保持原样不加包装。</summary>
 		private static DataNode ParseYaml(string text)
 		{
 			YamlStream stream = new YamlStream();
@@ -131,11 +147,30 @@ namespace ForkPlus.Plugins.Structured
 			{
 				stream.Load(reader);
 			}
-			if (stream.Documents.Count == 0)
+			List<DataNode> docs = new List<DataNode>();
+			foreach (YamlDocument document in stream.Documents)
+			{
+				DataNode node = FromYaml(document.RootNode);
+				if (node.Kind == DataKind.Scalar && string.IsNullOrEmpty(node.Value))
+				{
+					continue;
+				}
+				docs.Add(node);
+			}
+			if (docs.Count == 0)
 			{
 				return DataNode.Map();
 			}
-			return FromYaml(stream.Documents[0].RootNode);
+			if (docs.Count == 1)
+			{
+				return docs[0];
+			}
+			DataNode root = DataNode.Map();
+			for (int index = 0; index < docs.Count; index++)
+			{
+				root.Add("doc[" + index + "]", docs[index]);
+			}
+			return root;
 		}
 
 		private static DataNode FromYaml(YamlNode node)

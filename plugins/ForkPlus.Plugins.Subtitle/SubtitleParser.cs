@@ -28,7 +28,8 @@ namespace ForkPlus.Plugins.Subtitle
 		/// <summary>MicroDVD 未声明帧率时的缺省值。</summary>
 		private const double DefaultFps = 25.0;
 
-		/// <summary>按扩展名分派解析器。成功返回文档，失败返回 null 并回填 error。</summary>
+		/// <summary>按扩展名分派解析器。成功返回文档，失败返回 null 并回填 error。
+		/// 扩展名带不带前导点都接受（视图侧 FormatOf 产出无点形式，此处归一成小写含点）。</summary>
 		internal static SubtitleDocument Parse(string text, string extension, out string error)
 		{
 			error = null;
@@ -43,7 +44,12 @@ namespace ForkPlus.Plugins.Subtitle
 			try
 			{
 				SubtitleDocument document;
-				switch ((extension ?? string.Empty).ToLowerInvariant())
+				string ext = (extension ?? string.Empty).Trim().ToLowerInvariant();
+				if (ext.Length > 0 && ext[0] != '.')
+				{
+					ext = "." + ext;
+				}
+				switch (ext)
 				{
 				case ".srt":
 					document = ParseSrt(text, "SRT");

@@ -274,7 +274,9 @@ namespace ForkPlus.Plugins.Certificate
 			Button button = new Button
 			{
 				BorderThickness = new Thickness(0.0),
-				Padding = new Thickness(12.0, 3.0, 12.0, 3.0),
+				// 宿主 Button 主题固定 Height=24，垂直 padding 合计须 ≤4px；加厚的观感交给 MinHeight 抬高。
+				Padding = new Thickness(12.0, 0.0, 12.0, 0.0),
+				MinHeight = 28.0,
 				CornerRadius = new CornerRadius(4.0),
 			};
 			button.Click += handler;

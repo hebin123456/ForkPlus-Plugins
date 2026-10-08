@@ -701,6 +701,341 @@
           "html": "<p><strong>路由</strong>：SVG 是 XML 文本，而宿主只对<strong>二进制</strong>差异查询插件路由，因此自动路由通常不命中；要使用本视图需在宿主「偏好设置 → 扩展名绑定」里把 <code>.svg</code> 绑定到本插件。demo 仓库用 <code>.gitattributes</code> 的 <code>-diff</code> 让样本按二进制上报差异，截图才会落到本插件而不是内置文本编辑器。</p><p>单侧声明大小超过 <code>MaxSideBytes</code>（<code>300 * 1024 * 1024</code>，即 300 MB）时只显示 <code>File too large to preview</code>。解析、diff 与渲染在后台线程，控件只在 UI 线程构建；每次刷新 / 切模式以「代次 <code>_generation</code> + <code>CancellationTokenSource</code>」取消上一轮，回投时校验代次，切文件后旧任务结果不会画到本次视图。</p>"
         }
       ]
+    },
+    {
+      "id": "mlmodel",
+      "name": "机器学习模型对比插件 · ML Model Compare",
+      "version": "0.0.1",
+      "assembly": "ForkPlus.Plugins.MlModel",
+      "source": "plugins/ForkPlus.Plugins.MlModel",
+      "summary": "机器学习模型对比视图：认领 .onnx / .safetensors / .gguf，命中后把两侧模型解析成统一的键路径行（元数据 Meta 与张量 Tensor 两类），逐行标注「相同 / 已变更 / 仅左 / 仅右」——把差异区换成元数据表与张量表两种模式，而不是逐字符比二进制。safetensors 读 JSON 头（dtype / shape / __metadata__ 键值），GGUF v2/v3 读元数据键值与张量目录，ONNX 用自写 protobuf wire 读取器抽出图输入输出、producer、节点列表与算子直方图、initializer 参数量。三类样本都含 NUL 字节，git 判为二进制、自动命中本插件。单侧声明大小超过 300 MB 只给提示、不解析。",
+      "extensions": [
+        ".onnx",
+        ".safetensors",
+        ".gguf"
+      ],
+      "screenshots": [
+        {
+          "file": "mlmodel-modify.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.onnx，差异区由机器学习模型插件渲染成键路径表，逐行列出键路径 / 旧值 / 新值 / 状态",
+          "caption": "「修改」对比（机器学习模型 · .onnx，1920×1280 完整界面，未裁切）：默认停在「元数据」模式。顶部两栏标题由宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色，文字形如 <code>旧 · sample.onnx · …</code> / <code>新 · …</code>；状态行给出 <code>ML model compare: ONNX / ONNX</code>，随后是 <code>Summary: … entries · … changed · … left only · … right only</code>。内容区是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>，键路径用等宽字体）：demo 的 v2 把 <code>graph.initializer.conv1.weight</code> 的维度（8×3×3×3→16×3×3×3）标成「已变更」，新增的 <code>graph.initializer.fc1.bias</code>、节点 <code>Add</code> / <code>Softmax</code> 与算子直方图里多出的算子标成「仅右」，producer / 版本等元数据行逐行四色可见。"
+        },
+        {
+          "file": "mlmodel-add.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 add: sample.safetensors，差异区右栏渲染新增模型的键路径表，左栏显示 not present 占位",
+          "caption": "「新增」对比（机器学习模型 · .safetensors）：提交给仓库新增了 <code>sample.safetensors</code>，旧侧不存在。左栏标题写 <code>旧 · 不存在</code>，右栏标题 <code>已创建 · sample.safetensors · …</code>；状态行给出 <code>ML model compare: SafeTensors / SafeTensors</code>，键路径表里每个键都只有右侧有值，逐行标成「仅右」，覆盖 SafeTensors 的 JSON 头（<code>dtype</code> / <code>shape</code>）与 <code>__metadata__</code> 键值。一眼看出是纯新增，而非解析失败。"
+        },
+        {
+          "file": "mlmodel-remove.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.gguf，差异区左栏渲染被删除模型的键路径表，右栏显示 not present 占位",
+          "caption": "「删除」对比（机器学习模型 · .gguf）：提交删除了 <code>sample.gguf</code>，新侧不存在。左栏标题 <code>已删除 · sample.gguf · …</code> 下按键路径列出被删模型的 GGUF v3 元数据键值（<code>general.architecture</code> / <code>llama.context_length</code> / <code>llama.embedding_length</code> …）与张量目录（<code>token_embd.weight</code> / <code>blk.0.attn_q.weight</code> …），逐行标成「仅左」，右栏标题 <code>新 · 不存在</code>。"
+        },
+        {
+          "file": "mlmodel-tensors.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.onnx，差异区切到机器学习模型插件的「张量」模式，逐行列出张量键路径与维度变化",
+          "caption": "「张量」模式（机器学习模型 · .onnx，modify 场景）：点模式栏的 <code>Tensors</code> 按钮进入张量模式（<code>BuildTableContent(MlRowKind.Tensor)</code>），内容区只显示 <code>Kind=Tensor</code> 的行——demo 里 <code>conv1.weight</code> 的 shape（8×3×3×3→16×3×3×3）与 <code>fc1.weight</code>（10×72→10×144）标成「已变更」，新增的 <code>fc1.bias</code> 标成「仅右」。相比元数据模式，张量表回答的是「哪层张量改了维度、参数增了多少」。"
+        }
+      ],
+      "sections": [
+        {
+          "heading": "对比视图长什么样",
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式工具栏</strong>、<strong>内容区</strong>。标题行左旧右新各一个 <code>TextBlock</code>，文字形如 <code>旧 · sample.onnx · 12.3 KB</code>（角色名取译文、文件名取 <code>Path.GetFileName</code>、体积取 <code>PluginSizeFormat.ReadableFileSize</code>），采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色；某一侧为 <code>null</code> 时后半段变成 <code>不存在</code>。状态行先显示 <code>Analyzing…</code>，解析完成后落到 <code>ML model compare: &lt;格式&gt; / &lt;格式&gt;</code>，再追加 <code>Summary: N entries · c changed · l left only · r right only</code>；出错显示 <code>Failed to parse: …</code>。模式工具栏是横向 <code>StackPanel</code> 里两个 <code>Button</code>（<code>Metadata / Tensors</code>），当前项由 <code>StyleModeButton</code> 加浅蓝底 + 半粗。切换走 <code>SetMode</code>，共用同一套标题、状态与内容区。</p>"
+        },
+        {
+          "heading": "元数据模式：只看 Meta 行",
+          "html": "<p>默认模式只显示 <code>Kind=Meta</code> 的行（格式徽章、张量数 / 参数量、producer 与版本、KV 配置、算子直方图…），逐行比较。内容区是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）：<code>DataDiff</code> 分别以左右两张索引表建键路径字典，先左后右 <code>Emit</code> 去重合并，得到 <code>Same / Changed / LeftOnly / RightOnly</code> 四类 <code>MlRowKind</code>；每行按状态铺四色底色（<code>TintChanged</code> / <code>TintLeftOnly</code> / <code>TintRightOnly</code>），行尾附状态小标签，本侧缺失的值显示为「不存在」。单值展示超过 <code>MaxValueChars</code>（300）截断，但<strong>不影响比较</strong>；行数上限 <code>MaxRows</code>（3000），超出截断以免拖死 UI。</p>"
+        },
+        {
+          "heading": "张量模式：只看 Tensor 行",
+          "html": "<p>点 <code>Tensors</code> 切到张量模式后，同一份 diff 结果只过滤出 <code>Kind=Tensor</code> 的行（ONNX 的 initializer、GGUF 的张量目录、SafeTensors 的张量条目），逐行对比 dtype 与 shape。diff 一次算全、模式只做展示过滤，切换不重新解析。</p>"
+        },
+        {
+          "heading": "解析：三种格式 → 统一键路径行",
+          "html": "<p><code>MlModelParser</code> 按扩展名分派三条解析路径，产出与结构化数据插件同源的键路径行模型（<code>MlModelData</code>）：<strong>SafeTensors</strong> 读文件头 JSON（<code>dtype</code> / <code>shape</code> / <code>data_offsets</code> 与 <code>__metadata__</code> 键值）；<strong>GGUF</strong> 解析 v2/v3 头部（魔数 + 版本 + 张量数 / KV 数）与 KV 键值、张量目录；<strong>ONNX</strong> 用自写 protobuf wire 读取器（varint / length-delimited）抽出图输入输出、producer、<code>NodeProto</code> 节点列表与算子直方图、<code>TensorProto</code> initializer 参数量。三种格式解析失败都不冒泡，转成 <code>error</code> 文本由状态行显示。本插件<strong>零第三方依赖</strong>，随包进 <code>plugins/</code> 的只有插件自身主 DLL。</p>"
+        },
+        {
+          "heading": "路由说明、300 MB 阈值与线程",
+          "html": "<p><strong>路由</strong>：三类样本都含 NUL 字节，git 一律判为<strong>二进制</strong>差异，而宿主只对二进制差异查询插件路由，因此 <code>.onnx</code> / <code>.safetensors</code> / <code>.gguf</code> 自动命中本视图，无需手动绑定。单侧声明大小超过 <code>MaxSideBytes</code>（<code>300 * 1024 * 1024</code>，即 300 MB）时只显示 <code>File too large to preview</code>，两侧都不解析。解析与 diff 都在后台线程（<code>Task.Run</code>），控件只在 UI 线程构建；每次刷新 / 切模式用「代次 <code>_generation</code> + <code>CancellationTokenSource</code>」取消上一轮，切文件后旧任务结果不会画到本次视图。</p>"
+        }
+      ]
+    },
+    {
+      "id": "midi",
+      "name": "MIDI 对比插件 · MIDI Compare",
+      "version": "0.0.1",
+      "assembly": "ForkPlus.Plugins.Midi",
+      "source": "plugins/ForkPlus.Plugins.Midi",
+      "summary": "MIDI 对比视图：认领 .mid / .midi，命中后把两侧标准 MIDI 文件（SMF）解析成同一套音符模型，先按（通道, 音高, 起始毫秒）配对、再比较力度与时长，逐个标注「相同 / 已变更 / 仅左 / 仅右」——提供音符表与钢琴卷帘时间轴两种视图。解析 MThd / MTrk 事件流（running status、tempo 变换），音符以毫秒统一对齐。.mid / .midi 是二进制，自动命中本插件。单侧声明大小超过 300 MB 只给提示、不解析；单侧音符超 20000 截断并在状态行注明。",
+      "extensions": [
+        ".mid",
+        ".midi"
+      ],
+      "screenshots": [
+        {
+          "file": "midi-modify.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.mid，差异区由 MIDI 插件渲染成音符表，逐行列出旧时间 / 旧音符 / 新时间 / 新音符 / 状态",
+          "caption": "「修改」对比（MIDI · .mid，1920×1280 完整界面，未裁切）：默认停在「音符表」模式。顶部两栏标题由宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色，文字形如 <code>旧 · sample.mid · …</code> / <code>新 · …</code>；状态行给出 <code>MIDI compare: format SMF / SMF</code>，随后是 <code>Summary: … notes · … changed · … left only · … right only</code>。内容区是一张五列表（<code>旧时间 / 旧音符 / 新时间 / 新音符 / 状态</code>）：demo 的 v2 把 C 大调三音里首音的力度（100→110）标成「已变更」，新增的高八度 C（pitch 72）标成「仅右」。"
+        },
+        {
+          "file": "midi-add.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 add: sample.mid，差异区右栏渲染新增 MIDI 的音符表，左栏显示 not present 占位",
+          "caption": "「新增」对比（MIDI · .mid）：提交给仓库新增了 <code>sample.mid</code>，旧侧不存在。左栏标题写 <code>旧 · 不存在</code>，右栏标题 <code>已创建 · sample.mid · …</code>；音符表里每个音符都只有右侧有值，逐行标成「仅右」。一眼看出是纯新增，而非解析失败。"
+        },
+        {
+          "file": "midi-remove.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.mid，差异区左栏渲染被删除 MIDI 的音符表，右栏显示 not present 占位",
+          "caption": "「删除」对比（MIDI · .mid）：提交删除了 <code>sample.mid</code>，新侧不存在。左栏标题 <code>已删除 · sample.mid · …</code> 下逐行列出被删文件的音符（逐行标成「仅左」），右栏标题 <code>新 · 不存在</code>。删除场景同样可见完整内容，而不是空白。"
+        },
+        {
+          "file": "midi-pianoroll.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.mid，差异区切到 MIDI 插件的「钢琴卷帘」模式，上下两条轨道按时间轴铺开两侧音符",
+          "caption": "「钢琴卷帘」模式（MIDI · .mid，modify 场景）：点模式栏的 <code>Piano roll</code> 按钮进入 <code>pianoroll</code> 模式，内容区上下两条轨道（<code>Old</code> / <code>New</code>）按总时长等比铺开，每条音符画成一根音高行色条（y = 音高，x = 起止时间），按四色染色，顶部是 MM:SS 刻度尺。demo 里新增的高八度 C 在新轨上多出一根色条、首音更长的力度变化一眼可见——比音符表更直观地回答「音符在时间上哪里挪了 / 加了 / 删了」。"
+        }
+      ],
+      "sections": [
+        {
+          "heading": "对比视图长什么样",
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式工具栏</strong>、<strong>内容区</strong>。标题行左旧右新各一个 <code>TextBlock</code>，采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色；某一侧为 <code>null</code> 时后半段变成 <code>不存在</code>。状态行先显示 <code>Analyzing…</code>，解析完成后落到 <code>MIDI compare: format &lt;格式&gt; / &lt;格式&gt;</code>，再追加 <code>Summary: N notes · c changed · l left only · r right only</code>；单侧音符被截断时追加 <code>Notes truncated to 20000 per side</code>。模式工具栏两个 <code>Button</code>（<code>Notes / Piano roll</code>），当前项加浅蓝底 + 半粗。</p>"
+        },
+        {
+          "heading": "音符表模式：按（通道, 音高, 起始）配对",
+          "html": "<p>默认模式由音符表渲染，是一张五列表（<code>旧时间 / 旧音符 / 新时间 / 新音符 / 状态</code>）。<code>MidiDiff.Compute</code> 把两侧音符先按（通道, 音高, 起始毫秒）配对，命中则比较力度与时长，得到 <code>Same / Changed / LeftOnly / RightOnly</code> 四类；每行按状态铺四色底色，本侧缺失的格子显示「不存在」。行数上限 <code>MaxRows</code>（2000）。</p>"
+        },
+        {
+          "heading": "钢琴卷帘时间轴：一眼看时间位移",
+          "html": "<p>切到 <code>pianoroll</code> 后由 <code>BuildTrack</code> 渲染上下两条轨道（<code>Old</code> / <code>New</code>），按两侧总时长取同一时间刻度、按音高范围取同一行高，把每条音符画成一根色条，逐条按状态四色染色，顶部是 MM:SS 刻度尺。相比音符表逐行读数字，卷帘直接呈现音符在时间轴上的增删与挪动。</p>"
+        },
+        {
+          "heading": "解析：SMF 事件流 → 音符模型",
+          "html": "<p><code>MidiParser</code> 解析标准 MIDI 文件（<code>MThd</code> / <code>MTrk</code>、varlen delta-time、running status、tempo / 拍号元事件），把 <code>Note On / Note Off</code> 配对成统一音符模型（<code>MidiModel</code>：通道 / 音高 / 起止毫秒 / 力度），并用 tempo 把 tick 换算成毫秒，让两侧时间轴可比。单侧音符超 <code>MaxNotesPerSide</code>（20000）就地截断并置 <code>Truncated</code> 标记。本插件<strong>零第三方依赖</strong>，随包进 <code>plugins/</code> 的只有插件自身主 DLL。</p>"
+        },
+        {
+          "heading": "路由说明、300 MB 阈值与线程",
+          "html": "<p><strong>路由</strong>：<code>.mid</code> / <code>.midi</code> 是二进制，宿主只对二进制差异查询插件路由，自动命中本视图，无需手动绑定。单侧声明大小超过 <code>MaxSideBytes</code>（<code>300 * 1024 * 1024</code>，即 300 MB）时只显示「文件过大，不预览」，两侧都不解析。解析、配对与渲染都在后台线程，控件只在 UI 线程构建；每次刷新 / 切模式用「代次 <code>_generation</code> + <code>CancellationTokenSource</code>」取消上一轮。</p>"
+        }
+      ]
+    },
+    {
+      "id": "torrent",
+      "name": "种子文件对比插件 · Torrent Compare",
+      "version": "0.0.1",
+      "assembly": "ForkPlus.Plugins.Torrent",
+      "source": "plugins/ForkPlus.Plugins.Torrent",
+      "summary": "Torrent 种子文件对比视图：认领 .torrent，命中后把两侧 bencode 解码拍平成「键路径 → 值」列表，取并集逐行标注「相同 / 已变更 / 仅左 / 仅右」——tracker 列表、info 字典、piece length、分片哈希逐项可见。值按语义比较：字符串 / 整数直接比，pieces 这类长二进制按「分片数 + FNV-1a 哈希」摘要比，避免字面相同把真改动误判成相同。.torrent 是 bencode 二进制、自动命中本插件。单侧声明大小超过 300 MB 只给提示、不解析。",
+      "extensions": [
+        ".torrent"
+      ],
+      "screenshots": [
+        {
+          "file": "torrent-modify.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.torrent，差异区由 Torrent 插件渲染成键路径表，逐行列出键路径 / 旧值 / 新值 / 状态",
+          "caption": "「修改」对比（Torrent · .torrent，1920×1280 完整界面，未裁切）：单一键路径表模式。顶部两栏标题由宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色，文字形如 <code>旧 · sample.torrent · …</code> / <code>新 · …</code>；状态行给出 <code>Torrent compare: … / …</code>，随后是 <code>Summary: … entries · … changed · … left only · … right only</code>。内容区是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）：demo 的 v2 把 <code>info.name</code>（forkplus-demo-v1→forkplus-demo-v2）与 <code>info.length</code>（16777216→33554432）标成「已变更」，新增的第二条 <code>announce-list</code> 与更多分片相关的 <code>info.pieces</code> 摘要标成「仅右」。"
+        },
+        {
+          "file": "torrent-add.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 add: sample.torrent，差异区右栏渲染新增种子的键路径表，左栏显示 not present 占位",
+          "caption": "「新增」对比（Torrent · .torrent）：提交给仓库新增了 <code>sample.torrent</code>，旧侧不存在。左栏标题写 <code>旧 · 不存在</code>，右栏标题 <code>已创建 · sample.torrent · …</code>；键路径表里每个键都只有右侧有值，逐行标成「仅右」，覆盖 announce / announce-list / info 全部字段。"
+        },
+        {
+          "file": "torrent-remove.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.torrent，差异区左栏渲染被删除种子的键路径表，右栏显示 not present 占位",
+          "caption": "「删除」对比（Torrent · .torrent）：提交删除了 <code>sample.torrent</code>，新侧不存在。左栏标题 <code>已删除 · sample.torrent · …</code> 下按键路径列出被删种子的全部字段（逐行标成「仅左」），右栏标题 <code>新 · 不存在</code>。删除场景同样可见完整内容，而不是空白。"
+        }
+      ],
+      "sections": [
+        {
+          "heading": "对比视图长什么样",
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>内容区</strong>——单一键路径表模式，没有模式工具栏（<code>IDiffView.Modes</code> 返回空数组）。标题行采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色；某一侧为 <code>null</code> 时显示 <code>不存在</code>。状态行给出 <code>Torrent compare: &lt;名称&gt; / &lt;名称&gt;</code> 与 <code>Summary: N entries · c changed · l left only · r right only</code>。</p>"
+        },
+        {
+          "heading": "键路径表与语义比较",
+          "html": "<p>内容是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>，键路径用等宽字体）：<code>TorrentParser</code> 把 bencode 解码成树、<code>TorrentData</code> 拍平成「键路径 → 值」列表，取并集逐行四色标注，行数上限 <code>MaxRows</code>（4000）。值按语义比较，避免长二进制字面显示相同就误判为「相同」：<code>info.pieces</code> 这类分片串按「分片数（每 20 字节一片）+ FNV-1a 哈希」摘要后比较，真正换了分片也会报「已变更」；名称 / 长度 / tracker 等标量直接比。</p>"
+        },
+        {
+          "heading": "解析：bencode 自解析",
+          "html": "<p><code>TorrentParser</code> 自写 bencode 解码器，支持整数（<code>i…e</code>）、字节串（<code>N:…</code>）、列表（<code>l…e</code>）、字典（<code>d…e</code>，按 key 升序），覆盖 <code>announce</code> / <code>announce-list</code> / <code>comment</code> / <code>created by</code> / <code>info</code>（<code>name</code> / <code>length</code> / <code>files</code> / <code>piece length</code> / <code>pieces</code> / <code>private</code> 等），解码异常转成 <code>error</code> 文本由状态行显示。本插件<strong>零第三方依赖</strong>，随包进 <code>plugins/</code> 的只有插件自身主 DLL。</p>"
+        },
+        {
+          "heading": "路由说明、300 MB 阈值与线程",
+          "html": "<p><strong>路由</strong>：<code>.torrent</code> 是 bencode 二进制，git 一律判为二进制差异，宿主自动把差异查询路由到本插件，无需手动绑定。单侧声明大小超过 <code>MaxSideBytes</code>（<code>300 * 1024 * 1024</code>，即 300 MB）时只显示提示、两侧都不解析。解码与 diff 都在后台线程，控件只在 UI 线程构建；每次刷新用「代次 <code>_generation</code> + <code>CancellationTokenSource</code>」取消上一轮。</p>"
+        }
+      ]
+    },
+    {
+      "id": "pcap",
+      "name": "网络抓包对比插件 · Packet Capture Compare",
+      "version": "0.0.1",
+      "assembly": "ForkPlus.Plugins.Pcap",
+      "source": "plugins/ForkPlus.Plugins.Pcap",
+      "summary": "网络抓包对比视图：认领 .pcap / .pcapng，命中后把两侧抓包各自聚合出统计（包数 / 字节数 / 时长 / 首末包时间 / 协议分布 / Top 会话）与包列表，再做语义 diff——提供统计表与包列表两种视图，逐行标注「相同 / 已变更 / 仅左 / 仅右」。容器解析支持 pcap（四种魔数变体：微秒 / 纳秒 × 大端 / 小端）与 pcapng（块循环 + IDB 时间分辨率 + EPB / SPB）；链路层支持 Ethernet（含 VLAN）/ raw IP / Linux SLL，剥出 IPv4 协议与五元组，解析不出的包归 Other，不让整体失败。单侧包数上限 200000（超出记 Truncated），包列表保留 2000 条，统计仍按全部包计算。单侧声明大小超过 300 MB 只给提示、不解析。",
+      "extensions": [
+        ".pcap",
+        ".pcapng"
+      ],
+      "screenshots": [
+        {
+          "file": "pcap-modify.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.pcap，差异区由抓包插件渲染成统计键路径表，逐行列出键路径 / 旧值 / 新值 / 状态",
+          "caption": "「修改」对比（抓包 · .pcap，1920×1280 完整界面，未裁切）：默认停在「统计」模式。顶部两栏标题由宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色，文字形如 <code>旧 · sample.pcap · …</code> / <code>新 · …</code>；状态行给出 <code>Capture compare: PCAP / PCAP</code>，随后是 <code>Summary: … entries · … changed · … left only · … right only</code>。内容区是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）：demo 的 v2 包数（5→8）与字节数标成「已变更」，协议分布里多出的 <code>NTP</code> 会话与新增的 E→F:80 TCP 会话（Top 会话行）标成「仅右」。"
+        },
+        {
+          "file": "pcap-add.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 add: sample.pcapng，差异区右栏渲染新增抓包的统计表，左栏显示 not present 占位",
+          "caption": "「新增」对比（抓包 · .pcapng）：提交给仓库新增了 <code>sample.pcapng</code>，旧侧不存在。左栏标题写 <code>旧 · 不存在</code>，右栏标题 <code>已创建 · sample.pcapng · …</code>；统计表里每项都只有右侧有值，逐行标成「仅右」，验证 pcapng 容器（SHB + IDB + EPB）也能正常聚合。"
+        },
+        {
+          "file": "pcap-remove.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.pcap，差异区左栏渲染被删除抓包的统计表，右栏显示 not present 占位",
+          "caption": "「删除」对比（抓包 · .pcap）：提交删除了 <code>sample.pcap</code>，新侧不存在。左栏标题 <code>已删除 · sample.pcap · …</code> 下逐行列出被删抓包的统计（逐个标成「仅左」），右栏标题 <code>新 · 不存在</code>。删除场景同样可见完整内容，而不是空白。"
+        },
+        {
+          "file": "pcap-packets.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.pcap，差异区切到抓包插件的「包列表」模式，两侧按包序号对齐逐包比较",
+          "caption": "「包列表」模式（抓包 · .pcap，modify 场景）：点模式栏的 <code>Packets</code> 按钮进入 <code>packets</code> 模式，内容区是一张四列表（<code># / 旧 / 新 / 状态</code>），两侧同序号的包对齐成一行，每格给出「相对秒 · 长度 · 协议与五元组摘要」。demo 里 v2 在原有的 TCP 443 / DNS / ICMP 之后多出 E→F:80 的 TCP 会话与一条 NTP 会话，逐包标成「仅右」——比统计表更细地回答「多抓了哪几个包」。"
+        }
+      ],
+      "sections": [
+        {
+          "heading": "对比视图长什么样",
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式工具栏</strong>、<strong>内容区</strong>。标题行采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色；某一侧为 <code>null</code> 时显示 <code>不存在</code>。状态行给出 <code>Capture compare: &lt;容器&gt; / &lt;容器&gt;</code> 与 <code>Summary: N entries · c changed · l left only · r right only</code>（统计模式）。模式工具栏两个 <code>Button</code>（<code>Statistics / Packets</code>），当前项加浅蓝底 + 半粗。</p>"
+        },
+        {
+          "heading": "统计模式：聚合后逐项比较",
+          "html": "<p>默认模式由统计表渲染，是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）：包数 / 字节数 / 时长 / 首末包时间 / 协议分布（<code>TCP / UDP / Other</code>…）/ Top 会话（<code>ip:port → ip:port</code>）逐行四色标注，由 <code>PcapData</code> 聚合、<code>PcapDiff.Compute</code> 做语义 diff，得到 <code>Same / Changed / LeftOnly / RightOnly</code> 四类。</p>"
+        },
+        {
+          "heading": "包列表模式：逐包对齐",
+          "html": "<p>切到 <code>packets</code> 后由包列表渲染，是一张四列表（<code># / 旧 / 新 / 状态</code>）：两侧同序号的包对齐成一行，每格给出「相对首包的时间 · 长度 · 协议与五元组摘要」。为了不让超大抓包拖死 UI，包列表渲染上限 <code>MaxPacketRows</code>（1000）。</p>"
+        },
+        {
+          "heading": "解析：pcap / pcapng 容器 + 链路层剥包",
+          "html": "<p><code>PcapParser</code> 解析两类容器：<strong>pcap</strong> 识别四种魔数变体（微秒 / 纳秒 × 大端 / 小端），逐包头读出时间戳与长度；<strong>pcapng</strong> 按块循环（SHB / IDB / EPB / SPB），从 IDB 的 <code>if_tsresol</code> 得到时间分辨率。链路层支持 Ethernet（含 802.1Q VLAN）/ raw IP / Linux SLL，剥出 IPv4 的协议号与五元组（TCP / UDP / 其他），解析不出的包归 <code>Other</code>，不让整体失败。单侧包数上限 <code>MaxPackets</code>（200000），超出记 <code>Truncated</code>；包列表仅保留 <code>MaxPacketsKept</code>（2000）条，但统计仍按全部包计算。本插件<strong>零第三方依赖</strong>，随包进 <code>plugins/</code> 的只有插件自身主 DLL。</p>"
+        },
+        {
+          "heading": "路由说明、300 MB 阈值与线程",
+          "html": "<p><strong>路由</strong>：<code>.pcap</code> / <code>.pcapng</code> 是二进制，宿主只对二进制差异查询插件路由，自动命中本视图，无需手动绑定。单侧声明大小超过 <code>MaxSideBytes</code>（<code>300 * 1024 * 1024</code>，即 300 MB）时只显示提示、两侧都不解析。解析与聚合都在后台线程，控件只在 UI 线程构建；每次刷新 / 切模式用「代次 <code>_generation</code> + <code>CancellationTokenSource</code>」取消上一轮。</p>"
+        }
+      ]
+    },
+    {
+      "id": "psd",
+      "name": "PSD 图层对比插件 · PSD Compare",
+      "version": "0.0.1",
+      "assembly": "ForkPlus.Plugins.Psd",
+      "source": "plugins/ForkPlus.Plugins.Psd",
+      "summary": "PSD 图层对比视图：认领 .psd / .psb，命中后把两侧各自解析成头部字段 + 图层结构模型，并提供三种视图——缩略图并排、图层表、头部字段。头部行按键路径取并集、图层按名称配对，逐行标注「相同 / 已变更 / 仅左 / 仅右」。解析头部（尺寸 / 通道 / 位深 / 颜色模式 / 压缩）、图像资源段（捕获 1036 缩略图资源的 JFIF 数据，经 SkiaSharp 后台转 PNG 显示）与图层记录（名称 / 矩形 / 通道构成 / 混合模式 / 不透明度 / 可见性）；PSB 差异（u64 长度、Pascal 名 pad 4）由版本位分派。不做像素级合成，只解析骨架与缩略图，大文件也能秒开。SkiaSharp 由宿主共享，随包进 plugins/ 的只有插件自身主 DLL。单侧声明大小超过 300 MB 只给提示、不解析。",
+      "extensions": [
+        ".psd",
+        ".psb"
+      ],
+      "screenshots": [
+        {
+          "file": "psd-modify.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.psd，差异区由 PSD 插件渲染成左右并排的内嵌缩略图",
+          "caption": "「修改」对比（PSD · .psd，1920×1280 完整界面，未裁切）：默认停在「缩略图」模式。顶部两栏标题由宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色，文字形如 <code>旧 · sample.psd · …</code> / <code>新 · …</code>；状态行给出 <code>PSD compare: … / …</code>，随后是 <code>Summary: … entries · … changed · … left only · … right only</code>。内容区左右并排两张内嵌缩略图：demo 旧图是蓝底矩形、新图换成橙色底——只从 1036 缩略图资源读出的画面变化一眼可见，无需合成整幅图。"
+        },
+        {
+          "file": "psd-add.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 add: sample.psb，差异区右栏渲染新增 PSD 的缩略图，左栏显示 not present 占位",
+          "caption": "「新增」对比（PSD · .psb）：提交给仓库新增了 <code>sample.psb</code>，旧侧不存在。左栏标题写 <code>旧 · 不存在</code>，右栏标题 <code>已创建 · sample.psb · …</code> 并渲染新增文件的缩略图；PSB（版本位 2）走 u64 长度与 pad 4 的名称分派。一眼看出是纯新增，而非解析失败。"
+        },
+        {
+          "file": "psd-remove.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.psd，差异区左栏渲染被删除 PSD 的缩略图，右栏显示 not present 占位",
+          "caption": "「删除」对比（PSD · .psd）：提交删除了 <code>sample.psd</code>，新侧不存在。左栏标题 <code>已删除 · sample.psd · …</code> 下渲染被删文件的缩略图，右栏标题 <code>新 · 不存在</code>。删除场景同样可见画面，而不是空白。"
+        },
+        {
+          "file": "psd-layers.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.psd，差异区切到 PSD 插件的「图层」模式，逐行列出图层 / 旧 / 新 / 状态",
+          "caption": "「图层」模式（PSD · .psd，modify 场景）：点模式栏的 <code>Layers</code> 按钮进入图层表——一张四列表（<code>图层 / 旧 / 新 / 状态</code>），图层按名称配对，逐图层四色标注（任一呈现属性不同即「已变更」），分组图层带 ▸ / ▾ / — 前缀。demo 里 <code>Watermark</code> 图层（40% 不透明度、隐藏）标成「仅右」，<code>Logo</code> 的混合模式（norm→mult）与矩形位移标成「已变更」，<code>Effects</code> 分组的开闭状态也逐行可见。"
+        },
+        {
+          "file": "psd-header.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.psd，差异区切到 PSD 插件的「头部」模式，逐行列出头部与资源统计键路径",
+          "caption": "「头部」模式（PSD · .psd，modify 场景）：点模式栏的 <code>Header</code> 按钮进入头部字段表，是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）：宽 / 高 / 通道 / 位深 / 颜色模式 / 资源数 / 图层数 / 压缩逐行四色标注。demo 里资源数（图像资源段的资源条目数）等行随 v2 增加 ResolutionInfo 资源而变化，回答的是「文件骨架本身改了什么」。"
+        }
+      ],
+      "sections": [
+        {
+          "heading": "对比视图长什么样",
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式工具栏</strong>、<strong>内容区</strong>。标题行采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色；某一侧为 <code>null</code> 时显示 <code>不存在</code>。状态行给出 <code>PSD compare: &lt;宽×高&gt; / …</code> 与 <code>Summary: N entries · c changed · l left only · r right only</code>。模式工具栏三个 <code>Button</code>（<code>Preview / Layers / Header</code>），当前项加浅蓝底 + 半粗。</p>"
+        },
+        {
+          "heading": "预览模式：内嵌缩略图并排",
+          "html": "<p>默认模式左右并排显示两侧内嵌缩略图：从图像资源段捕获资源 id <strong>1036</strong> 的 JFIF 数据，后台经 <strong>SkiaSharp</strong> 解码转 PNG，再在 UI 线程显示，无缩略图的一侧明示 <code>No embedded thumbnail</code>。只看「整张图改成什么样了」，不做像素级合成，因此大文件也能秒开。</p>"
+        },
+        {
+          "heading": "图层模式：按名称配对",
+          "html": "<p>图层表把两侧图层按名称配对，逐图层四色标注（名称 / 矩形 / 通道构成 / 混合模式 / 不透明度 / 可见性任一不同即 <code>Changed</code>），分组图层带 ▸ / ▾ / — 前缀，一眼看出「哪个图层挪了 / 隐藏了 / 多了一层」。渲染行数上限 <code>MaxRows</code>（1000）。</p>"
+        },
+        {
+          "heading": "头部模式：头部 / 资源统计键路径表",
+          "html": "<p>头部表按键路径取并集，逐行四色比较：宽 / 高 / 通道数 / 位深 / 颜色模式 / 图像资源数 / 图层数 / 压缩方法。由 <code>PsdDiff.ComputeHeader</code> 计算，是判断「文件骨架本身是否变化」的口径。</p>"
+        },
+        {
+          "heading": "解析：PSD / PSB 头部 + 图层记录 + 1036 缩略图",
+          "html": "<p><code>PsdParser</code> 解析 <code>8BPS</code> 头部（版本位：PSD=1 / PSB=2）、颜色模式数据段、图像资源段与图层与蒙版段：图层记录读出名称（Pascal 串 + <code>luni</code> Unicode 名）、矩形、通道构成、混合模式、不透明度、可见性与 <code>LSct</code> 分组标记；PSB 的 u64 段长度与 Pascal 名 pad 4 由版本位分派。缩略图取资源 1036 的 JFIF 数据，经 SkiaSharp 解码。<strong>SkiaSharp 由宿主共享</strong>（与字体插件同口径），随包进 <code>plugins/</code> 的只有插件自身主 DLL。</p>"
+        },
+        {
+          "heading": "路由说明、300 MB 阈值与线程",
+          "html": "<p><strong>路由</strong>：<code>.psd</code> / <code>.psb</code> 是二进制，宿主只对二进制差异查询插件路由，自动命中本视图，无需手动绑定。单侧声明大小超过 <code>MaxSideBytes</code>（<code>300 * 1024 * 1024</code>，即 300 MB）时只显示提示、两侧都不解析。解析与缩略图解码都在后台线程，控件只在 UI 线程构建；每次刷新 / 切模式用「代次 <code>_generation</code> + <code>CancellationTokenSource</code>」取消上一轮。</p>"
+        }
+      ]
+    },
+    {
+      "id": "epub",
+      "name": "EPUB 电子书对比插件 · EPUB Compare",
+      "version": "0.0.1",
+      "assembly": "ForkPlus.Plugins.Epub",
+      "source": "plugins/ForkPlus.Plugins.Epub",
+      "summary": "EPUB 电子书对比视图：认领 .epub，命中后用内置 System.IO.Compression 解开 ZIP 容器，走 META-INF/container.xml 找到 OPF，解析其元数据（书名 / 作者 / 语言 / 标识 / 日期）、manifest（文档清单）与 spine（书脊顺序），提供「元数据」与「章节」两种 diff 视图，逐行标注「相同 / 已变更 / 仅左 / 仅右」。.epub 是 ZIP 二进制、自动命中本插件。单侧声明大小超过 300 MB 只给提示、不解析。",
+      "extensions": [
+        ".epub"
+      ],
+      "screenshots": [
+        {
+          "file": "epub-modify.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.epub，差异区由 EPUB 插件渲染成元数据键路径表，逐行列出键路径 / 旧值 / 新值 / 状态",
+          "caption": "「修改」对比（EPUB · .epub，1920×1280 完整界面，未裁切）：默认停在「元数据」模式。顶部两栏标题由宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色，文字形如 <code>旧 · sample.epub · …</code> / <code>新 · …</code>；状态行给出 <code>EPUB compare: &lt;书名&gt; / &lt;书名&gt;</code>，随后是 <code>Summary: … entries · … changed · … left only · … right only</code>。内容区是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）：demo 的 v2 把 <code>title</code>（ForkPlus Handbook→ForkPlus Handbook, 2nd Edition）、<code>identifier</code> 与 <code>date</code> 标成「已变更」，新增的第二位作者 <code>creator</code> 与 <code>dcterms:modified</code> 标成「仅右」。"
+        },
+        {
+          "file": "epub-add.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 add: sample.epub，差异区右栏渲染新增电子书的元数据表，左栏显示 not present 占位",
+          "caption": "「新增」对比（EPUB · .epub）：提交给仓库新增了 <code>sample.epub</code>，旧侧不存在。左栏标题写 <code>旧 · 不存在</code>，右栏标题 <code>已创建 · sample.epub · …</code>；元数据表里每项都只有右侧有值，逐行标成「仅右」，覆盖 OPF 的 dc:title / dc:creator / dc:language / dc:identifier / dc:date 与章节数统计。一眼看出是纯新增，而非解析失败。"
+        },
+        {
+          "file": "epub-remove.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.epub，差异区左栏渲染被删除电子书的元数据表，右栏显示 not present 占位",
+          "caption": "「删除」对比（EPUB · .epub）：提交删除了 <code>sample.epub</code>，新侧不存在。左栏标题 <code>已删除 · sample.epub · …</code> 下逐行列出被删电子书的 OPF 元数据（逐个标成「仅左」），右栏标题 <code>新 · 不存在</code>。删除场景同样可见完整内容，而不是空白。"
+        },
+        {
+          "file": "epub-chapters.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.epub，差异区切到 EPUB 插件的「章节」模式，两侧按 spine 序号对齐逐章比较",
+          "caption": "「章节」模式（EPUB · .epub，modify 场景）：点模式栏的 <code>Chapters</code> 按钮进入章节表——一张四列表（<code># / 旧 / 新 / 状态</code>），按 spine 序号对齐两侧章节（第 i 章 · 标题（href 文件名 · 体积））。demo 里 v2 把第 2 章标题改掉并新增第 3 章，逐章标成「已变更 / 仅右」，manifest 缺项与顺序调整也一目了然。"
+        }
+      ],
+      "sections": [
+        {
+          "heading": "对比视图长什么样",
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式工具栏</strong>、<strong>内容区</strong>。标题行采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色；某一侧为 <code>null</code> 时显示 <code>不存在</code>。状态行给出 <code>EPUB compare: &lt;书名&gt; / &lt;书名&gt;</code> 与 <code>Summary: N entries · c changed · l left only · r right only</code>。模式工具栏两个 <code>Button</code>（<code>Metadata / Chapters</code>），当前项加浅蓝底 + 半粗。</p>"
+        },
+        {
+          "heading": "元数据模式：OPF 元数据键路径表",
+          "html": "<p>默认模式由元数据表渲染，是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）：书名 / 作者（可多位）/ 语言 / 标识 / 日期 / <code>dcterms:modified</code> 与文档数 / 章节数等统计逐行四色标注。<code>EpubData</code> 按键路径取并集，<code>EpubDiff.Compute</code> 先左后右 <code>Emit</code> 去重合并，得到 <code>Same / Changed / LeftOnly / RightOnly</code> 四类。行数上限 <code>MaxRows</code>（3000）。</p>"
+        },
+        {
+          "heading": "章节模式：按 spine 序号对齐",
+          "html": "<p>切到 <code>chapters</code> 后由章节表渲染，是一张四列表（<code># / 旧 / 新 / 状态</code>）：按 spine 序号对齐两侧章节，每格给出「第 i 章 · 标题（href 文件名 · 体积）」，逐章四色标注。章节数上限 <code>MaxChapterRows</code>（2000），超长描述按 <code>MaxDescriptionChars</code>（120）截断展示。</p>"
+        },
+        {
+          "heading": "解析：ZIP → container.xml → OPF",
+          "html": "<p><code>EpubParser</code> 用共享框架内置的 <code>System.IO.Compression</code> 打开 ZIP 容器，读 <code>META-INF/container.xml</code> 定位 OPF 路径，再解析 OPF：<code>&lt;metadata&gt;</code>（dc:title / dc:creator / dc:language / dc:identifier / dc:date / meta property）、<code>&lt;manifest&gt;</code>（文档清单，href / media-type / properties）、<code>&lt;spine&gt;</code>（书脊顺序，itemref 引用）。解析异常转成 <code>error</code> 文本由状态行显示。本插件<strong>零第三方依赖</strong>，随包进 <code>plugins/</code> 的只有插件自身主 DLL。</p>"
+        },
+        {
+          "heading": "路由说明、300 MB 阈值与线程",
+          "html": "<p><strong>路由</strong>：<code>.epub</code> 是 ZIP 二进制，宿主只对二进制差异查询插件路由，自动命中本视图，无需手动绑定。单侧声明大小超过 <code>MaxSideBytes</code>（<code>300 * 1024 * 1024</code>，即 300 MB）时只显示提示、两侧都不解析。解析与对齐都在后台线程，控件只在 UI 线程构建；每次刷新 / 切模式用「代次 <code>_generation</code> + <code>CancellationTokenSource</code>」取消上一轮。</p>"
+        }
+      ]
     }
   ]
 }
