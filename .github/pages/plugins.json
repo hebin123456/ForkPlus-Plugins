@@ -576,7 +576,7 @@
     {
       "id": "dbc",
       "name": "DBC（CAN 数据库）对比插件 · DBC Compare",
-      "version": "0.0.1",
+      "version": "0.1.0",
       "assembly": "ForkPlus.Plugins.Dbc",
       "source": "plugins/ForkPlus.Plugins.Dbc",
       "summary": "DBC（CAN 数据库）对比视图：认领 .dbc，命中后用第三方库 DbcParserLib 把两侧解析成同一套数据模型，对节点 / 报文 / 信号 / 环境变量做语义 diff——把差异区换成键路径表与原文对照两种模式，逐行标注「相同 / 已变更 / 仅左 / 仅右」，而不是逐字符比文本。报文按 ID、信号按起始位排序保证行序稳定；覆盖 ID（十进制 / 十六进制 / 扩展帧）、DLC、发送方、起始位、长度、字节序（Motorola / Intel）、数值类型、因子、偏移、取值范围、单位、初值、多路复用、接收方、值表（VAL_）与属性（BA_）。.dbc 是纯文本格式，自动路由通常不命中，需在偏好设置里把 .dbc 绑定到本插件。单侧声明大小超过 300 MB 只给提示、不解析。",

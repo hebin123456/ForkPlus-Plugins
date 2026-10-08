@@ -752,7 +752,7 @@ INI / `.cfg` / `.properties` 自写解析器。
 打包时合并成 `ForkPlus.Plugins.Dbc.THIRD-PARTY-NOTICES.txt`（见「第三方许可管理」）。
 
 插件实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「DBC 对比」（英文原文
-`DBC Compare`，8 语言译文见 `Localization/DbcStrings.cs`）、版本 `0.0.1` 与描述。
+`DBC Compare`，8 语言译文见 `Localization/DbcStrings.cs`）、版本 `0.1.0` 与描述。
 
 ---
 

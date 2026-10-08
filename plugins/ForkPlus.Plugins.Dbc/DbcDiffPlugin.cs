@@ -25,7 +25,7 @@ namespace ForkPlus.Plugins.Dbc
 		public string DisplayNameKey => "DBC Compare";
 
 		/// <summary>插件自身的版本号（与宿主版本解耦）。</summary>
-		public string Version => "0.0.1";
+		public string Version => "0.1.0";
 
 		/// <summary>插件显示名（英文原文，同时作为多语言缺省值）。</summary>
 		public string DisplayName => "DBC Compare";
