@@ -26,6 +26,10 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+# 同一时刻只保留一轮站点生成：一次「推 master + 打 tag」会命中两个触发条件（分支推送 + 标签推送，
+# 内容与 SHA 相同），cancel-in-progress 让后到的 tag 那一轮顶掉 master 那一轮，只跑一次。
+# 因此 Actions 列表里常能看到 master 那轮显示 cancelled——这是**去重的预期行为**，不是故障；
+# 真正会让整轮白跑的是 build job 超时（见下方 timeout-minutes），那会连 tag 那一轮也一起掐掉。
 concurrency:
   group: pages
   cancel-in-progress: true
@@ -38,10 +42,29 @@ jobs:
   build:
     name: build site
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # 截图是「逐个视图启动一次 ForkPlus、点行、整屏截图、退出」的串行流程，单张约 40~60 秒，
+    # 与插件数（截图数）线性增长。当前 pages/assets 下共 90 张截图，实测整步约 85~110 分钟
+    #（含取三方件 / 构建插件 / 下载宿主）；原先的 45 分钟会中途被 job 超时掐断（现象是 run 显示
+    # cancelled、截图只产出一半），故按最坏情况留足余量。误改成 45~60 会让 CI 再次「一直被取消」。
+    timeout-minutes: 180
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # 需要 tag 才能把「Plugins 版本」徽章显示成最近的发行标签（如 v1.1.1）；
+          # 浅克隆下无 tag，git describe 只能退回短 SHA。
+          fetch-depth: 0
+
+      - name: Resolve plugins version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == v* ]]; then
+            version="${GITHUB_REF_NAME}"
+          else
+            version="$(git describe --tags --abbrev=0 2>/dev/null || echo dev)"
+          fi
+          echo "PLUGIN_VERSION=$version" >> "$GITHUB_ENV"
+          echo "plugins version: $version"
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
