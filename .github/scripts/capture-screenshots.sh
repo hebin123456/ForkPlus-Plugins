@@ -26,6 +26,8 @@
 #   DISPLAY_NUM  Xvfb 显示号（默认 :77）
 #   SCREEN_W/H   虚拟屏尺寸（默认 1920x1280）
 #   CLICK_X      demo 仓库文件行的点击横向位置（默认屏宽 33%）
+#   PLUGIN_VERSION  站点「Plugins 版本」徽章文案；不传则由 git describe 推（CI 由 pages.yml
+#                   的「Resolve plugins version」步传入：tag 推送用 tag 名，分支推送用最近 tag）
 #
 set -euo pipefail
 
@@ -40,8 +42,11 @@ SCREEN_H="${SCREEN_H:-1280}"
 CLICK_X="${CLICK_X:-$(( SCREEN_W * 33 / 100 ))}"
 
 APPDIR=""
-FORKPLUS_VERSION=""
-PLUGIN_VERSION=""
+# 这两个变量脚本会自行填充：FORKPLUS_VERSION 取实际下载到的发行包 tag（见 download_forkplus），
+# PLUGIN_VERSION 供 write_metadata 写站点徽章。这里用 ${VAR:-} 而不是直接赋空串——赋空串会把
+# 调用方（CI 的「Resolve plugins version」步经 GITHUB_ENV 传入的值）抹掉，外部就再也传不进来。
+FORKPLUS_VERSION="${FORKPLUS_VERSION:-}"
+PLUGIN_VERSION="${PLUGIN_VERSION:-}"
 
 log() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 die() { printf '\n\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
