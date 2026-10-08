@@ -195,6 +195,16 @@
           "file": "font-remove.png",
           "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.ttf，差异区左栏渲染被删除字体的多字号样张，右栏显示 new · not present 占位",
           "caption": "「删除」对比：提交删除了 sample.ttf，新侧不存在。插件在左栏标题 <code>已删除 · sample.ttf · …</code> 下渲染被删字体的样张（状态行 <code>Font compare: 1 / 0 faces</code>），右栏给出标题 <code>新 · not present</code> 与占位——删除场景同样可见完整样张。"
+        },
+        {
+          "file": "font-metadata.png",
+          "alt": "ForkPlus 完整软件界面：字体插件切到元数据模式，左右两栏各是 Identity / Vertical metrics / Weight & width / Tables 分组的字段卡片，差异行按四色铺底",
+          "caption": "「元数据」模式（modify 场景为样本）：切到工具栏 <code>Metadata</code> 后，两栏各自把 sfnt 表拉成同序分组的字段卡片——<code>Identity</code>（Format / Family / Subfamily / Full name / PostScript name / Version …）、<code>Vertical metrics</code>（Units per em / ascent / descent / line gap）、<code>Weight &amp; width</code>、<code>Tables</code>（各表字节数与时间戳）。逐行按 <strong>相同 / 变了 / 仅左 / 仅右</strong> 四色铺底并在行尾给状态徽章：旧 DejaVu Sans → 新 DejaVu Serif 的 Family / Subfamily / PostScript name 等显示为「变了」，一眼看清改了哪些名字字段。"
+        },
+        {
+          "file": "font-codepoints.png",
+          "alt": "ForkPlus 完整软件界面：字体插件切到码位模式，左右两栏各是覆盖量占比条、共有 / 仅左 / 仅右统计与 Unicode block 归类表",
+          "caption": "「码位」模式（modify 场景为样本）：切到工具栏 <code>Codepoints</code> 后，各栏顶部是一条<strong>水平占比条</strong>与该侧 <code>Coverage: N codepoints</code>，下面给出 <code>Common</code> / <code>Only in left</code> / <code>Only in right</code> 三行统计（后跟最多 16 个 <code>U+XXXX</code> 示例码位），最下是 <strong>Unicode block 归类表</strong>（拉丁 / 希腊 / 西里尔 / CJK / 表情 … 逐 block 给左右数量与四色标注）——「新字体新增的字符集中在哪个区段」一目了然。"
         }
       ],
       "sections": [
@@ -248,13 +258,28 @@
         },
         {
           "file": "executable-add.png",
-          "alt": "ForkPlus 完整软件界面：提交视图选中 add: sample.dll，差异区右栏渲染新增的 PE 程序集结构，左栏显示 old · not present 占位",
-          "caption": "「新增」对比（PE · .dll）：提交给仓库新增了 .NET 托管类库 <code>sample.dll</code>，旧侧不存在。插件在左栏给出标题 <code>旧 · not present</code> 与栏内 <code>not present</code> 占位，右栏标题 <code>已创建 · sample.dll · …</code>，顶部是 <code>PE</code> 格式徽章，其下解析出机器 / 子系统 / DllCharacteristics 等字段（安全位展开为 <code>ASLR</code> / <code>DEP</code> / <code>CFG</code> 等小徽章）与 <code>Assembly references</code>——一眼看出这是纯新增，而非解析失败。"
+          "alt": "ForkPlus 完整软件界面：提交视图选中 add: sample.wasm，差异区右栏渲染新增 WebAssembly 模块的结构摘要，左栏显示 old · not present 占位",
+          "caption": "「新增」对比（WebAssembly · .wasm）：提交给仓库新增了 <code>sample.wasm</code>，旧侧不存在。插件在左栏给出标题 <code>旧 · not present</code> 与栏内 <code>not present</code> 占位，右栏标题 <code>已创建 · sample.wasm · …</code>，顶部是 <code>WASM</code> 格式徽章，其下解析出模块头字段（版本 / 段数）与各段概要，并列出 <code>Dependencies</code>（从不存在的 <code>env</code> 模块导入的 <code>log</code> / <code>sin</code>）与 <code>Exports</code>（<code>add</code> / <code>memory</code>）——一眼看出这是纯新增，而非解析失败。"
         },
         {
           "file": "executable-remove.png",
           "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.a，差异区左栏渲染被删除静态库的 ar 成员列表，右栏显示 new · not present 占位",
           "caption": "「删除」对比（ar · .a）：提交删除了静态库 <code>sample.a</code>，新侧不存在。插件在左栏标题 <code>已删除 · sample.a · …</code> 下把 ar 归档展开成成员列表（<code>sample_one.o</code> / <code>sample_two.o</code> 等，逐行带体积，特殊成员带徽章，并给出偏移与 Unix 时间戳）；右栏给出标题 <code>新 · not present</code> 与占位——删除场景同样可见完整结构。"
+        },
+        {
+          "file": "executable-sections.png",
+          "alt": "ForkPlus 完整软件界面：可执行文件插件切到段·节表模式，左右两栏各是 ELF 节表逐行名称 / 体积 / 权限徽章",
+          "caption": "「段 · 节表」模式（modify 场景为样本，ELF）：切到工具栏 <code>Sections</code> 后，两栏逐行列出各节 / 段——名称、字节数、读 / 写 / 执行<strong>权限徽章</strong>，行首带四色圆点标注；v2 与 v1 的节集合差异（如新增 / 变动的节）直接可见。"
+        },
+        {
+          "file": "executable-symbols.png",
+          "alt": "ForkPlus 完整软件界面：可执行文件插件切到导入导出模式，左右两栏分 Dependencies / Imports / Exports 三类并按共有 / 仅左 / 仅右三色分组",
+          "caption": "「导入导出」模式（modify 场景为样本，ELF）：切到工具栏 <code>Symbols</code> 后，分 <code>Dependencies</code> / <code>Imports</code> / <code>Exports</code> 三类，每类内部再按「共有 / 仅左 / 仅右」三色分组、符号去重后逐个列出——本例 v2 比 v1 多导出的 <code>sample_mul</code> 只出现在右栏，正是「导出少了 / 多了」这类问题的照妖镜。"
+        },
+        {
+          "file": "executable-size.png",
+          "alt": "ForkPlus 完整软件界面：可执行文件插件切到体积构成模式，左右两栏各是一条彩色堆叠条 + WrapPanel 图例，下面逐节给体积与 F1 百分比",
+          "caption": "「体积构成」模式（modify 场景为样本，ELF）：切到工具栏 <code>Size</code> 后，每侧各节按字节数<strong>降序</strong>取前 24 块画成一条 18px 高的彩色堆叠条（每块宽度以体积为权重），下方是 <strong>WrapPanel 图例</strong>（色块 + 节名）；再逐节列出名称、体积与 <code>F1</code> 百分比，行首带四色圆点——「体积涨在哪一节」一眼可见。"
         }
       ],
       "sections": [
@@ -311,6 +336,11 @@
           "file": "certificate-remove.png",
           "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.p7b，差异区左栏渲染被删除 PKCS#7 证书袋里的证书，右栏显示 new · not present 占位",
           "caption": "「删除」对比（PKCS#7 · .p7b）：提交删除了 <code>sample.p7b</code>，新侧不存在。插件在左栏标题 <code>已删除 · sample.p7b · …</code> 下把 PKCS#7 证书袋解出证书并渲染详情（容器徽章 <code>PKCS#7</code> + 证书数 + 各分组字段与可视化元素），右栏给出标题 <code>新 · not present</code> 与占位——删除场景同样可见完整内容。"
+        },
+        {
+          "file": "certificate-chain.png",
+          "alt": "ForkPlus 完整软件界面：证书插件切到证书链模式，逐张列出容器内证书，每张卡片带序号徽章 #N、Subject、签发者与紧凑有效期时间轴",
+          "caption": "「证书链」模式（add 的 <code>.p12</code> 含多张证书，为样本）：切到工具条 <code>Chain</code> 后，容器里的证书逐张列成卡片——标题带序号徽章 <code>#N</code> 与 Subject，下面是签发者（<code>Authority : …</code>）与紧凑有效期时间轴。两侧用 <strong>SHA-1 指纹</strong> 判定同一张证书是否共享：共享卡片无底色，仅左 / 仅右按四色铺底，卡片上方另给 <code>{0} shared, {1} only left, {2} only right</code> 的数量统计——签名链 / 证书袋换了哪几张，一目了然。"
         }
       ],
       "sections": [
@@ -1034,6 +1064,175 @@
         {
           "heading": "路由说明、300 MB 阈值与线程",
           "html": "<p><strong>路由</strong>：<code>.epub</code> 是 ZIP 二进制，宿主只对二进制差异查询插件路由，自动命中本视图，无需手动绑定。单侧声明大小超过 <code>MaxSideBytes</code>（<code>300 * 1024 * 1024</code>，即 300 MB）时只显示提示、两侧都不解析。解析与对齐都在后台线程，控件只在 UI 线程构建；每次刷新 / 切模式用「代次 <code>_generation</code> + <code>CancellationTokenSource</code>」取消上一轮。</p>"
+        }
+      ]
+    },
+    {
+      "id": "sqlite",
+      "name": "SQLite 数据库对比插件 · SQLite Compare",
+      "version": "0.0.1",
+      "assembly": "ForkPlus.Plugins.Sqlite",
+      "source": "plugins/ForkPlus.Plugins.Sqlite",
+      "summary": "SQLite 数据库对比视图：认领 .db / .sqlite / .sqlite3，命中后纯托管自解析 SQLite 文件格式（100 字节文件头 + sqlite_master 的 B 树 + 各表 B 树的记录序列类型），把两侧库的「表结构」与「数据」分别展开成键路径表并排对比——逐行按「相同 / 已变 / 仅左 / 仅右」四色标注。零第三方依赖：不引入任何 SQLite 原生库 / 托管驱动，随包进 <code>plugins/</code> 的只有插件自身主 DLL。",
+      "extensions": [".db", ".sqlite", ".sqlite3"],
+      "screenshots": [
+        {
+          "file": "sqlite-modify.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.db，差异区由 SQLite 插件渲染成键路径对比表，左 old、右 new 各是解析出的表结构",
+          "caption": "「修改」对比（1920×1280 完整界面，未裁切）：左栏标题形如 <code>旧 · sample.db · …</code>，右栏 <code>新 · sample.db · …</code>。默认「表结构」模式下是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）：先是文件头统计（<code>page size</code> / <code>text encoding</code> / <code>schema format</code> / <code>page count</code> 与 <code>tables</code> / <code>indexes</code> / <code>views</code> / <code>triggers</code> 计数），随后逐对象列出 <code>table.users</code>、<code>table.users.column.email</code>、<code>index.idx_users_email</code>、<code>view.v_active</code>、<code>trigger.trg_users_audit</code> 等键路径。demo 里 v2 给 <code>users</code> 增加 <code>created_at</code> 列、<code>email</code> 变 <code>NOT NULL</code>、把索引改成 <code>UNIQUE</code>、删掉触发器并新增 <code>sessions</code> 表——逐行四色标注，一眼看出改了哪张表、哪个列、哪个索引；状态行给出 <code>SQLite compare: sample.db / sample.db · tables: 3 / 3 · rows: 7 / 9</code>。"
+        },
+        {
+          "file": "sqlite-add.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 add: sample.db，差异区右栏渲染新增数据库的表结构，左栏显示 old · not present 占位",
+          "caption": "「新增」对比：提交给仓库新增了 <code>sample.db</code>，旧侧不存在。插件在左栏给出标题 <code>旧 · not present</code> 与栏内 <code>not present</code> 占位，右栏标题 <code>已创建 · sample.db · …</code> 并逐行列出新增库的表结构（每项只有右值、逐行标成「仅右」）——一眼看出这是纯新增，而非解析失败。"
+        },
+        {
+          "file": "sqlite-remove.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.db，差异区左栏渲染被删除数据库的表结构，右栏显示 new · not present 占位",
+          "caption": "「删除」对比：提交删除了 <code>sample.db</code>，新侧不存在。插件在左栏标题 <code>已删除 · sample.db · …</code> 下逐行列出被删库的表结构（每项只有左值、逐行标成「仅左」），右栏给出标题 <code>新 · not present</code> 与占位——删除场景同样可见完整结构。"
+        },
+        {
+          "file": "sqlite-data.png",
+          "alt": "ForkPlus 完整软件界面：SQLite 插件切到数据模式，左右两栏各是逐行键路径表，键路径形如 data.users[1]，值为 col=val",
+          "caption": "「数据」模式（modify 场景为样本）：点模式条 <code>Data</code> 进入数据口径——同样是一张四列表，键路径是 <code>data.users[1]</code> 这样的逐行路径，值是 <code>id=1, name=Alice, email=…</code> 的行摘要；另有 <code>rows.users</code> / <code>rows.orders</code> 汇总每张表的行数。demo 里 v2 的 <code>users</code> 由 3 行变 4 行、<code>orders</code> 的金额与状态有改动，逐行可见增删改。"
+        }
+      ],
+      "sections": [
+        {
+          "heading": "对比视图长什么样",
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式工具条</strong>、<strong>内容区</strong>。标题行是两列 <code>Grid</code>，左旧右新各一个 <code>TextBlock</code>，文字形如 <code>old  ·  sample.db  ·  28 KB</code>（角色名取 <code>PluginEnvironment.Translate</code>，文件名取 <code>Path.GetFileName</code>，体积取 <code>PluginSizeFormat.ReadableFileSize</code>），并采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>DstTitleBrush</code> 着色。</p><p>内容区是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）外包一个卡片与 <code>ScrollViewer</code>：首列键路径用等宽字体，行按状态铺四色低对比底色，状态列给彩色小词（相同 / 已变 / 仅左 / 仅右）。状态行给出 <code>SQLite compare: 左 / 右</code>、<code>tables: 左 / 右</code>、<code>rows: 左 / 右</code> 与 <code>Summary: N 项 · c 已变 · l 仅左 · r 仅右</code>。</p>"
+        },
+        {
+          "heading": "两种模式：表结构 / 数据",
+          "html": "<div class=\"grid grid-2\"><div class=\"card\"><h3>表结构（默认）</h3><p>文件头统计 + <code>sqlite_master</code> 里的对象清单，键路径是稳定路径：<code>table.&lt;名&gt;</code>、<code>table.&lt;名&gt;.column.&lt;列&gt;</code>、<code>index.&lt;名&gt;</code>、<code>view.&lt;名&gt;</code>、<code>trigger.&lt;名&gt;</code>，一眼看出改了哪张表 / 哪个列 / 哪个索引。</p></div><div class=\"card\"><h3>数据</h3><p>各表 B 树逐行解码，键路径是 <code>data.&lt;表&gt;[rowid]</code>，值为 <code>col=val, …</code> 行摘要；另有 <code>rows.&lt;表&gt;</code> 汇总每张表行数。模式切换无需重解析——一次解析同时产出两种口径。</p></div></div><p>两个模式共用同一份解析结果（<code>SqliteDocument</code>），切模式只重建内容区。</p>"
+        },
+        {
+          "heading": "表结构：文件头统计 + 对象清单",
+          "html": "<p>先读 100 字节文件头：magic（<code>SQLite format 3\\0</code>）、页大小、保留区、schema 格式号、页数、文本编码，落成 <code>page size</code> / <code>text encoding</code> / <code>schema format</code> / <code>page count</code> 等行与 <code>tables</code> / <code>indexes</code> / <code>views</code> / <code>triggers</code> 计数。随后遍历根页 1 的 <code>sqlite_master</code> B 树，逐条取 type / name / tbl_name / rootpage / sql，得到库里的表 / 索引 / 视图 / 触发器清单。</p><p><code>CREATE TABLE</code> 语句再抽出列名 / 类型 / 约束（<code>INTEGER PRIMARY KEY</code> 标注为 rowid 别名），落成 <code>table.&lt;表&gt;.column.&lt;列&gt;</code> 行——列的类型与约束变了，在键路径表里就是「已变」。</p>"
+        },
+        {
+          "heading": "数据：B 树记录解码",
+          "html": "<p>数据口径逐表定位根页，按 B 树（表页 / 索引页、cell 指针数组）遍历，用「变长整数 + 记录序列类型」解码每行，再按列名拼成 <code>col=val, …</code> 摘要，键路径用 rowid（<code>data.users[1]</code>）。出于对比展示的安全阈值：对象最多 200 张、单表最多读 200 行，超出置 <code>DataTruncated</code> 并在表下注明 <code>Data truncated: …</code>；B 树遍历用「已访问页集合」防止损坏文件造成环。</p><p>长 TEXT / BLOB 值按 <code>MaxValueChars</code>（120）截断；<code>INTEGER PRIMARY KEY</code> 列在记录里存 NULL，展示时用 rowid 回填。</p>"
+        },
+        {
+          "heading": "纯托管解析（零第三方依赖）",
+          "html": "<p><code>SqliteParser</code> 全程自解析 SQLite 文件格式——不引入任何 SQLite 原生库 / 托管驱动（<code>Microsoft.Data.Sqlite</code> / <code>SQLitePCLRaw</code> 等一律不依赖），因此不分发任何私有托管或原生依赖，随包进 <code>plugins/</code> 的只有插件自身主 DLL。解析与对齐都在后台线程（<code>Task.Run</code>）执行，控件只在 UI 线程构建；每次刷新用「代次 + <code>CancellationToken</code>」取消上一轮。解析失败不抛异常，归为「无法解析」在栏内提示。</p>"
+        },
+        {
+          "heading": "路由说明与 300 MB 阈值",
+          "html": "<p>本插件声明 <code>Priority = 100</code>，认领 <code>.db / .sqlite / .sqlite3</code>。<strong>宿主只对二进制差异查询插件路由</strong>，SQLite 数据库页头含 NUL，git 判为二进制，因此必然命中本插件；若用户已在设置里把扩展名绑定到别的插件，则以用户绑定为准（优先级最高）。单侧声明大小超过 300 MB 时只显示提示、不解析。</p>"
+        }
+      ]
+    },
+    {
+      "id": "managedassembly",
+      "name": "托管程序集对比插件 · Managed Assembly Compare",
+      "version": "0.0.1",
+      "assembly": "ForkPlus.Plugins.ManagedAssembly",
+      "source": "plugins/ForkPlus.Plugins.ManagedAssembly",
+      "summary": "托管程序集（.NET assembly）对比视图：认领 .dll / .exe，命中后用共享框架内置的 System.Reflection.Metadata / System.Reflection.PortableExecutable 纯托管读取 ECMA-335 元数据，把两侧程序集的「程序集标识」「类型 → 方法 / 字段」「AssemblyRef 引用」分别展开成键路径表并排对比——逐行按「相同 / 已变 / 仅左 / 仅右」四色标注。以更高优先级（120 &gt; 100）接管 .dll / .exe，因为生态中它们绝大多数是托管程序集，元数据对比远比 PE 节段对比有用；零第三方依赖。",
+      "extensions": [".dll", ".exe"],
+      "screenshots": [
+        {
+          "file": "managedassembly-modify.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.dll，差异区由托管程序集插件渲染成键路径对比表，左 old、右 new 各是解析出的程序集标识",
+          "caption": "「修改」对比（.dll，1920×1280 完整界面，未裁切）：左栏标题形如 <code>旧 · sample.dll · …</code>，右栏 <code>新 · sample.dll · …</code>。默认「程序集标识」模式下是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>），列出 <code>assembly.name</code> / <code>assembly.version</code> / <code>assembly.culture</code> / <code>assembly.public key token</code> / <code>assembly.flags</code> / <code>assembly.hash algorithm</code>、<code>metadata.version</code> / <code>target framework</code> / <code>machine</code> / <code>characteristics</code> / <code>corflags</code> 等键路径。demo 里 v2 把程序集版本从 <code>1.0.0.0</code> 升到 <code>2.0.0.0</code>，<code>assembly.version</code> 一行显示为「已变」；状态行给出 <code>Managed assembly compare: sample / sample · types: 2 / 4 · members: 3 / 8</code>。"
+        },
+        {
+          "file": "managedassembly-add.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 add: sample.exe，差异区右栏渲染新增托管程序集（.exe）的标识字段，左栏显示 old · not present 占位",
+          "caption": "「新增」对比（.exe）：提交给仓库新增了托管 <code>sample.exe</code>，旧侧不存在。插件在左栏给出标题 <code>旧 · not present</code> 与栏内 <code>not present</code> 占位，右栏标题 <code>已创建 · sample.exe · …</code> 并逐行列出程序集标识（每项只有右值、逐行标成「仅右」），<code>machine</code> / <code>corflags</code> 等指明这是托管 PE——一眼看出这是纯新增，而非解析失败。"
+        },
+        {
+          "file": "managedassembly-remove.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.dll，差异区左栏渲染被删除程序集的标识字段，右栏显示 new · not present 占位",
+          "caption": "「删除」对比（.dll）：提交删除了 <code>sample.dll</code>，新侧不存在。插件在左栏标题 <code>已删除 · sample.dll · …</code> 下逐行列出被删程序集的标识（每项只有左值、逐行标成「仅左」），右栏给出标题 <code>新 · not present</code> 与占位——删除场景同样可见完整标识。"
+        },
+        {
+          "file": "managedassembly-types.png",
+          "alt": "ForkPlus 完整软件界面：托管程序集插件切到类型模式，左右两栏各是命名空间 → 类型 → 方法 / 字段 的键路径表",
+          "caption": "「类型」模式（modify 场景为样本）：点模式条 <code>Types</code> 后，键路径是 <code>type.&lt;命名空间.类型&gt;</code>（值为类型种类 · 方法数 · 字段数）、<code>type.&lt;…&gt;.method.&lt;名(参数)&gt;</code>（值为可见性 → 返回类型）、<code>type.&lt;…&gt;.field.&lt;名&gt;</code>（值为可见性 + 字段类型）。demo 里 v2 给 <code>Calculator</code> 加了 <code>Multiply</code> 方法、新增 <code>Settings</code> / <code>Serializer</code> 两个类型——逐个标成「仅右」，正是「API 增删了哪些」的照妖镜。"
+        },
+        {
+          "file": "managedassembly-references.png",
+          "alt": "ForkPlus 完整软件界面：托管程序集插件切到引用模式，左右两栏各是 AssemblyRef 清单键路径表，键路径形如 reference.System.Text.Json",
+          "caption": "「引用」模式（modify 场景为样本）：点模式条 <code>References</code> 后，键路径是 <code>reference.&lt;程序集简单名&gt;</code>（值为版本等描述）。v2 的 <code>Serializer</code> 用了 <code>System.Text.Json</code>，于是 <code>reference.System.Text.Json</code> 一行只出现在右栏（标成「仅右」）——「新版多引了一个包」这类问题一眼可见。"
+        }
+      ],
+      "sections": [
+        {
+          "heading": "对比视图长什么样",
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式工具条</strong>、<strong>内容区</strong>。标题行是两列 <code>Grid</code>，左旧右新各一个 <code>TextBlock</code>，文字形如 <code>old  ·  sample.dll  ·  4 KB</code>（角色名取 <code>PluginEnvironment.Translate</code>，文件名取 <code>Path.GetFileName</code>，体积取 <code>PluginSizeFormat.ReadableFileSize</code>），并采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>DstTitleBrush</code> 着色。</p><p>内容区是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）外包卡片与 <code>ScrollViewer</code>：首列键路径用等宽字体，行按状态铺四色底色。状态行给出 <code>Managed assembly compare: 左 / 右</code>、<code>types: 左 / 右</code>、<code>members: 左 / 右</code> 与 <code>Summary: N 项 · c 已变 · l 仅左 · r 仅右</code>。</p>"
+        },
+        {
+          "heading": "三种模式：标识 / 类型 / 引用",
+          "html": "<div class=\"grid grid-3\"><div class=\"card\"><h3>程序集标识</h3><p><code>assembly.name</code> / <code>.version</code> / <code>.culture</code> / <code>.public key token</code> / <code>.flags</code> / <code>.hash algorithm</code>，以及 <code>metadata.version</code> / <code>target framework</code> / <code>machine</code> / <code>characteristics</code> / <code>corflags</code>。</p></div><div class=\"card\"><h3>类型 → 方法 / 字段</h3><p><code>type.&lt;命名空间.类型&gt;</code> 下挂 <code>.method.&lt;名(参数)&gt;</code> 与 <code>.field.&lt;名&gt;</code>，覆盖 API 增删与签名变化。</p></div><div class=\"card\"><h3>AssemblyRef 引用</h3><p><code>reference.&lt;程序集简单名&gt;</code> 列出程序集引用清单——新增 / 移除的依赖包一眼可见。</p></div></div><p>三个模式共用同一份解析结果（<code>ManagedDocument</code>），切模式只重建内容区。</p>"
+        },
+        {
+          "heading": "解析：ECMA-335 元数据怎么读",
+          "html": "<p><code>ManagedAssemblyParser</code> 走共享框架内置的 <code>System.Reflection.PortableExecutable</code> / <code>System.Reflection.Metadata</code>：<code>PEReader</code> 读 COFF 头（<code>machine</code> / <code>characteristics</code>）与 CLR 头（<code>corflags</code>），<code>MetadataReader</code> 读 <code>AssemblyDefinition</code>（名字 / 版本 / 区域 / 公钥标记 / 标志 / 哈希算法）、<code>TypeDefinition</code>（命名空间 · 类型 · 方法 / 字段）、<code>AssemblyReference</code>（引用清单）与自定义特性里的 target framework。类型 ↔ 方法 / 字段的归属按 <code>MethodDefinition.GetDeclaringType</code> / <code>FieldDefinition.GetDeclaringType</code> 归并到各自类型名下。</p><p>为防超大程序集卡住 UI：类型上限 <code>MaxTypes</code>（5000）、单类型成员上限 <code>MaxMembersPerType</code>（200）、引用上限 <code>MaxReferences</code>（500），超出置 <code>Truncated</code> 并在表下注明 <code>Metadata truncated: …</code>。</p>"
+        },
+        {
+          "heading": "为什么它接管 .dll / .exe",
+          "html": "<p>本插件声明 <code>Priority = 120</code>，高于「可执行文件 / 库对比」插件的 <code>100</code>。宿主对同一扩展名按 <code>Priority</code> 降序询问 <code>CanHandle</code>，因此 <code>.dll / .exe</code> 默认交给本插件——因为在插件 / .NET 生态里，仓库中的 <code>.dll / .exe</code> 绝大多数是<strong>托管程序集</strong>，看命名空间 / 类型 / 方法 / 引用比看 PE 节段有用得多。若确实要看原生 PE 结构，可在宿主「偏好设置 → 扩展名绑定」里把 <code>.dll / .exe</code> 绑回可执行文件插件（用户绑定优先级最高）。</p><p>非托管 PE（无 CLR 元数据）解析会失败并归类为「无法解析」，不会假装支持——这类文件本就该走可执行文件插件。</p>"
+        },
+        {
+          "heading": "零第三方依赖与路由",
+          "html": "<p>PE 与元数据读取全部走共享框架内置类型，因此<strong>不分发任何私有托管或原生依赖</strong>，随包进 <code>plugins/</code> 的只有插件自身主 DLL。托管程序集是二进制（PE 头含 NUL），git 判为二进制，宿主只对二进制差异查询插件路由，自动命中本视图；单侧声明大小超过 300 MB 时只显示提示、不解析。解析与对齐都在后台线程，控件只在 UI 线程构建。</p>"
+        }
+      ]
+    },
+    {
+      "id": "eml",
+      "name": "邮件对比插件 · EML Compare",
+      "version": "0.0.1",
+      "assembly": "ForkPlus.Plugins.Eml",
+      "source": "plugins/ForkPlus.Plugins.Eml",
+      "summary": "邮件（.eml）对比视图：认领 .eml，命中后纯托管自解析 RFC 5322 邮件头与 MIME 多部件树（multipart/* 边界切分、Content-Transfer-Encoding base64 / quoted-printable 解码、RFC 2047 编码字解码），把两侧邮件的「邮件头」「MIME 部件」「正文」分别展开成键路径表并排对比——逐行按「相同 / 已变 / 仅左 / 仅右」四色标注。零第三方依赖：全为共享框架内置的 System.*。",
+      "extensions": [".eml"],
+      "screenshots": [
+        {
+          "file": "eml-modify.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.eml，差异区由邮件插件渲染成键路径对比表，左 old、右 new 各是解析出的邮件头",
+          "caption": "「修改」对比（1920×1280 完整界面，未裁切）：左栏标题形如 <code>旧 · sample.eml · …</code>，右栏 <code>新 · sample.eml · …</code>。默认「邮件头」模式下是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）：键路径为 <code>header.from</code> / <code>header.to</code> / <code>header.subject</code> / <code>header.date</code> / <code>header.message-id</code> / <code>header.mime-version</code> / <code>header.content-type</code> 等，值统一做 RFC 2047 编码字解码。demo 里 v2 改了 Subject、加了 <code>Cc</code>、换了 <code>Message-ID</code> 与日期——逐行四色标注；状态行给出 <code>Email compare: （主题） / （主题） · headers: 7 / 8 · parts: 4 / 4</code>。"
+        },
+        {
+          "file": "eml-add.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 add: sample.eml，差异区右栏渲染新增邮件的头部键路径表，左栏显示 old · not present 占位",
+          "caption": "「新增」对比：提交给仓库新增了 <code>sample.eml</code>，旧侧不存在。插件在左栏给出标题 <code>旧 · not present</code> 与栏内 <code>not present</code> 占位，右栏标题 <code>已创建 · sample.eml · …</code> 并逐行列出新增邮件的头部（每项只有右值、逐行标成「仅右」）——一眼看出这是纯新增，而非解析失败。"
+        },
+        {
+          "file": "eml-remove.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.eml，差异区左栏渲染被删除邮件的头部键路径表，右栏显示 new · not present 占位",
+          "caption": "「删除」对比：提交删除了 <code>sample.eml</code>，新侧不存在。插件在左栏标题 <code>已删除 · sample.eml · …</code> 下逐行列出被删邮件的头部（每项只有左值、逐行标成「仅左」），右栏给出标题 <code>新 · not present</code> 与占位——删除场景同样可见完整头部。"
+        },
+        {
+          "file": "eml-parts.png",
+          "alt": "ForkPlus 完整软件界面：邮件插件切到 MIME 部件模式，左右两栏各是 part[i] 的 content-type / encoding / charset / disposition / filename / size 键路径表",
+          "caption": "「MIME 部件」模式（modify 场景为样本）：点模式条 <code>Parts</code> 后，键路径按部件树层级展开——<code>part[0].content-type</code> / <code>.encoding</code> / <code>.charset</code> / <code>.disposition</code> / <code>.filename</code> / <code>.size</code>，另有 <code>parts.count</code> 与 <code>headers.count</code> 汇总。demo 邮件是 <code>multipart/mixed</code> 内嵌 <code>multipart/alternative</code>（text/plain + text/html）再挂一个 base64 附件，v2 换了附件名（<code>changelog.pdf</code> → <code>roadmap.pdf</code>）——部件与附件名的增删改一目了然。"
+        },
+        {
+          "file": "eml-body.png",
+          "alt": "ForkPlus 完整软件界面：邮件插件切到正文模式，左右两栏各是 part[i].line[n] 的逐行键路径表",
+          "caption": "「正文」模式（modify 场景为样本）：点模式条 <code>Body</code> 后，各文本部件逐行展开成 <code>part[1].line[0]</code> 这样的键路径（空行显示为 <code>(blank)</code>），每行逐条四色标注——v2 正文改写的句子逐行可见，比整封 base64 / 文本 diff 可读得多。"
+        }
+      ],
+      "sections": [
+        {
+          "heading": "对比视图长什么样",
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式工具条</strong>、<strong>内容区</strong>。标题行是两列 <code>Grid</code>，左旧右新各一个 <code>TextBlock</code>，文字形如 <code>old  ·  sample.eml  ·  1 KB</code>（角色名取 <code>PluginEnvironment.Translate</code>，文件名取 <code>Path.GetFileName</code>，体积取 <code>PluginSizeFormat.ReadableFileSize</code>），并采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>DstTitleBrush</code> 着色。</p><p>内容区是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）外包卡片与 <code>ScrollViewer</code>：首列键路径用等宽字体，行按状态铺四色底色。状态行给出 <code>Email compare: 左 / 右</code>（标题行取邮件 Subject）、<code>headers: 左 / 右</code>、<code>parts: 左 / 右</code> 与 <code>Summary: N 项 · c 已变 · l 仅左 · r 仅右</code>。</p>"
+        },
+        {
+          "heading": "三种模式：邮件头 / 部件 / 正文",
+          "html": "<div class=\"grid grid-3\"><div class=\"card\"><h3>邮件头</h3><p><code>header.&lt;名&gt;</code>（同名重复头加 <code>[n]</code> 后缀）逐条列出 From / To / Cc / Subject / Date / Message-ID / MIME-Version / Content-Type / Received 等，值做 RFC 2047 编码字解码，另给 <code>headers.count</code>。</p></div><div class=\"card\"><h3>MIME 部件</h3><p>按部件树层级展开 <code>part[i].content-type</code> / <code>.encoding</code> / <code>.charset</code> / <code>.disposition</code> / <code>.filename</code> / <code>.size</code>，另给 <code>parts.count</code>。</p></div><div class=\"card\"><h3>正文</h3><p>各文本部件逐行展开成 <code>part[i].line[n]</code>，空行显示为 <code>(blank)</code>，最能看清「正文改了几句」。</p></div></div><p>三个模式共用同一份解析结果（<code>EmlDocument</code>），切模式只重建内容区。</p>"
+        },
+        {
+          "heading": "解析：RFC 5322 头 + MIME 多部件树",
+          "html": "<p><code>EmlParser</code> 先把原始字节按 Latin-1 还原成字符串（1 字节 = 1 字符，字节值不丢），以首个空行（<code>CRLFCRLF</code> / <code>LFLF</code>）切出头块与正文；头块按「折叠行展开」解析成 name/value 列表（续行以空格 / 制表符开头）。<code>Content-Type</code> 为 <code>multipart/*</code> 时按 boundary 切分正文，逐个子实体递归解析，形成部件树；叶子部件按 <code>Content-Transfer-Encoding</code>（base64 / quoted-printable）解码，文本部件再按 charset 解成字符串。展示值统一做 RFC 2047 编码字解码（<code>=?UTF-8?B?…?=</code> / <code>=?GBK?Q?…?=</code>）。</p><p>为防畸形 / 恶意邮件：无有效头块、或不含任何已知邮件头时归类为「不是有效邮件」；头 / 部件 / 正文行数与递归深度均设上限，超出置 <code>Truncated</code>。</p>"
+        },
+        {
+          "heading": "零第三方依赖与路由",
+          "html": "<p>邮件解析全用共享框架内置的 <code>System.*</code>，因此<strong>不分发任何私有托管或原生依赖</strong>，随包进 <code>plugins/</code> 的只有插件自身主 DLL。邮件默认是纯文本，宿主只对<strong>二进制</strong>差异查询插件路由——demo 里的 <code>.eml</code> 带附件与 base64 编码正文、并借 <code>.gitattributes</code> 的 <code>-diff</code> 确保走插件；若用户已在设置里把 <code>.eml</code> 绑定到别的插件，则以用户绑定为准（优先级最高）。解析与对齐都在后台线程，控件只在 UI 线程构建。</p>"
         }
       ]
     }

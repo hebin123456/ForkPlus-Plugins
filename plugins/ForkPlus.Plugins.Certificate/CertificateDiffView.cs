@@ -117,7 +117,19 @@ namespace ForkPlus.Plugins.Certificate
 
 		private string _password = string.Empty;
 
-		private string _mode = DetailsMode;
+		/// <summary>
+		/// CI 截图用的初始模式：无头截图脚本经环境变量 FORKPLUS_PLUGIN_VIEW_MODE 指定
+		/// （chain，其余走默认详情），据此逐模式取图；正常运行时该变量为空。
+		/// </summary>
+		private static readonly string InitialMode = ResolveInitialMode();
+
+		private static string ResolveInitialMode()
+		{
+			string forced = (Environment.GetEnvironmentVariable("FORKPLUS_PLUGIN_VIEW_MODE") ?? string.Empty).Trim();
+			return string.Equals(forced, ChainMode, StringComparison.OrdinalIgnoreCase) ? ChainMode : DetailsMode;
+		}
+
+		private string _mode = InitialMode;
 
 		private int _renderGeneration;
 

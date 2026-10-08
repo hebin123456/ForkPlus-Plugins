@@ -158,7 +158,27 @@ namespace ForkPlus.Plugins.Font
 
 		private CancellationTokenSource _cts;
 
-		private ViewMode _mode;
+		/// <summary>
+		/// CI 截图用的初始模式：无头截图脚本经环境变量 FORKPLUS_PLUGIN_VIEW_MODE 指定
+		/// （metadata / codepoints，其余走默认样张），据此逐模式取图；正常运行时该变量为空。
+		/// </summary>
+		private static readonly ViewMode InitialMode = ResolveInitialMode();
+
+		private static ViewMode ResolveInitialMode()
+		{
+			string forced = (Environment.GetEnvironmentVariable("FORKPLUS_PLUGIN_VIEW_MODE") ?? string.Empty).Trim();
+			if (string.Equals(forced, "metadata", StringComparison.OrdinalIgnoreCase))
+			{
+				return ViewMode.Metadata;
+			}
+			if (string.Equals(forced, "codepoints", StringComparison.OrdinalIgnoreCase))
+			{
+				return ViewMode.Codepoints;
+			}
+			return ViewMode.Sample;
+		}
+
+		private ViewMode _mode = InitialMode;
 
 		private FontModel _srcModel;
 

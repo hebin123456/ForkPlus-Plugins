@@ -23,4 +23,7 @@
   <Project Path="plugins/ForkPlus.Plugins.Pcap/ForkPlus.Plugins.Pcap.csproj" />
   <Project Path="plugins/ForkPlus.Plugins.Psd/ForkPlus.Plugins.Psd.csproj" />
   <Project Path="plugins/ForkPlus.Plugins.Epub/ForkPlus.Plugins.Epub.csproj" />
+  <Project Path="plugins/ForkPlus.Plugins.Sqlite/ForkPlus.Plugins.Sqlite.csproj" />
+  <Project Path="plugins/ForkPlus.Plugins.ManagedAssembly/ForkPlus.Plugins.ManagedAssembly.csproj" />
+  <Project Path="plugins/ForkPlus.Plugins.Eml/ForkPlus.Plugins.Eml.csproj" />
 </Solution>

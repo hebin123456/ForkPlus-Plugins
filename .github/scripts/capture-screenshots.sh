@@ -9,7 +9,9 @@
 #   ② 下载最新的 ForkPlus（linux-x64 发行包）
 #   ③ 把插件产物（主 DLL + 私有依赖 + 原生库）装入 ForkPlus 的 plugins/ 目录
 #   ④ 准备 demo 仓库：PDF / Office / 压缩包 / 字体 / 可执行文件 / 证书 / 音频 / 视频 /
-#      结构化数据 / 字幕 / SVG 各三种 diff 场景（修改 / 新增 / 删除）
+#      结构化数据 / DBC / 字幕 / SVG / 机器学习模型 / MIDI / Torrent / 抓包 / PSD / EPUB /
+#      SQLite / 托管程序集 / 邮件 EML 各三种 diff 场景（修改 / 新增 / 删除），
+#      多模式插件另按模式各取一张
 #   ⑤ 无头 X 环境（Xvfb + openbox）启动 ForkPlus，逐场景触发对应插件对比视图，
 #      截取完整软件界面（整屏 1920x1280，不做局部裁切）
 #   ⑥ 产物落到 <repo>/pages/assets/，交由 build-pages.py 生成站点
@@ -462,10 +464,10 @@ write_demo_font() {
 }
 
 # ── demo 素材：可执行文件 / 库 ──────────────────────────────────────────────
-# 三种场景各用一种真实格式（都用 CI runner 自带工具现造），一次覆盖 ELF / PE / ar 三条
+# 三种场景各用一种真实格式（都用 CI runner 自带工具现造），一次覆盖 ELF / wasm / ar 三条
 # 解析路径，也覆盖「结构摘要 / 段节表 / 导入导出 / 体积构成」四种模式所需的字段：
 #   modify → .so（ELF 共享库，cc 编译；v2 多一个导出符号）
-#   add    → .dll（.NET 托管 PE，dotnet build 出最小类库）
+#   add    → .wasm（WebAssembly 模块，纯 Python 手写；含 type/import/function/memory/export/code 段）
 #   remove → .a（ar 归档，ar rcs 打包两个目标文件）
 
 # 用 cc 编一个最小 ELF 共享库；v2 额外导出一个符号，制造「导出符号」差异。
@@ -487,36 +489,58 @@ EOF
 	cc -shared -fPIC -O2 -Wl,-soname,libsample.so -o "$out" "$tmp/sample.c"
 }
 
-# 用 dotnet 编一个最小托管类库，产出的 sample.dll 是真实 PE（含 COR 元数据）。
-write_demo_pe() {
-	local out="$1" version="$2" tmp="$3"
-	local proj="$tmp/peproj"
-	mkdir -p "$proj"
-	cat >"$proj/sample.csproj" <<'EOF'
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <AssemblyName>sample</AssemblyName>
-    <RootNamespace>ForkPlus.Sample</RootNamespace>
-    <Nullable>disable</Nullable>
-    <ImplicitUsings>disable</ImplicitUsings>
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
-  </PropertyGroup>
-</Project>
-EOF
-	cat >"$proj/Sample.cs" <<EOF
-namespace ForkPlus.Sample
-{
-	public static class Sample
-	{
-		public const string Revision = "$version";
-		public static int Add(int a, int b) { return a + b; }
-	}
-}
-EOF
-	# 需要 dotnet 在 PATH（pages.yml 已 setup-dotnet）；-v:q 压缩日志噪音。
-	dotnet build "$proj/sample.csproj" -c Release -o "$tmp/peout" --nologo -v:q
-	cp "$tmp/peout/sample.dll" "$out"
+# 用纯 Python 标准库手写一个最小合法 WebAssembly 模块（.wasm）：含 type / import / function /
+# memory / export / code 六段，且从一个虚构模块 env 导入 log / sin，导出 add 与 memory——
+# 让「节段表 / 导入导出 / 依赖」都有内容可展示。
+# 说明：托管 .dll（.NET PE）现由托管程序集插件（Priority 120）承接，故可执行文件插件的 add
+# 场景改用 wasm，既避免两插件争抢 .dll 路由，也顺带覆盖 WebAssembly 这条解析路径。
+write_demo_wasm() {
+	local out="$1"
+	python3 - "$out" <<'PY'
+import sys
+out = sys.argv[1]
+
+def leb(n):
+    buf = bytearray()
+    while True:
+        b = n & 0x7f
+        n >>= 7
+        if n:
+            buf.append(b | 0x80)
+        else:
+            buf.append(b)
+            return bytes(buf)
+
+def section(sid, payload):
+    return bytes([sid]) + leb(len(payload)) + payload
+
+def name(s):
+    b = s.encode("utf-8")
+    return leb(len(b)) + b
+
+module = bytearray(b"\x00asm" + (1).to_bytes(4, "little"))
+# type：1 个函数类型 (i32, i32) -> i32
+module += section(1, leb(1) + b"\x60" + leb(2) + b"\x7f\x7f" + leb(1) + b"\x7f")
+# import：从 env 导入 log / sin 两个函数（typeidx 0）
+imp = bytearray(leb(2))
+for field in ("log", "sin"):
+    imp += name("env") + name(field) + b"\x00" + leb(0)
+module += section(2, bytes(imp))
+# function：1 个自定义函数，复用 type 0
+module += section(3, leb(1) + leb(0))
+# memory：1 页
+module += section(5, leb(1) + b"\x00" + leb(1))
+# export：add(func #2) / memory(mem #0)
+exp = bytearray(leb(2))
+exp += name("add") + b"\x00" + leb(2)
+exp += name("memory") + b"\x02" + leb(0)
+module += section(7, bytes(exp))
+# code：函数体 locals=0；local.get 0; local.get 1; i32.add; end
+body = b"\x00\x20\x00\x20\x01\x6a\x0b"
+module += section(10, leb(1) + leb(len(body)) + body)
+open(out, "wb").write(bytes(module))
+print("  demo wasm ->", out)
+PY
 }
 
 # 用 ar 打一个静态库（.a）：两个目标文件 → 归档里两个成员 + 符号表。
@@ -740,8 +764,8 @@ prepare_repo_font() {
 	echo "  $repo ($mode)"
 }
 
-# 可执行文件 demo 仓库：modify 用 .so（ELF 共享库，v2 多一个导出符号）、add 用 .dll
-# （.NET 托管 PE）、remove 用 .a（ar 归档）——一次覆盖四条解析路径与四种模式所需字段。
+# 可执行文件 demo 仓库：modify 用 .so（ELF 共享库，v2 多一个导出符号）、add 用 .wasm
+# （WebAssembly 模块）、remove 用 .a（ar 归档）——一次覆盖四条解析路径与四种模式所需字段。
 prepare_repo_executable() {
 	local mode="$1" ext="$2"
 	local repo="$WORK/repo-executable-$mode"
@@ -754,7 +778,7 @@ prepare_repo_executable() {
 		printf 'baseline\n' >"$repo/readme.txt"
 		git -C "$repo" add -A
 		git -C "$repo" commit -q -m "initial: baseline"
-		write_demo_pe "$repo/sample.$ext" v2 "$tmp"
+		write_demo_wasm "$repo/sample.$ext"
 		git -C "$repo" add -A
 		git -C "$repo" commit -q -m "add: sample.$ext"
 		;;
@@ -1770,6 +1794,251 @@ print("  demo epub ->", target, "(" + version + ")")
 PY
 }
 
+# ── demo 素材：SQLite 数据库 ────────────────────────────────────────────────
+# 用 Python 标准库 sqlite3 现造两个真实 SQLite 库：v1 两张表 + 索引 / 视图 / 触发器，
+# v2 改列（users 增 created_at、email 变 NOT NULL）、加表（sessions）、索引改 UNIQUE、删触发器、
+# 数据行增删改——「表结构」与「数据」两种口径都有真实差异。SQLite 文件含 NUL，git 判二进制。
+write_demo_sqlite() {
+	local repo="$1" version="$2" ext="$3"
+	python3 - "$repo" "$version" "$ext" <<'PY'
+import os, sqlite3, sys
+repo, version, ext = sys.argv[1], sys.argv[2], sys.argv[3]
+is_new = version == "v2"
+path = os.path.join(repo, "sample." + ext)
+if os.path.exists(path):
+    os.remove(path)
+con = sqlite3.connect(path)
+cur = con.cursor()
+if is_new:
+    cur.executescript(
+        "CREATE TABLE users ("
+        "  id INTEGER PRIMARY KEY,"
+        "  name TEXT NOT NULL,"
+        "  email TEXT NOT NULL,"
+        "  created_at TEXT"
+        ");"
+        "CREATE TABLE orders ("
+        "  id INTEGER PRIMARY KEY,"
+        "  user_id INTEGER NOT NULL,"
+        "  total REAL,"
+        "  status TEXT"
+        ");"
+        "CREATE TABLE sessions ("
+        "  token TEXT PRIMARY KEY,"
+        "  user_id INTEGER NOT NULL"
+        ");"
+        "CREATE UNIQUE INDEX idx_users_email ON users(email);"
+        "CREATE VIEW v_active AS SELECT id, name, email FROM users WHERE email IS NOT NULL;")
+    cur.executemany("INSERT INTO users (id, name, email, created_at) VALUES (?,?,?,?)", [
+        (1, "Alice", "alice@example.com", "2026-06-01"),
+        (2, "Bob", "bob@example.com", "2026-06-02"),
+        (3, "Carol", "carol@example.com", "2026-06-03"),
+        (4, "Dave", "dave@example.com", "2026-06-04"),
+    ])
+    cur.executemany("INSERT INTO orders (id, user_id, total, status) VALUES (?,?,?,?)", [
+        (1, 1, 19.99, "paid"),
+        (2, 1, 4.50, "paid"),
+        (3, 2, 125.00, "refunded"),
+    ])
+    cur.executemany("INSERT INTO sessions (token, user_id) VALUES (?,?)", [
+        ("t-1", 1),
+        ("t-2", 3),
+    ])
+else:
+    cur.executescript(
+        "CREATE TABLE users ("
+        "  id INTEGER PRIMARY KEY,"
+        "  name TEXT NOT NULL,"
+        "  email TEXT"
+        ");"
+        "CREATE TABLE orders ("
+        "  id INTEGER PRIMARY KEY,"
+        "  user_id INTEGER NOT NULL,"
+        "  total REAL"
+        ");"
+        "CREATE INDEX idx_users_email ON users(email);"
+        "CREATE VIEW v_active AS SELECT id, name FROM users WHERE email IS NOT NULL;"
+        "CREATE TRIGGER trg_users_audit AFTER INSERT ON users BEGIN"
+        "  UPDATE users SET name = name WHERE id = NEW.id;"
+        "END;")
+    cur.executemany("INSERT INTO users (id, name, email) VALUES (?,?,?)", [
+        (1, "Alice", "alice@example.com"),
+        (2, "Bob", "bob@example.com"),
+        (3, "Carol", None),
+    ])
+    cur.executemany("INSERT INTO orders (id, user_id, total) VALUES (?,?,?)", [
+        (1, 1, 19.99),
+        (2, 1, 4.50),
+        (3, 2, 120.00),
+    ])
+con.commit()
+con.close()
+print("  demo sqlite ->", path, "(" + version + ")")
+PY
+}
+
+# ── demo 素材：托管程序集（.NET assembly） ──────────────────────────────────
+# 用 dotnet 编出两个真实 .NET 类库（sample.dll）：v1 = 1.0.0.0（Calculator / Greeter），
+# v2 = 2.0.0.0（Calculator 加 Multiply、新增 Settings 与 Serializer 类型，且 Serializer 用
+# System.Text.Json，令 AssemblyRef 多出一条引用）——「程序集标识 / 类型 / 引用」三种口径都有差异。
+# 托管 DLL 含 NUL，git 判二进制；插件声明 Priority 120，高于可执行文件插件，.dll / .exe 的
+# 托管程序集都归本插件路由。
+write_demo_managedassembly() {
+	local repo="$1" version="$2" ext="$3"
+	local tmp="$WORK/demo-managedassembly-$version"
+	rm -rf "$tmp"
+	mkdir -p "$tmp/proj"
+	cat >"$tmp/proj/sample.csproj" <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>sample</AssemblyName>
+    <RootNamespace>ForkPlus.Sample</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+</Project>
+EOF
+	if [ "$version" = "v2" ]; then
+		cat >"$tmp/proj/Sample.cs" <<'EOF'
+using System.Text.Json;
+namespace ForkPlus.Sample
+{
+	public static class Calculator
+	{
+		public static int Add(int a, int b) { return a + b; }
+		public static int Subtract(int a, int b) { return a - b; }
+		public static int Multiply(int a, int b) { return a * b; }
+	}
+	public static class Greeter
+	{
+		public static string Greet(string who) { return "Hello, " + who; }
+	}
+	public sealed class Settings
+	{
+		public string Theme;
+		public int FontSize;
+	}
+	public static class Serializer
+	{
+		public static string ToJson(object value) { return JsonSerializer.Serialize(value); }
+	}
+}
+EOF
+	else
+		cat >"$tmp/proj/Sample.cs" <<'EOF'
+namespace ForkPlus.Sample
+{
+	public static class Calculator
+	{
+		public static int Add(int a, int b) { return a + b; }
+		public static int Subtract(int a, int b) { return a - b; }
+	}
+	public static class Greeter
+	{
+		public static string Greet(string who) { return "Hello, " + who; }
+	}
+}
+EOF
+	fi
+	local asmver="1.0.0.0"
+	[ "$version" = "v2" ] && asmver="2.0.0.0"
+	# 需要 dotnet 在 PATH（pages.yml 已 setup-dotnet）；-v:q 压缩日志噪音。
+	dotnet build "$tmp/proj/sample.csproj" -c Release -o "$tmp/out" --nologo -v:q \
+		-p:AssemblyVersion="$asmver" -p:FileVersion="$asmver" -p:Version="$asmver"
+	cp "$tmp/out/sample.dll" "$repo/sample.$ext"
+	rm -rf "$tmp"
+	echo "  demo managedassembly -> $repo/sample.$ext ($version)"
+}
+
+# ── demo 素材：邮件 EML ─────────────────────────────────────────────────────
+# 纯 Python 写一封 RFC 5322 / MIME 邮件：multipart/mixed 内嵌 multipart/alternative
+# （text/plain + text/html），再挂一个 base64 的 PDF 附件。v1 / v2 改主题、加抄送、改正文、
+# 换附件名与正文措辞——「邮件头 / 部件 / 正文」三种口径都有真实差异。
+# 邮件是纯文本，靠 .gitattributes 的 `-diff` 走插件路由（与结构化数据 / DBC 同法）。
+write_demo_eml() {
+	local repo="$1" version="$2"
+	python3 - "$repo" "$version" <<'PY'
+import os, sys
+repo, version = sys.argv[1], sys.argv[2]
+is_new = version == "v2"
+if is_new:
+    boundary = "==ForkPlus_v2_mixed=="
+    headers = [
+        ("From", "Alice Author <alice@example.com>"),
+        ("To", "Bob Editor <bob@example.com>"),
+        ("Cc", "Carol Reviewer <carol@example.com>"),
+        ("Subject", "ForkPlus release 2.0 roadmap"),
+        ("Date", "Mon, 01 Jun 2026 09:30:00 +0800"),
+        ("Message-ID", "<forkplus-demo-v2@example.com>"),
+        ("MIME-Version", "1.0"),
+        ("Content-Type", "multipart/mixed; boundary=\"%s\"" % boundary),
+    ]
+    plain = ("Hi Bob,\n\nThe 2.0 release is on track. This week we shipped the SQLite,\n"
+             "managed assembly and EML compare plugins.\n\n"
+             "Please review the roadmap before Friday.\n\n-- Alice\n")
+    html = ("<html><body><p>Hi Bob,</p><p>The 2.0 release is on track. This week we "
+            "shipped the SQLite, managed assembly and EML compare plugins.</p>"
+            "<p>Please review the roadmap before Friday.</p><p>-- Alice</p></body></html>\n")
+    attachment = ("roadmap.pdf", "JVBERi0xLjQKJSBkZW1vIHJvYWRtYXAgdjIK")
+else:
+    boundary = "==ForkPlus_v1_mixed=="
+    headers = [
+        ("From", "Alice Author <alice@example.com>"),
+        ("To", "Bob Editor <bob@example.com>"),
+        ("Subject", "ForkPlus release 1.0"),
+        ("Date", "Thu, 01 Jan 2026 09:30:00 +0800"),
+        ("Message-ID", "<forkplus-demo-v1@example.com>"),
+        ("MIME-Version", "1.0"),
+        ("Content-Type", "multipart/mixed; boundary=\"%s\"" % boundary),
+    ]
+    plain = ("Hi Bob,\n\nThe 1.0 release is out. PDF and Office compare are available.\n\n"
+             "Thanks,\nAlice\n")
+    html = ("<html><body><p>Hi Bob,</p><p>The 1.0 release is out. PDF and Office compare "
+            "are available.</p><p>Thanks,<br>Alice</p></body></html>\n")
+    attachment = ("changelog.pdf", "JVBERi0xLjQKJSBkZW1vIGNoYW5nZWxvZyB2MQo=")
+
+alt_boundary = boundary.replace("mixed", "alt")
+lines = []
+for key, value in headers:
+    lines.append(key + ": " + value)
+lines.append("")
+lines.append("This is a multi-part message in MIME format.")
+lines.append("")
+lines.append("--" + boundary)
+lines.append("Content-Type: multipart/alternative; boundary=\"%s\"" % alt_boundary)
+lines.append("")
+lines.append("--" + alt_boundary)
+lines.append("Content-Type: text/plain; charset=utf-8")
+lines.append("Content-Transfer-Encoding: 8bit")
+lines.append("")
+lines.extend(plain.rstrip("\n").split("\n"))
+lines.append("")
+lines.append("--" + alt_boundary)
+lines.append("Content-Type: text/html; charset=utf-8")
+lines.append("Content-Transfer-Encoding: 8bit")
+lines.append("")
+lines.extend(html.rstrip("\n").split("\n"))
+lines.append("")
+lines.append("--" + alt_boundary + "--")
+lines.append("")
+lines.append("--" + boundary)
+lines.append("Content-Type: application/pdf; name=\"%s\"" % attachment[0])
+lines.append("Content-Transfer-Encoding: base64")
+lines.append("Content-Disposition: attachment; filename=\"%s\"" % attachment[0])
+lines.append("")
+lines.append(attachment[1])
+lines.append("")
+lines.append("--" + boundary + "--")
+lines.append("")
+target = os.path.join(repo, "sample.eml")
+with open(target, "w", newline="") as f:
+    f.write("\r\n".join(lines) + "\r\n")
+print("  demo eml ->", target, "(" + version + ")")
+PY
+}
+
 # 三类文本格式 demo 仓库共用一套骨架：
 #   ① 写 .gitattributes 给样本加 `-diff`——宿主只对二进制差异查询插件路由，这样样本虽仍是
 #      合法文本，差异却会走插件（否则截图会落到内置文本编辑器上）；
@@ -1938,7 +2207,9 @@ capture_one() {
 	# plugin_mode 非空时经 FORKPLUS_PLUGIN_VIEW_MODE 指定插件的初始视图模式
 	# （音频 波形 / 频谱 / 封面，视频 帧条 / 单帧对比 / 播放，
 	#  结构化数据 tree，字幕 timeline，SVG structure，
-	#  机器学习模型 tensors，MIDI pianoroll，抓包 packets，PSD layers / header，EPUB chapters）；
+	#  机器学习模型 tensors，MIDI pianoroll，抓包 packets，PSD layers / header，EPUB chapters，
+	#  字体 metadata / codepoints，可执行文件 sections / symbols / size，证书 chain，
+	#  SQLite data，托管程序集 types / references，邮件 EML parts / body）；
 	# 不设则走各插件默认模式。
 	( cd "$APPDIR" && DISPLAY="$DISPLAY_NUM" FORKPLUS_PLUGIN_VIEW_MODE="$plugin_mode" \
 		./ForkPlus "$repo" >"$WORK/forkplus.log" 2>&1 & )
@@ -2024,9 +2295,9 @@ prepare_repo_archive remove tar.xz
 prepare_repo_font modify
 prepare_repo_font add
 prepare_repo_font remove
-# 可执行文件 demo：三场景各用一种格式（modify=so(ELF) / add=dll(PE) / remove=a(ar)）
+# 可执行文件 demo：三场景各用一种格式（modify=so(ELF) / add=wasm(WebAssembly) / remove=a(ar)）
 prepare_repo_executable modify so
-prepare_repo_executable add dll
+prepare_repo_executable add wasm
 prepare_repo_executable remove a
 # 证书 demo：三场景各用一种容器（modify=der / add=p12 / remove=p7b）
 prepare_repo_certificate modify der
@@ -2083,6 +2354,21 @@ prepare_repo_binary psd remove write_demo_psd psd
 prepare_repo_binary epub modify write_demo_epub epub
 prepare_repo_binary epub add write_demo_epub epub
 prepare_repo_binary epub remove write_demo_epub epub
+# SQLite demo：三场景共用同一对 .db（旧：2 表 + 索引 / 视图 / 触发器；新：改列 / 加表 /
+# 改索引 / 删触发器 + 数据增删改）；样本含 NUL，git 判二进制，自动走插件路由。
+prepare_repo_binary sqlite modify write_demo_sqlite db
+prepare_repo_binary sqlite add write_demo_sqlite db
+prepare_repo_binary sqlite remove write_demo_sqlite db
+# 托管程序集 demo：modify/remove 用 .dll、add 用 .exe（都是 .NET 托管 PE）；
+# v1 = 1.0.0.0（Calculator / Greeter），v2 = 2.0.0.0（Calculator 加 Multiply、新增 Settings /
+# Serializer 并让 Serializer 引用 System.Text.Json）——标识 / 类型 / 引用三口径都有差异。
+prepare_repo_binary managedassembly modify write_demo_managedassembly dll
+prepare_repo_binary managedassembly add write_demo_managedassembly exe
+prepare_repo_binary managedassembly remove write_demo_managedassembly dll
+# 邮件 EML demo：三场景共用同一对 .eml；邮件是纯文本，靠 .gitattributes 的 `-diff` 走插件路由。
+prepare_repo_text eml modify "sample.eml" write_demo_eml
+prepare_repo_text eml add "sample.eml" write_demo_eml
+prepare_repo_text eml remove "sample.eml" write_demo_eml
 start_x
 # PDF 插件三种场景各截一张：修改 / 新增 / 删除
 for mode in modify add remove; do
@@ -2104,16 +2390,29 @@ for mode in modify add remove; do
 	seed_settings
 	capture_one "$WORK/repo-font-$mode" "FontDiffView.SetContent" "font-$mode.png" 4 "字体插件 · $mode"
 done
-# 可执行文件插件三种场景各截一张（ELF(.so) / PE(.dll) / ar(.a) 各覆盖一种）
+# 字体插件另取元数据 / 码位两模式各一张（modify 场景为样本）
+for m in "metadata:元数据" "codepoints:码位"; do
+	seed_settings
+	capture_one "$WORK/repo-font-modify" "FontDiffView.SetContent" "font-${m%%:*}.png" 4 "字体插件 · ${m##*:}" "${m%%:*}"
+done
+# 可执行文件插件三种场景各截一张（ELF(.so) / WebAssembly(.wasm) / ar(.a) 各覆盖一种）
 for mode in modify add remove; do
 	seed_settings
 	capture_one "$WORK/repo-executable-$mode" "ExecutableDiffView.SetContent" "executable-$mode.png" 4 "可执行文件插件 · $mode"
+done
+# 可执行文件插件另取段节表 / 导入导出 / 体积构成三模式各一张（modify 场景为样本）
+for m in "sections:段节表" "symbols:导入导出" "size:体积构成"; do
+	seed_settings
+	capture_one "$WORK/repo-executable-modify" "ExecutableDiffView.SetContent" "executable-${m%%:*}.png" 4 "可执行文件插件 · ${m##*:}" "${m%%:*}"
 done
 # 证书插件三种场景各截一张（DER / PKCS#12 / PKCS#7 各覆盖一种）
 for mode in modify add remove; do
 	seed_settings
 	capture_one "$WORK/repo-certificate-$mode" "CertificateDiffView.SetContent" "certificate-$mode.png" 4 "证书插件 · $mode"
 done
+# 证书插件另取证书链模式一张（add 的 .p12 含多张证书，为样本）
+seed_settings
+capture_one "$WORK/repo-certificate-add" "CertificateDiffView.SetContent" "certificate-chain.png" 4 "证书插件 · 证书链" "chain"
 # 音频插件三种场景各截一张（mp3 / wav / flac 各覆盖一种；默认元数据模式）
 for mode in modify add remove; do
 	seed_settings
@@ -2214,5 +2513,33 @@ done
 # EPUB 插件另取章节目录模式一张（modify 场景为样本）
 seed_settings
 capture_one "$WORK/repo-epub-modify" "EpubDiffView.SetContent" "epub-chapters.png" 4 "EPUB 插件 · 章节目录" "chapters"
+# SQLite 插件三种场景各截一张（旧 / 新同一对 .db；默认表结构模式）
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-sqlite-$mode" "SqliteDiffView.SetContent" "sqlite-$mode.png" 4 "SQLite 插件 · $mode"
+done
+# SQLite 插件另取数据模式一张（modify 场景为样本）
+seed_settings
+capture_one "$WORK/repo-sqlite-modify" "SqliteDiffView.SetContent" "sqlite-data.png" 4 "SQLite 插件 · 数据" "data"
+# 托管程序集插件三种场景各截一张（modify/remove=.dll、add=.exe；默认标识模式）
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-managedassembly-$mode" "ManagedAssemblyDiffView.SetContent" "managedassembly-$mode.png" 4 "托管程序集插件 · $mode"
+done
+# 托管程序集插件另取类型 / 引用两模式各一张（modify 场景为样本）
+for m in "types:类型" "references:引用"; do
+	seed_settings
+	capture_one "$WORK/repo-managedassembly-modify" "ManagedAssemblyDiffView.SetContent" "managedassembly-${m%%:*}.png" 4 "托管程序集插件 · ${m##*:}" "${m%%:*}"
+done
+# 邮件 EML 插件三种场景各截一张（旧 / 新同一对 .eml；默认邮件头模式）
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-eml-$mode" "EmlDiffView.SetContent" "eml-$mode.png" 4 "邮件 EML 插件 · $mode"
+done
+# 邮件 EML 插件另取 MIME 部件 / 正文两模式各一张（modify 场景为样本）
+for m in "parts:MIME 部件" "body:正文"; do
+	seed_settings
+	capture_one "$WORK/repo-eml-modify" "EmlDiffView.SetContent" "eml-${m%%:*}.png" 4 "邮件 EML 插件 · ${m##*:}" "${m%%:*}"
+done
 write_metadata
 log "完成：截图已输出到 $OUT"

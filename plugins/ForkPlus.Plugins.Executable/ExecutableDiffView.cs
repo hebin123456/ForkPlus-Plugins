@@ -115,7 +115,26 @@ namespace ForkPlus.Plugins.Executable
 
 		private bool _released;
 
-		private string _mode = "summary";
+		/// <summary>
+		/// CI 截图用的初始模式：无头截图脚本经环境变量 FORKPLUS_PLUGIN_VIEW_MODE 指定
+		/// （sections / symbols / size，其余走默认摘要），据此逐模式取图；正常运行时该变量为空。
+		/// </summary>
+		private static readonly string InitialMode = ResolveInitialMode();
+
+		private static string ResolveInitialMode()
+		{
+			string forced = (Environment.GetEnvironmentVariable("FORKPLUS_PLUGIN_VIEW_MODE") ?? string.Empty).Trim();
+			foreach (string id in ModeIds)
+			{
+				if (string.Equals(id, forced, StringComparison.OrdinalIgnoreCase))
+				{
+					return id;
+				}
+			}
+			return "summary";
+		}
+
+		private string _mode = InitialMode;
 
 		private ExecutableModel _srcModel;
 

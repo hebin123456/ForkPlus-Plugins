@@ -214,14 +214,38 @@ ForkPlus-Plugins/
 │   │   ├── Localization/
 │   │   │   └── PsdStrings.cs             # 插件自带译文（8 语言）
 │   │   └── ForkPlus.Plugins.Psd.csproj   # 零私有依赖（SkiaSharp 由宿主共享）
-│   └── ForkPlus.Plugins.Epub/            # EPUB 电子书对比插件（元数据 / 章节目录）
-│       ├── EpubDiffPlugin.cs
-│       ├── EpubDiffView.cs               # 两模式视图：元数据 / 章节目录
-│       ├── EpubParser.cs                 # ZIP 容器 + container.xml + OPF（元数据 / 清单 / 书脊）解析
-│       ├── EpubData.cs                   # 书籍 / 章节模型 + 元数据与章节 diff
+│   ├── ForkPlus.Plugins.Epub/            # EPUB 电子书对比插件（元数据 / 章节目录）
+│   │   ├── EpubDiffPlugin.cs
+│   │   ├── EpubDiffView.cs               # 两模式视图：元数据 / 章节目录
+│   │   ├── EpubParser.cs                 # ZIP 容器 + container.xml + OPF（元数据 / 清单 / 书脊）解析
+│   │   ├── EpubData.cs                   # 书籍 / 章节模型 + 元数据与章节 diff
+│   │   ├── Localization/
+│   │   │   └── EpubStrings.cs            # 插件自带译文（8 语言）
+│   │   └── ForkPlus.Plugins.Epub.csproj  # 零第三方依赖（内置 System.IO.Compression）
+│   ├── ForkPlus.Plugins.Sqlite/          # SQLite 数据库对比插件（表结构 / 数据）
+│   │   ├── SqliteDiffPlugin.cs
+│   │   ├── SqliteDiffView.cs             # 两模式视图：表结构 / 数据
+│   │   ├── SqliteParser.cs               # 纯托管解析 SQLite 文件格式（100 字节头 + 页 B 树 + 记录）
+│   │   ├── SqliteData.cs                 # 库 / 表 / 列模型 + 表结构与数据 diff
+│   │   ├── Localization/
+│   │   │   └── SqliteStrings.cs          # 插件自带译文（8 语言）
+│   │   └── ForkPlus.Plugins.Sqlite.csproj # 零第三方依赖（不引入任何 SQLite 驱动）
+│   ├── ForkPlus.Plugins.ManagedAssembly/ # 托管程序集对比插件（程序集标识 / 类型 / 引用）
+│   │   ├── ManagedAssemblyDiffPlugin.cs
+│   │   ├── ManagedAssemblyDiffView.cs    # 三模式视图：程序集标识 / 类型 / 引用
+│   │   ├── ManagedAssemblyParser.cs      # System.Reflection.Metadata 读 ECMA-335 元数据
+│   │   ├── ManagedAssemblyData.cs        # 程序集 / 类型 / 成员 / 引用模型 + 语义 diff
+│   │   ├── Localization/
+│   │   │   └── ManagedAssemblyStrings.cs # 插件自带译文（8 语言）
+│   │   └── ForkPlus.Plugins.ManagedAssembly.csproj # 零第三方依赖（共享框架内置）
+│   └── ForkPlus.Plugins.Eml/             # 邮件（EML）对比插件（邮件头 / MIME 部件 / 正文）
+│       ├── EmlDiffPlugin.cs
+│       ├── EmlDiffView.cs                # 三模式视图：邮件头 / MIME 部件 / 正文
+│       ├── EmlParser.cs                  # RFC 5322 头 + MIME 多部件树 + RFC 2047 编码字解码
+│       ├── EmlData.cs                    # 邮件 / 部件 / 行模型 + 头 / 部件 / 正文 diff
 │       ├── Localization/
-│       │   └── EpubStrings.cs            # 插件自带译文（8 语言）
-│       └── ForkPlus.Plugins.Epub.csproj  # 零第三方依赖（内置 System.IO.Compression）
+│       │   └── EmlStrings.cs             # 插件自带译文（8 语言）
+│       └── ForkPlus.Plugins.Eml.csproj   # 零第三方依赖
 ├── licenses/                             # 第三方许可全文仓库（按组件分目录，集中管理）
 │   ├── docnet-core/LICENSE.txt           # Docnet.Core（MIT）
 │   ├── open-xml-sdk/LICENSE.txt          # Open XML SDK（MIT）
@@ -911,6 +935,74 @@ INI / `.cfg` / `.properties` 自写解析器。
 
 ---
 
+## SQLite 数据库对比插件
+
+[plugins/ForkPlus.Plugins.Sqlite](plugins/ForkPlus.Plugins.Sqlite) 认领 `.db` / `.sqlite` / `.sqlite3`：
+改表结构、动配置数据之后，并排看清两版数据库的差异——表结构与数据。
+
+- 纯托管自解析 SQLite 文件格式：100 字节文件头（magic / 页大小 / 保留区 / schema 格式号 / 页数 /
+  文本编码）+ 根页 `sqlite_master` B 树（表 / 索引 / 视图 / 触发器清单）+ 各表 B 树记录
+  （变长整数 + 记录序列类型解码），不引入任何 SQLite 原生库或托管驱动。
+- 两模式（`Schema / Data` 切换，默认表结构；CI 截图可用环境变量
+  `FORKPLUS_PLUGIN_VIEW_MODE` 预选 `data`）：
+  - **表结构**：文件头统计 + `sqlite_master` 对象清单，键路径形如 `table.users`、
+    `table.users.column.email`、`index.idx_users_email`、`view.v_active`、`trigger.trg_users_audit`，
+    一眼看出改了哪张表 / 哪个列 / 哪个索引；
+  - **数据**：各表逐行解码，键路径形如 `data.users[1]`，值为 `id=1, name=Alice, email=…` 行摘要，
+    另有 `rows.<表>` 汇总每张表行数。
+- 两模式共用同一份解析结果，切模式不重解析；对象上限 200 张、单表最多读 200 行（超出记
+  Truncated）、长值截断 120 字符，单侧声明大小超过 300 MB 只提示不解析；B 树遍历用「已访问页集合」防环。
+- **零第三方依赖**，随包进 `plugins/` 的只有插件自身主 DLL。
+- 插件实现 `IPluginMetadata`，名称「SQLite 数据库对比」（`SQLite Compare`，
+  译文见 `Localization/SqliteStrings.cs`）、版本 `0.0.1` 与描述。
+
+---
+
+## 托管程序集对比插件
+
+[plugins/ForkPlus.Plugins.ManagedAssembly](plugins/ForkPlus.Plugins.ManagedAssembly) 认领 `.dll` / `.exe`：
+换版本、加 API 之后，并排看清两版 .NET 程序集的差异——程序集标识、类型与引用。
+
+- 用共享框架内置的 `System.Reflection.PortableExecutable` / `System.Reflection.Metadata` 纯托管
+  读取 ECMA-335 元数据：`PEReader` 读 COFF 头（`machine` / `characteristics`）与 CLR 头
+  （`corflags`），`MetadataReader` 读 `AssemblyDefinition` / `TypeDefinition` / `MethodDefinition` /
+  `FieldDefinition` / `AssemblyReference` 与自定义特性里的 target framework。
+- 三模式（`Identity / Types / References` 切换，默认程序集标识；CI 截图可用环境变量
+  `FORKPLUS_PLUGIN_VIEW_MODE` 预选 `types` / `references`）：
+  - **程序集标识**：`assembly.name` / `.version` / `.culture` / `.public key token` / `.flags` /
+    `.hash algorithm` 与 `metadata.version` / `target framework` / `machine` / `characteristics` / `corflags`；
+  - **类型**：`type.<命名空间.类型>` 下挂 `.method.<名(参数)>` 与 `.field.<名>`，覆盖 API 增删与签名变化；
+  - **引用**：`reference.<程序集简单名>` 列出 AssemblyRef 清单，新增 / 移除的依赖包一眼可见。
+- 优先级 `120`，高于「可执行文件 / 库对比」插件的 `100`——生态里的 `.dll` / `.exe` 绝大多数是托管程序集，
+  元数据对比远比 PE 节段对比有用；非托管 PE 会归类为「无法解析」，可在「扩展名绑定」里绑回可执行文件插件。
+- 类型上限 5000、单类型成员上限 200、引用上限 500（超出记 Truncated），单侧声明大小超过 300 MB 只提示不解析。
+- **零第三方依赖**（全为共享框架内置类型），随包进 `plugins/` 的只有插件自身主 DLL。
+- 插件实现 `IPluginMetadata`，名称「托管程序集对比」（`Managed Assembly Compare`，
+  译文见 `Localization/ManagedAssemblyStrings.cs`）、版本 `0.0.1` 与描述。
+
+---
+
+## 邮件（EML）对比插件
+
+[plugins/ForkPlus.Plugins.Eml](plugins/ForkPlus.Plugins.Eml) 认领 `.eml`：
+改主题、增删附件之后，并排看清两封邮件的差异——邮件头、MIME 部件与正文。
+
+- 纯托管自解析 RFC 5322 邮件头与 MIME 多部件树：`multipart/*` 按 `boundary` 递进切分、
+  `Content-Transfer-Encoding` 的 base64 / quoted-printable 解码、RFC 2047 编码字（`=?utf-8?B?…?=`）
+  解码，不引入任何第三方邮件库。
+- 三模式（`Headers / Parts / Body` 切换，默认邮件头；CI 截图可用环境变量
+  `FORKPLUS_PLUGIN_VIEW_MODE` 预选 `parts` / `body`）：
+  - **邮件头**：`header.from` / `header.to` / `header.subject` / `header.date` /
+    `header.message-id` / `header.content-type` 等，值统一做编码字解码；
+  - **MIME 部件**：`part[1].content-type` / `part[1].part[2].filename` / `part[1].size` 等部件树键路径；
+  - **正文**：文本部件逐行，键路径形如 `part[1].line[3]`。
+- 邮件头上限 200、部件上限 200、正文行上限 2000，单侧声明大小超过 300 MB 只提示不解析。
+- **零第三方依赖**（全为共享框架内置的 `System.*`），随包进 `plugins/` 的只有插件自身主 DLL。
+- 插件实现 `IPluginMetadata`，名称「邮件对比」（`EML Compare`，
+  译文见 `Localization/EmlStrings.cs`）、版本 `0.0.1` 与描述。
+
+---
+
 ## Pages 截图约定
 
 插件对比视图的截图由 CI 在真实 ForkPlus 中现场采集（无头 X + 整屏截图），并随 Pages 一起发布上线；
@@ -932,7 +1024,8 @@ INI / `.cfg` / `.properties` 自写解析器。
   结构化数据插件即 `structured-*.png`，DBC 插件即 `dbc-*.png`，字幕插件即 `subtitle-*.png`，
   SVG 插件即 `svg-*.png`，音频插件即 `audio-*.png`，视频插件即 `video-*.png`，
   机器学习模型插件即 `mlmodel-*.png`，MIDI 插件即 `midi-*.png`，Torrent 插件即 `torrent-*.png`，
-  抓包插件即 `pcap-*.png`，PSD 插件即 `psd-*.png`，EPUB 插件即 `epub-*.png`）；
+  抓包插件即 `pcap-*.png`，PSD 插件即 `psd-*.png`，EPUB 插件即 `epub-*.png`，
+  SQLite 插件即 `sqlite-*.png`，托管程序集插件即 `managedassembly-*.png`，邮件 EML 插件即 `eml-*.png`）；
 - 截图规格：整屏 `1920×1280`，完整软件界面，不做局部裁切；
 - 缺任一场景视为截图不完整；插件新增变更形态时，同步补对应场景截图与 `plugins.json` 登记。
 - demo 素材由采集脚本现场构造（PDF 用 `write_demo_pdf`，Office 用 `write_demo_office`，
@@ -948,14 +1041,17 @@ INI / `.cfg` / `.properties` 自写解析器。
   remove=`.p7b`；字体三场景用同一对系统字体（旧 DejaVu Sans → 新 DejaVu Serif）。
   这些依赖见 [pages.yml](.github/workflows/pages.yml) 的 `Install headless toolchain`
   （`fonts-dejavu` / `fonts-liberation` / `gcc` / `binutils` / `openssl`）。
-- **结构化数据 / DBC / 字幕 / SVG** 四类的 demo 素材都是**纯文本**，由采集脚本用纯 Python 标准库
-  直接写出（`write_demo_structured` / `write_demo_dbc` / `write_demo_subtitle` / `write_demo_svg`）。
-  因为宿主只对**二进制**差异查询插件路由，这四类文本格式**自动路由不会命中**，采集脚本须在 demo
+- **结构化数据 / DBC / 字幕 / SVG / 邮件 EML** 五类的 demo 素材都是**纯文本**，由采集脚本用纯 Python
+  标准库直接写出（`write_demo_structured` / `write_demo_dbc` / `write_demo_subtitle` / `write_demo_svg` /
+  `write_demo_eml`）。
+  因为宿主只对**二进制**差异查询插件路由，这五类文本格式**自动路由不会命中**，采集脚本须在 demo
   仓库里预置「把对应扩展名绑定到本插件」的设置（用户绑定优先级最高），否则截图会落到内置文本编辑器上。
   三张截图各覆盖一种格式形态：结构化数据 modify=`.yaml` / add=`.json` / remove=`.toml`（另用
   `.ini` / `.xml` 体现解析广度），DBC 三场景共用同一对 `.dbc`（旧：两报文 / 三信号带值表；新：改因子与
   取值范围、加一条信号与一条报文、删一条信号），字幕 modify=`.srt` / add=`.vtt` / remove=`.ass`（另用
-  `.ssa` / MicroDVD `.sub`），SVG 三场景共用同一对 `.svg`（旧：蓝底矩形 + 灰线；新：换色 + 挪位 + 多一笔）。
+  `.ssa` / MicroDVD `.sub`），SVG 三场景共用同一对 `.svg`（旧：蓝底矩形 + 灰线；新：换色 + 挪位 + 多一笔），
+  邮件 EML 三场景共用同一对 `.eml`（multipart/mixed 内嵌 multipart/alternative + base64 PDF 附件；
+  旧 / 新改主题、加抄送、改正文与附件名）并另取 MIME 部件 / 正文两张。
 - **音频 / 视频**两类 demo 素材用 **系统 `ffmpeg` CLI** 现造（`write_demo_audio` / `write_demo_video`，
   pages.yml 装 `ffmpeg`）。注意分工：造样本用系统 ffmpeg，插件解码用随包分发的 FFmpeg 原生库，
   两者互不相干。音频三场景各用一种容器（modify=`.mp3` 有损 / add=`.wav` PCM 无损 / remove=`.flac`
@@ -963,14 +1059,20 @@ INI / `.cfg` / `.properties` 自写解析器。
   modify=`.mp4`(H.264) / add=`.mkv`(H.264) / remove=`.avi`(MPEG-4 Part 2)，旧 `testsrc` 2 s、
   新 `testsrc2` 3 s 并做 90° 色相旋转，让帧条与单帧对比里的画面明显不同。三张截图都停在默认的
   元数据模式。
-- **机器学习模型 / MIDI / Torrent / 抓包 / PSD / EPUB** 六类 demo 素材同样是**二进制**，由采集脚本用
-  纯 Python 标准库现场构造（`write_demo_mlmodel` / `write_demo_midi` / `write_demo_torrent` /
-  `write_demo_pcap` / `write_demo_psd` / `write_demo_epub`；PSD 的缩略图另借系统 `ffmpeg` 造一张小 JPEG）。
-  样本都夹带 NUL 字节，git 一律判为二进制、自动走插件路由，无需 `.gitattributes` 干预。
-  三张截图各覆盖一种形态：机器学习模型 modify=`.onnx` / add=`.safetensors` / remove=`.gguf`（另取张量模式一张），
+- **机器学习模型 / MIDI / Torrent / 抓包 / PSD / EPUB / SQLite / 托管程序集** 八类 demo 素材同样是
+  **二进制**，样本都夹带 NUL 字节，git 一律判为二进制、自动走插件路由，无需 `.gitattributes` 干预。
+  其中机器学习模型 / MIDI / Torrent / 抓包 / PSD / EPUB / SQLite 由采集脚本用纯 Python 标准库现场构造
+  （`write_demo_mlmodel` / `write_demo_midi` / `write_demo_torrent` / `write_demo_pcap` /
+  `write_demo_psd` / `write_demo_epub` / `write_demo_sqlite`；PSD 的缩略图另借系统 `ffmpeg` 造一张小 JPEG，
+  SQLite 借 Python 内置 `sqlite3` 建真库）；托管程序集由 `write_demo_managedassembly` 用 **`dotnet` CLI**
+  现编两个真实 .NET 类库（pages.yml 已 setup-dotnet）。三张截图各覆盖一种形态：
+  机器学习模型 modify=`.onnx` / add=`.safetensors` / remove=`.gguf`（另取张量模式一张），
   MIDI 三场景共用同一对 `.mid` 并另取钢琴卷帘一张，Torrent 三场景共用同一对 `.torrent`，
   抓包 modify/remove=`.pcap` / add=`.pcapng` 并另取包列表一张，PSD modify/remove=`.psd` / add=`.psb`
-  并另取图层 / 头部两张，EPUB 三场景共用同一对 `.epub` 并另取章节目录一张。
+  并另取图层 / 头部两张，EPUB 三场景共用同一对 `.epub` 并另取章节目录一张，
+  SQLite 三场景共用同一对 `.db`（旧：两表 + 索引 / 视图 / 触发器；新：改列 / 加表 / 改索引 / 删触发器 +
+  数据增删改）并另取数据模式一张，托管程序集 modify/remove=`.dll` / add=`.exe`（v1 = 1.0.0.0，
+  v2 = 2.0.0.0 且加方法 / 加类型 / 多一条 AssemblyRef）并另取类型 / 引用两张。
 - 采集脚本在构建插件前先跑 [fetch-third-party.sh](.github/scripts/fetch-third-party.sh) 从三方件仓
   最新 Release 取原生件并校验 sha256，否则音视频插件按 RID 拷不出原生库。
 

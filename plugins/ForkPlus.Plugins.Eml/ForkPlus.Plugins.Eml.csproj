@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- 邮件（EML）对比视图插件：认领 .eml，自解析 RFC 5322 头 + MIME 多部件树
+         （multipart/* 边界切分、Content-Transfer-Encoding base64 / quoted-printable 解码、
+         RFC 2047 编码字解码），提供「邮件头 / 部件 / 正文」三种 diff 视图。
+         零第三方依赖：全为共享框架内置的 System.*（不需要 third-party.json）。
+         公共属性（net10.0 / AvaloniaVersion / 契约引用）见 ../Directory.Build.props。 -->
+    <AssemblyName>ForkPlus.Plugins.Eml</AssemblyName>
+    <RootNamespace>ForkPlus.Plugins.Eml</RootNamespace>
+
+    <!-- 插件自身版本（与宿主版本解耦）；偏好设置 → 插件页展示的 Version 与此一致。 -->
+    <Version>0.0.1</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 本插件视图用 Avalonia 控件纯代码构建（未使用 .axaml）。
+         运行期 Avalonia 由宿主提供，打包时不随插件分发（见 README「依赖与共享程序集」）。 -->
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+  </ItemGroup>
+</Project>

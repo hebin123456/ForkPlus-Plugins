@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- SQLite 数据库对比视图插件：认领 .db / .sqlite / .sqlite3，纯托管自解析 SQLite 文件格式
+         （100 字节文件头 + 各页 B 树 + 记录格式），提供「表结构」与「数据」两种 diff 视图。
+         零第三方依赖：不引入任何 SQLite 原生库 / 托管驱动，随包进 plugins/ 的只有插件自身主 DLL
+         （不需要 third-party.json）。
+         公共属性（net10.0 / AvaloniaVersion / 契约引用）见 ../Directory.Build.props。 -->
+    <AssemblyName>ForkPlus.Plugins.Sqlite</AssemblyName>
+    <RootNamespace>ForkPlus.Plugins.Sqlite</RootNamespace>
+
+    <!-- 插件自身版本（与宿主版本解耦）；偏好设置 → 插件页展示的 Version 与此一致。 -->
+    <Version>0.0.1</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 本插件视图用 Avalonia 控件纯代码构建（未使用 .axaml）。
+         运行期 Avalonia 由宿主提供，打包时不随插件分发（见 README「依赖与共享程序集」）。 -->
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+  </ItemGroup>
+</Project>
