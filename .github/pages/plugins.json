@@ -599,8 +599,8 @@
         },
         {
           "file": "dbc-raw.png",
-          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.dbc，差异区切到 DBC 插件的「原文」模式，左右两栏并排展示两侧原始 DBC 文本",
-          "caption": "「原文」模式（DBC · .dbc，modify 场景）：点模式栏的 <code>原文</code> 进入 <code>RawMode</code>，内容区由 <code>BuildRawContent</code> 渲染——左右两栏各一整段原始文本（等宽字体、可滚动），便于在结构化差异之外对照上下文，比如确认某条 <code>SG_</code> 的完整定义。"
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.dbc，差异区切到 DBC 插件的「原文」模式，左右两栏并排展示两侧原始 DBC 文本，每行左侧带行号",
+          "caption": "「原文」模式（DBC · .dbc，modify 场景）：点模式栏的 <code>原文</code> 进入 <code>RawMode</code>，内容区由 <code>BuildRawContent</code> 渲染——左右两栏各一整段原始文本（等宽字体、可滚动），每行左侧是浅灰行号槽（行号随行一起进虚拟化列表，槽宽按最大行号位数定，两侧各自从 1 起算，与编辑器行号一致），便于在结构化差异之外对照上下文，比如确认某条 <code>SG_</code> 的完整定义。"
         }
       ],
       "sections": [
@@ -614,7 +614,7 @@
         },
         {
           "heading": "原文模式：并排对照",
-          "html": "<p>切到 <code>RawMode</code> 后由 <code>BuildRawContent</code> 渲染：左右两栏各一张卡片，内容是该侧原始 DBC 文本，等宽字体、<code>NoWrap</code> 并可双向滚动；一侧缺失时显示「不存在」占位，空文件显示「空」。文本经 <code>DecodeText</code> 以 UTF-8 读取（保留 BOM 探测）。结构化模式负责「改了哪个键」，原文模式负责「上下文长什么样」，两者共用同一份已解析的文本，切换不重新读盘。</p>"
+          "html": "<p>切到 <code>RawMode</code> 后由 <code>BuildRawContent</code> 渲染：左右两栏各一张卡片，内容是该侧原始 DBC 文本，等宽字体、<code>NoWrap</code> 并可双向滚动；每行左侧另起一列浅灰行号槽（<code>RawLine.Number</code> 由 <code>SplitLines</code> 按 1 起编，槽宽由 <code>GutterWidth</code> 按最大行号位数算出，同卡片内各行共用、行号右对齐成列；行号随行一起进虚拟化列表，因此两侧行号与编辑器一致、超长行截断不影响计数）。一侧缺失时显示「不存在」占位，空文件显示「空」。文本经 <code>DecodeText</code> 以 UTF-8 读取（保留 BOM 探测）。结构化模式负责「改了哪个键」，原文模式负责「上下文长什么样」，两者共用同一份已解析的文本，切换不重新读盘。</p>"
         },
         {
           "heading": "解析：DbcParserLib → 统一数据树",

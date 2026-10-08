@@ -30,8 +30,8 @@ namespace ForkPlus.Plugins.Dbc
 	/// <see cref="VirtualizingStackPanel"/> 虚拟化，只物化视口内的行（大文件 formerly 一次性
 	/// 物化数千行 TextBlock 会把 UI 线程拖住数秒）。</item>
 	/// <item>「仅差异」（默认开）：Same 行不进表格（计数仍全量，状态行可见），需要全量时关掉即后台重算。</item>
-	/// <item>原文：左右两栏并排展示两侧原始文本（按行拆分 + 虚拟化；单行超长截断展示，
-	/// 不影响结构化 diff），便于对照上下文。</item>
+	/// <item>原文：左右两栏并排展示两侧原始文本（按行拆分 + 虚拟化，每行左侧带 1 起行号槽，
+	/// 与编辑器行号一致，便于对照上下文；单行超长截断展示，不影响结构化 diff）。</item>
 	/// </list>
 	///
 	/// 解析与 diff 在后台线程执行，控件只在 UI 线程构建；每次刷新用代次 + CancellationToken 取消上一轮。
@@ -88,6 +88,9 @@ namespace ForkPlus.Plugins.Dbc
 
 		private static readonly IBrush StateRight = new SolidColorBrush(Color.FromArgb(0xFF, 0x2E, 0x9E, 0x5B));
 
+		/// <summary>原文模式行号槽文字色（浅灰，弱于正文，避免抢视线）。</summary>
+		private static readonly IBrush GutterText = new SolidColorBrush(Color.FromArgb(0xFF, 0x9A, 0x9A, 0x9A));
+
 		private static readonly FontFamily MonoFont = new FontFamily("Consolas, Menlo, DejaVu Sans Mono, Courier New, monospace");
 
 		private static readonly FuncTemplate<Panel> VirtualizingPanel = new FuncTemplate<Panel>(delegate
@@ -131,9 +134,9 @@ namespace ForkPlus.Plugins.Dbc
 
 		private DiffSummary _summary;
 
-		private List<string> _leftLines;
+		private List<RawLine> _leftLines;
 
-		private List<string> _rightLines;
+		private List<RawLine> _rightLines;
 
 		private string _error;
 
@@ -331,8 +334,8 @@ namespace ForkPlus.Plugins.Dbc
 			{
 				DataNode left = null;
 				DataNode right = null;
-				List<string> leftLines = null;
-				List<string> rightLines = null;
+				List<RawLine> leftLines = null;
+				List<RawLine> rightLines = null;
 				string error = null;
 				try
 				{
@@ -513,10 +516,27 @@ namespace ForkPlus.Plugins.Dbc
 			}
 		}
 
-		/// <summary>按行拆分（去行尾 \r，超长行截断展示）——原文模式虚拟化列表的数据源。</summary>
-		private static List<string> SplitLines(string text)
+		/// <summary>
+		/// 原文模式的一行：行号（1 起）+ 行文本（超长已截断）。
+		/// 行号随行一起进虚拟化列表——两侧各自从 1 起算，与编辑器里的行号一致，便于对照上下文。
+		/// </summary>
+		private sealed class RawLine
 		{
-			List<string> lines = new List<string>();
+			internal int Number { get; }
+
+			internal string Text { get; }
+
+			internal RawLine(int number, string text)
+			{
+				Number = number;
+				Text = text;
+			}
+		}
+
+		/// <summary>按行拆分（去行尾 \r、超长行截断展示、补 1 起行号）——原文模式虚拟化列表的数据源。</summary>
+		private static List<RawLine> SplitLines(string text)
+		{
+			List<RawLine> lines = new List<RawLine>();
 			if (string.IsNullOrEmpty(text))
 			{
 				return lines;
@@ -531,7 +551,7 @@ namespace ForkPlus.Plugins.Dbc
 				{
 					lineEnd--;
 				}
-				lines.Add(TruncateLine(text.Substring(start, lineEnd - start)));
+				lines.Add(new RawLine(lines.Count + 1, TruncateLine(text.Substring(start, lineEnd - start))));
 				if (newline < 0)
 				{
 					break;
@@ -701,24 +721,58 @@ namespace ForkPlus.Plugins.Dbc
 			}
 		}
 
-		/// <summary>原文行模板：item 即行文本。</summary>
+		/// <summary>
+		/// 行号槽宽度（像素）：按最大行号的位数定，同一张卡片内所有行共用同一宽度，行号才能右对齐成列。
+		/// 等宽字体 12px 下数字宽约 7.2px，留 1 位余量 + 8px 与正文的间距。
+		/// </summary>
+		private static double GutterWidth(int lineCount)
+		{
+			return lineCount.ToString().Length * 7.5 + 8.0;
+		}
+
+		/// <summary>原文行模板：左侧固定宽行号槽（右对齐、灰色）+ 行文本（等宽、不换行）。</summary>
 		private sealed class RawLineTemplate : IDataTemplate
 		{
+			private readonly double _gutterWidth;
+
+			internal RawLineTemplate(double gutterWidth)
+			{
+				_gutterWidth = gutterWidth;
+			}
+
 			public bool Match(object data)
 			{
-				return data is string;
+				return data is RawLine;
 			}
 
 			public Control Build(object param)
 			{
-				return new TextBlock
+				RawLine line = (RawLine)param;
+				Grid row = new Grid();
+				row.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(_gutterWidth, GridUnitType.Pixel)));
+				row.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+				TextBlock number = new TextBlock
 				{
-					Text = (string)param,
+					Text = line.Number.ToString(),
+					FontFamily = MonoFont,
+					FontSize = 12.0,
+					TextAlignment = TextAlignment.Right,
+					Foreground = GutterText,
+					Margin = new Thickness(0.0, 0.0, 8.0, 0.0)
+				};
+				TextBlock text = new TextBlock
+				{
+					Text = line.Text,
 					FontFamily = MonoFont,
 					FontSize = 12.0,
 					TextWrapping = TextWrapping.NoWrap,
 					Foreground = Brushes.Black
 				};
+				Grid.SetColumn(number, 0);
+				Grid.SetColumn(text, 1);
+				row.Children.Add(number);
+				row.Children.Add(text);
+				return row;
 			}
 		}
 
@@ -834,7 +888,7 @@ namespace ForkPlus.Plugins.Dbc
 			return panes;
 		}
 
-		private static Border RawCard(List<string> lines)
+		private static Border RawCard(List<RawLine> lines)
 		{
 			Control body;
 			if (lines == null)
@@ -851,7 +905,7 @@ namespace ForkPlus.Plugins.Dbc
 				{
 					ItemsSource = lines,
 					ItemsPanel = VirtualizingPanel,
-					ItemTemplate = new RawLineTemplate()
+					ItemTemplate = new RawLineTemplate(GutterWidth(lines.Count))
 				};
 				body = list;
 			}
