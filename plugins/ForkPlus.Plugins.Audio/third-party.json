@@ -18,22 +18,6 @@
       "licenseFile": "licenses/ffmpeg-autogen/LICENSE.txt"
     },
     {
-      "name": "FFmpeg.AutoGen.Abstractions",
-      "version": "9.0.1.1",
-      "license": "LGPL-3.0-or-later",
-      "copyright": "Copyright (c) Ruslan Balanukhin",
-      "homepage": "https://github.com/Ruslan-B/FFmpeg.AutoGen",
-      "licenseFile": "licenses/ffmpeg-autogen/LICENSE.txt"
-    },
-    {
-      "name": "FFmpeg.AutoGen.Bindings.DynamicallyLoaded",
-      "version": "9.0.1.1",
-      "license": "LGPL-3.0-or-later",
-      "copyright": "Copyright (c) Ruslan Balanukhin",
-      "homepage": "https://github.com/Ruslan-B/FFmpeg.AutoGen",
-      "licenseFile": "licenses/ffmpeg-autogen/LICENSE.txt"
-    },
-    {
       "name": "miniaudio",
       "version": "0.11.25",
       "license": "Unlicense OR MIT-0",

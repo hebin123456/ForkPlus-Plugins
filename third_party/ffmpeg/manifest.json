@@ -20,7 +20,7 @@
   "bindings": {
     "package": "FFmpeg.AutoGen",
     "version": "9.0.1.1",
-    "note": "NuGet 版本号与 FFmpeg 发行版同步（9.0.x ↔ FFmpeg 9.0.x）；原生库大版本必须与绑定一致，版本错配是崩溃级问题。当前锁 9.0.1.1（含 Abstractions / Bindings.DynamicallyLoaded 两个同版本包）。"
+    "note": "NuGet 版本号与 FFmpeg 发行版同步（9.0.x ↔ FFmpeg 9.0.x）；原生库大版本必须与绑定一致，版本错配是崩溃级问题。当前锁 9.0.1.1 的自包含包 FFmpeg.AutoGen（自带 DynamicallyLoadedBindings 与各平台解析器，运行期按 ffmpeg.RootPath 加载原生件）。不引 FFmpeg.AutoGen.Bindings.DynamicallyLoaded——那是另一套并行绑定栈，配置它影响不到实际调用的 FFmpeg.AutoGen.ffmpeg。"
   },
   "source": {
     "repo": "hebin123456/ForkPlus-Plugins-Third_Party",

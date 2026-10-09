@@ -12,9 +12,12 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
-    <!-- FFmpeg.AutoGen：LGPL 绑定（包版本与 FFmpeg 发行版 9.0.x 同步，大版本必须一致）。
-         Bindings.DynamicallyLoaded：运行期 dlopen / LoadLibrary 原生件，不静态链接。 -->
+    <!-- FFmpeg.AutoGen：LGPL 自包含动态绑定（包版本与 FFmpeg 发行版 9.0.x 同步，大版本必须一致）。
+         该包自带 ffmpeg 类、DynamicallyLoadedBindings 与各平台解析器，运行期按 ffmpeg.RootPath
+         dlopen / LoadLibrary 原生件，不静态链接。
+         **不要再引 FFmpeg.AutoGen.Bindings.DynamicallyLoaded**：那是另一套并行、互不相通的绑定栈
+         （FFmpeg.AutoGen.Abstractions + Bindings.DynamicallyLoaded），配置它影响不到本程序实际调用的
+         FFmpeg.AutoGen.ffmpeg——自定义解析器永不被读取，Windows 上会因原生件依赖找不到而整段解码失败。 -->
     <PackageReference Include="FFmpeg.AutoGen" Version="9.0.1.1" />
-    <PackageReference Include="FFmpeg.AutoGen.Bindings.DynamicallyLoaded" Version="9.0.1.1" />
   </ItemGroup>
 </Project>

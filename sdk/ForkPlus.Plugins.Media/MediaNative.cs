@@ -3,9 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using FFmpeg.AutoGen;
-using FFmpeg.AutoGen.Bindings.DynamicallyLoaded;
-using FFmpeg.AutoGen.Bindings.DynamicallyLoaded.Native;
-using DynBindings = FFmpeg.AutoGen.Bindings.DynamicallyLoaded.DynamicallyLoadedBindings;
+using FFmpeg.AutoGen.Native;
+using DynBindings = FFmpeg.AutoGen.DynamicallyLoadedBindings;
 
 namespace ForkPlus.Plugins.Media
 {
@@ -16,6 +15,12 @@ namespace ForkPlus.Plugins.Media
 	/// 不能用 <see cref="AppContext.BaseDirectory"/>：那是宿主可执行文件所在目录，并不含
 	/// plugins/ 子目录，会解析不到原生件而整体报「FFmpeg 解码不可用」。
 	/// 只做一次初始化；失败后记住原因，不再重试（避免每次对比都抛一遍）。
+	///
+	/// 绑定只走自包含的 <c>FFmpeg.AutoGen</c>：它的 <c>ffmpeg</c> 类自带
+	/// <see cref="DynBindings"/> 与各平台解析器，并以 <c>ffmpeg.RootPath</c> 定位原生件。
+	/// **不要再引 <c>FFmpeg.AutoGen.Bindings.DynamicallyLoaded</c>**——那是另一套并行、互不相通的绑定栈
+	/// （命名空间 <c>FFmpeg.AutoGen.Abstractions</c> / <c>FFmpeg.AutoGen.Bindings.DynamicallyLoaded</c>），
+	/// 配置它不会影响本程序实际调用的 <c>FFmpeg.AutoGen.ffmpeg</c>，Windows 上会因解析器永不被读取而失败。
 	///
 	/// 设计约束（见 design/audio-video-plugins.md §12）：只解码不编码；绑定大版本必须与原生库一致。
 	/// </summary>
@@ -78,10 +83,11 @@ namespace ForkPlus.Plugins.Media
 					{
 						throw new DirectoryNotFoundException("native directory not found (tried: " + string.Join(", ", Candidates()) + ")");
 					}
-					ffmpeg.RootPath = directory;
-					DynBindings.LibrariesPath = directory;
+					// 先装解析器，再设根路径：设置 ffmpeg.RootPath 会触发 ffmpeg 的静态构造，
+					// 其中 DynamicallyLoadedBindings.Initialize() 只在 FunctionResolver 为 null 时才建
+					// 平台默认解析器。自定义解析器先就位，Windows 的 altered-search-path 才会真正生效。
 					DynBindings.FunctionResolver = CreateResolver();
-					DynBindings.Initialize();
+					ffmpeg.RootPath = directory;
 					// FFmpeg 默认把 warning 级日志打到 stderr；宿主日志里会出现 mp3 时间戳之类的
 					// 解析噪音。只保留 error，真正的问题仍可从解码返回码看到。
 					ffmpeg.av_log_set_level(ffmpeg.AV_LOG_ERROR);
@@ -128,7 +134,7 @@ namespace ForkPlus.Plugins.Media
 			yield return AppContext.BaseDirectory;
 		}
 
-		private static FFmpeg.AutoGen.Bindings.DynamicallyLoaded.IFunctionResolver CreateResolver()
+		private static IFunctionResolver CreateResolver()
 		{
 			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 			{

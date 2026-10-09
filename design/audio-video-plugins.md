@@ -148,7 +148,7 @@
 | 组件 | 版本 | 许可 | 用途 |
 | --- | --- | --- | --- |
 | FFmpeg 原生件 | **9.0.2**（三方件仓 [ForkPlus-Plugins-Third_Party](https://github.com/hebin123456/ForkPlus-Plugins-Third_Party) 按 `n9.0.2` 源码自建，四个 RID 一套 configure） | LGPL-2.1-or-later | 解码 / 格式解析 / 缩放 / 重采样 |
-| FFmpeg.AutoGen | **9.0.1.1**（含 `Abstractions` / `Bindings.DynamicallyLoaded`） | LGPL-3.0-or-later | P/Invoke 绑定 |
+| FFmpeg.AutoGen | **9.0.1.1**（自包含动态绑定，自带 `DynamicallyLoadedBindings` 与各平台解析器） | LGPL-3.0-or-later | P/Invoke 绑定 |
 | miniaudio | **0.11.25**（三方件仓自建，经 C ABI 垫片 `fpp_audio.h`，运行期库 `fpp_audio`，随包分发） | public domain / MIT-0 | 跨平台音频输出（见 §8） |
 
 **两条硬约束**：
