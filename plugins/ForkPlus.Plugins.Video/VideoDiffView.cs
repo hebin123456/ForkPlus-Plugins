@@ -214,6 +214,12 @@ namespace ForkPlus.Plugins.Video
 		/// <summary>播放的是哪一侧：true = 旧（左）/ false = 新（右）。</summary>
 		private bool _listenSrc = true;
 
+		/// <summary>试听侧是否由用户显式选过；未选过时允许自动改听有字节的一侧。</summary>
+		private bool _listenSideChosen;
+
+		/// <summary>最近一次渲染是否因单侧过大被拦下；换侧重建内容区要沿用同一判据。</summary>
+		private bool _blocked;
+
 		/// <summary>正在后台创建播放器（避免连点重复创建）。</summary>
 		private bool _playbackBusy;
 
@@ -611,14 +617,17 @@ namespace ForkPlus.Plugins.Video
 				return;
 			}
 			_listenSrc = isSrc;
+			_listenSideChosen = true;
 			DisposePlayback();
 			_playbackPosition = 0.0;
 			SetTransportValue(0.0);
 			UpdateTransport();
-			// 播放模式下换侧即续播新一侧，省得再点一次播放。
+			// 播放模式下换侧即续播新一侧，省得再点一次播放。这里必须**重建内容区**：
+			// 播放画布（_playbackImage）是按建面板时的试听侧创建的，只调 EnsurePlayback 不重建，
+			// 画布会停留在旧侧的空状态，帧到 UI 后被 OnPlaybackFrame 丢弃 → 只有声音没画面。
 			if (_mode == ViewMode.Playback)
 			{
-				EnsurePlayback();
+				BuildContent(ViewMode.Playback, _blocked);
 			}
 		}
 
@@ -926,6 +935,7 @@ namespace ForkPlus.Plugins.Video
 					_dst = dst;
 					_status.Text = status;
 					_scrubLabel.Text = FrameLabel(src, dst);
+					_blocked = blocked;
 					BuildContent(mode, blocked);
 				});
 			}
@@ -1556,6 +1566,7 @@ namespace ForkPlus.Plugins.Video
 		/// </summary>
 		private Control BuildPlaybackContent()
 		{
+			ResolveDefaultListenSide();
 			StackPanel root = new StackPanel
 			{
 				Margin = new Thickness(12.0, 0.0, 12.0, 12.0)
@@ -1651,6 +1662,33 @@ namespace ForkPlus.Plugins.Video
 				return VideoStrings.T("No video stream");
 			}
 			return null;
+		}
+
+		/// <summary>
+		/// 首次进入播放模式时，若当前试听侧取不到字节而另一侧有，则自动改听另一侧，免得一进来就
+		/// 停在「媒体内容不可用」的空面板上。用户手动选过侧后不再干预（选了空侧就如实显示）。
+		/// </summary>
+		private void ResolveDefaultListenSide()
+		{
+			if (_listenSideChosen)
+			{
+				return;
+			}
+			if (HasBytes(_listenSrc ? _src : _dst))
+			{
+				return;
+			}
+			if (!HasBytes(_listenSrc ? _dst : _src))
+			{
+				return;
+			}
+			_listenSrc = !_listenSrc;
+			UpdateTransport();
+		}
+
+		private static bool HasBytes(Side side)
+		{
+			return side != null && side.Bytes != null && side.Bytes.Length > 0;
 		}
 
 		private static string DescribeFailure(Side side, string fallback)
