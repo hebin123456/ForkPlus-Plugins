@@ -12,7 +12,7 @@
 #      宿主 5.1.0 起按 plugins/<目录>/plugin.json 扫描加载）
 #   ④ 准备 demo 仓库：PDF / Office / 压缩包 / 字体 / 可执行文件 / 证书 / 音频 / 视频 /
 #      结构化数据 / DBC / 字幕 / SVG / 机器学习模型 / MIDI / Torrent / 抓包 / PSD / EPUB /
-#      SQLite / 托管程序集 / 邮件 EML 各三种 diff 场景（修改 / 新增 / 删除），
+#      SQLite / 托管程序集 / 邮件 EML / CHM 各三种 diff 场景（修改 / 新增 / 删除），
 #      多模式插件另按模式各取一张
 #   ⑤ 无头 X 环境（Xvfb + openbox）启动 ForkPlus，逐场景触发对应插件对比视图，
 #      截取完整软件界面（整屏 1920x1280，不做局部裁切）
@@ -1804,6 +1804,127 @@ print("  demo epub ->", target, "(" + version + ")")
 PY
 }
 
+# CHM：三场景共用同一对 .chm（ITSF 文件头 V3 + ITSP 目录头 + 单块 PMGL 目录 + 未压缩数据区）。
+# v2 改标题（#SYSTEM 记录 3）/ 默认主题（记录 2），改 index.html 与封面图内容并新增 advanced.html；
+# 文件头含大量 NUL 字节，git 一律判为二进制。
+write_demo_chm() {
+	local repo="$1" version="$2"
+	python3 - "$repo" "$version" <<'PY'
+import os, struct, sys
+repo, version = sys.argv[1], sys.argv[2]
+is_new = version == "v2"
+
+BLOCK_LEN = 4096                 # 单个 PMGL 目录块长度
+DIR_OFFSET = 0x60                # ITSF 头长（V3）
+ITSP_LEN = 0x54                  # ITSP 头长（V1）
+DIR_LEN = ITSP_LEN + BLOCK_LEN   # 目录区：ITSP 头 + 一个目录块
+DATA_OFFSET = DIR_OFFSET + DIR_LEN
+LANG_ID = 0x0409                 # en-US
+
+def cword(value):
+    # CHM 变长整数（每字节 7 位，高位续读）——与解析器的 _chm_parse_cword 一致。
+    out = [value & 0x7F]
+    value >>= 7
+    while value:
+        out.append(value & 0x7F)
+        value >>= 7
+    out.reverse()
+    for i in range(len(out) - 1):
+        out[i] |= 0x80
+    return bytes(out)
+
+def system_blob(title, default_topic, contents_file, index_file):
+    # #SYSTEM：u16 code + u16 length + data；0=目录文件 1=索引文件 2=默认主题 3=标题。
+    def rec(code, text):
+        data = text.encode("utf-8") + b"\x00"
+        return struct.pack("<HH", code, len(data)) + data
+    return (rec(0, contents_file) + rec(1, index_file)
+            + rec(2, default_topic) + rec(3, title))
+
+def page(title, body):
+    return ("<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>" + title +
+            "</title></head><body><h1>" + title + "</h1><p>" + body + "</p></body></html>\n")
+
+PNG = b"\x89PNG\r\n\x1a\n" + bytes(range(0, 64))   # 非真实图，仅作内容差异样本
+
+if is_new:
+    title = "ForkPlus Help Center 2.0"
+    default_topic = "getting-started.html"
+    files = [
+        ("/index.html", page("ForkPlus Help", "Welcome to the 2.0 help center.")),
+        ("/getting-started.html", page("Getting Started", "Install ForkPlus and open a repository.")),
+        ("/advanced.html", page("Advanced Topics", "Custom diff routing and plugins.")),
+        ("/images/logo.png", PNG + b"-v2"),
+    ]
+else:
+    title = "ForkPlus Help Center"
+    default_topic = "index.html"
+    files = [
+        ("/index.html", page("ForkPlus Help", "Welcome to the help center.")),
+        ("/getting-started.html", page("Getting Started", "Install ForkPlus and open a repository.")),
+        ("/images/logo.png", PNG + b"-v1"),
+    ]
+
+# 数据区排布：先 #SYSTEM，再各文件；目录项（以 '/' 结尾）不占数据。
+system = system_blob(title, default_topic, "toc.hhc", "index.hhk")
+entries = []          # (path, space, start, length)
+data = bytearray()
+
+def add(path, blob):
+    start = len(data)
+    data.extend(blob)
+    entries.append((path, 1, start, len(blob)))
+
+add("/#SYSTEM", system)
+for path, blob in files:
+    add(path, blob.encode("utf-8") if isinstance(blob, str) else blob)
+entries.append(("/images/", 1, 0, 0))     # 目录项（长度 0）
+
+# PMGL 目录块：签名 + free_space + block_next(-1) + 条目串。
+block = bytearray(BLOCK_LEN)
+block[0:4] = b"PMGL"
+struct.pack_into("<i", block, 0x10, -1)
+pos = 0x14
+for path, space, start, length in entries:
+    raw = path.encode("utf-8")
+    chunk = cword(len(raw)) + raw + cword(space) + cword(start) + cword(length)
+    block[pos:pos + len(chunk)] = chunk
+    pos += len(chunk)
+struct.pack_into("<I", block, 4, BLOCK_LEN - pos)
+
+# ITSP 目录头：块长 0x10 / index_root 0x1C(-1) / index_head 0x20 / 语言 0x30。
+itsp = bytearray(ITSP_LEN)
+itsp[0:4] = b"ITSP"
+struct.pack_into("<I", itsp, 0x04, 1)
+struct.pack_into("<I", itsp, 0x08, ITSP_LEN)
+struct.pack_into("<I", itsp, 0x0C, 1)
+struct.pack_into("<I", itsp, 0x10, BLOCK_LEN)
+struct.pack_into("<i", itsp, 0x1C, -1)
+struct.pack_into("<i", itsp, 0x20, 0)
+struct.pack_into("<I", itsp, 0x30, LANG_ID)
+
+# ITSF 文件头（V3）：版本 3 / 头长 0x60 / 目录偏移 0x48 / 目录长度 0x50 / 数据偏移 0x58。
+itsf = bytearray(0x60)
+itsf[0:4] = b"ITSF"
+struct.pack_into("<I", itsf, 0x04, 3)
+struct.pack_into("<I", itsf, 0x08, 0x60)
+struct.pack_into("<I", itsf, 0x0C, 1)
+struct.pack_into("<I", itsf, 0x10, 1600000000)   # 固定时间戳，保证两侧一致
+struct.pack_into("<I", itsf, 0x14, LANG_ID)
+struct.pack_into("<Q", itsf, 0x48, DIR_OFFSET)
+struct.pack_into("<Q", itsf, 0x50, DIR_LEN)
+struct.pack_into("<Q", itsf, 0x58, DATA_OFFSET)
+
+target = os.path.join(repo, "sample.chm")
+with open(target, "wb") as f:
+    f.write(bytes(itsf))
+    f.write(bytes(itsp))
+    f.write(bytes(block))
+    f.write(bytes(data))
+print("  demo chm ->", target, "(" + version + ")")
+PY
+}
+
 # ── demo 素材：SQLite 数据库 ────────────────────────────────────────────────
 # 用 Python 标准库 sqlite3 现造两个真实 SQLite 库：v1 两张表 + 索引 / 视图 / 触发器，
 # v2 改列（users 增 created_at、email 变 NOT NULL）、加表（sessions）、索引改 UNIQUE、删触发器、
@@ -2379,6 +2500,12 @@ prepare_repo_binary managedassembly remove write_demo_managedassembly dll
 prepare_repo_text eml modify "sample.eml" write_demo_eml
 prepare_repo_text eml add "sample.eml" write_demo_eml
 prepare_repo_text eml remove "sample.eml" write_demo_eml
+# CHM demo：三场景共用同一对 .chm（ITSF 文件头 V3 + ITSP 目录头 + 单块 PMGL 目录 + 未压缩数据区）；
+# 文件头含 NUL，git 自动判二进制，无需 .gitattributes。v2 改标题 / 默认主题、改 index.html 与封面图
+# 内容并新增 advanced.html——元数据（标题 / 默认主题 / 统计）与目录条目两口径都有真实差异。
+prepare_repo_binary chm modify write_demo_chm chm
+prepare_repo_binary chm add write_demo_chm chm
+prepare_repo_binary chm remove write_demo_chm chm
 start_x
 # PDF 插件三种场景各截一张：修改 / 新增 / 删除
 for mode in modify add remove; do
@@ -2551,5 +2678,13 @@ for m in "parts:MIME 部件" "body:正文"; do
 	seed_settings
 	capture_one "$WORK/repo-eml-modify" "EmlDiffView.SetContent" "eml-${m%%:*}.png" 4 "邮件 EML 插件 · ${m##*:}" "${m%%:*}"
 done
+# CHM 插件三种场景各截一张（旧 / 新同一对 .chm；默认元数据模式）
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-chm-$mode" "ChmDiffView.SetContent" "chm-$mode.png" 4 "CHM 插件 · $mode"
+done
+# CHM 插件另取目录条目模式一张（modify 场景为样本）
+seed_settings
+capture_one "$WORK/repo-chm-modify" "ChmDiffView.SetContent" "chm-entries.png" 4 "CHM 插件 · 目录条目" "entries"
 write_metadata
 log "完成：截图已输出到 $OUT"

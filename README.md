@@ -247,14 +247,23 @@ ForkPlus-Plugins/
 │   │   ├── Localization/
 │   │   │   └── ManagedAssemblyStrings.cs # 插件自带译文（8 语言）
 │   │   └── ForkPlus.Plugins.ManagedAssembly.csproj # 零第三方依赖（共享框架内置）
-│   └── ForkPlus.Plugins.Eml/             # 邮件（EML）对比插件（邮件头 / MIME 部件 / 正文）
-│       ├── EmlDiffPlugin.cs
-│       ├── EmlDiffView.cs                # 三模式视图：邮件头 / MIME 部件 / 正文
-│       ├── EmlParser.cs                  # RFC 5322 头 + MIME 多部件树 + RFC 2047 编码字解码
-│       ├── EmlData.cs                    # 邮件 / 部件 / 行模型 + 头 / 部件 / 正文 diff
+│   ├── ForkPlus.Plugins.Eml/             # 邮件（EML）对比插件（邮件头 / MIME 部件 / 正文）
+│   │   ├── EmlDiffPlugin.cs
+│   │   ├── EmlDiffView.cs                # 三模式视图：邮件头 / MIME 部件 / 正文
+│   │   ├── EmlParser.cs                  # RFC 5322 头 + MIME 多部件树 + RFC 2047 编码字解码
+│   │   ├── EmlData.cs                    # 邮件 / 部件 / 行模型 + 头 / 部件 / 正文 diff
+│   │   ├── Localization/
+│   │   │   └── EmlStrings.cs             # 插件自带译文（8 语言）
+│   │   └── ForkPlus.Plugins.Eml.csproj   # 零第三方依赖
+│   └── ForkPlus.Plugins.Chm/             # CHM 帮助文档对比插件（元数据 / 目录条目）
+│       ├── ChmDiffPlugin.cs
+│       ├── ChmDiffView.cs                # 两模式视图：元数据 / 目录条目
+│       ├── ChmParser.cs                  # ITSF / ITSP 头部 + PMGL 目录块 + MSCompressed 内容流解压
+│       ├── ChmData.cs                    # 条目 / 元数据模型 + 元数据与条目 diff
+│       ├── LzxDecoder.cs                 # 纯托管 LZX 解压器（移植自 CHMLib 的 lzx.c）
 │       ├── Localization/
-│       │   └── EmlStrings.cs             # 插件自带译文（8 语言）
-│       └── ForkPlus.Plugins.Eml.csproj   # 零第三方依赖
+│       │   └── ChmStrings.cs             # 插件自带译文（8 语言）
+│       └── ForkPlus.Plugins.Chm.csproj   # 零第三方依赖（纯托管解析 + 内置 LZX 解压）
 ├── licenses/                             # 第三方许可全文仓库（按组件分目录，集中管理）
 │   ├── docnet-core/LICENSE.txt           # Docnet.Core（MIT）
 │   ├── open-xml-sdk/LICENSE.txt          # Open XML SDK（MIT）
@@ -1045,6 +1054,31 @@ INI / `.cfg` / `.properties` 自写解析器。
 
 ---
 
+## CHM 帮助文档对比插件
+
+[plugins/ForkPlus.Plugins.Chm](plugins/ForkPlus.Plugins.Chm) 认领 `.chm`：
+改标题、增删主题页、换掉配图之后，并排看清两份「已编译 HTML 帮助」的差异——元数据与目录条目。
+
+- 纯托管自解析 CHM 容器：`ITSF` 文件头（V2 / V3）→ `ITSP` 目录头 → `PMGL` 目录块链表，
+  逐条读出「内部路径 + 存储空间 + 数据偏移 + 未压缩长度」，不引入任何第三方 CHM 库。
+- 压缩内容流（`MSCompressed` 存储）用随插件分发的**纯托管 LZX 解压器**
+  （`LzxDecoder.cs`，移植自 CHMLib 的 `lzx.c`）解开：读重置表 / `LZXC` 控制块，
+  逐块解压并顺序拼成未压缩内容，再为条目计算内容指纹（SHA-256 前 8 字节），
+  因此即使帮助内容被压缩，也能做**内容级**比对，而非只比体积。
+- 两模式（`Metadata / Entries` 切换，默认元数据；CI 截图可用环境变量
+  `FORKPLUS_PLUGIN_VIEW_MODE` 预选 `entries`）：
+  - **元数据**：`title` / `default topic` / `contents file` / `index file` / `language` /
+    `help format version` / `last modified` / `compressed` 与 `files` / `directories` /
+    `total bytes` 等统计键路径，逐行四色标注；
+  - **目录条目**：按 CHM 内部路径对齐两侧条目（目录项标注为「目录」，文件给「体积 · 内容指纹」），
+    一眼看出主题页的增删与内容改动。
+- 元数据表上限 3000、条目表上限 2000，单侧声明大小超过 300 MB 只提示不解析。
+- **零第三方依赖**（纯托管实现，不需要 `third-party.json`），随包进 `plugins/` 的只有插件自身主 DLL。
+- 插件实现 `IPluginMetadata`，名称「CHM 帮助文档对比」（`CHM Compare`，
+  译文见 `Localization/ChmStrings.cs`）、版本 `1.0.0` 与描述。
+
+---
+
 ## Pages 截图约定
 
 插件对比视图的截图由 CI 在真实 ForkPlus 中现场采集（无头 X + 整屏截图），并随 Pages 一起发布上线；
@@ -1067,7 +1101,8 @@ INI / `.cfg` / `.properties` 自写解析器。
   SVG 插件即 `svg-*.png`，音频插件即 `audio-*.png`，视频插件即 `video-*.png`，
   机器学习模型插件即 `mlmodel-*.png`，MIDI 插件即 `midi-*.png`，Torrent 插件即 `torrent-*.png`，
   抓包插件即 `pcap-*.png`，PSD 插件即 `psd-*.png`，EPUB 插件即 `epub-*.png`，
-  SQLite 插件即 `sqlite-*.png`，托管程序集插件即 `managedassembly-*.png`，邮件 EML 插件即 `eml-*.png`）；
+  SQLite 插件即 `sqlite-*.png`，托管程序集插件即 `managedassembly-*.png`，邮件 EML 插件即 `eml-*.png`，
+  CHM 插件即 `chm-*.png`）；
 - 截图规格：整屏 `1920×1280`，完整软件界面，不做局部裁切；
 - 缺任一场景视为截图不完整；插件新增变更形态时，同步补对应场景截图与 `plugins.json` 登记。
 - demo 素材由采集脚本现场构造（PDF 用 `write_demo_pdf`，Office 用 `write_demo_office`，
@@ -1101,17 +1136,19 @@ INI / `.cfg` / `.properties` 自写解析器。
   modify=`.mp4`(H.264) / add=`.mkv`(H.264) / remove=`.avi`(MPEG-4 Part 2)，旧 `testsrc` 2 s、
   新 `testsrc2` 3 s 并做 90° 色相旋转，让帧条与单帧对比里的画面明显不同。三张截图都停在默认的
   元数据模式。
-- **机器学习模型 / MIDI / Torrent / 抓包 / PSD / EPUB / SQLite / 托管程序集** 八类 demo 素材同样是
+- **机器学习模型 / MIDI / Torrent / 抓包 / PSD / EPUB / SQLite / 托管程序集 / CHM** 九类 demo 素材同样是
   **二进制**，样本都夹带 NUL 字节，git 一律判为二进制、自动走插件路由，无需 `.gitattributes` 干预。
-  其中机器学习模型 / MIDI / Torrent / 抓包 / PSD / EPUB / SQLite 由采集脚本用纯 Python 标准库现场构造
+  其中机器学习模型 / MIDI / Torrent / 抓包 / PSD / EPUB / SQLite / CHM 由采集脚本用纯 Python 标准库现场构造
   （`write_demo_mlmodel` / `write_demo_midi` / `write_demo_torrent` / `write_demo_pcap` /
-  `write_demo_psd` / `write_demo_epub` / `write_demo_sqlite`；PSD 的缩略图另借系统 `ffmpeg` 造一张小 JPEG，
+  `write_demo_psd` / `write_demo_epub` / `write_demo_sqlite` / `write_demo_chm`；PSD 的缩略图另借系统 `ffmpeg` 造一张小 JPEG，
   SQLite 借 Python 内置 `sqlite3` 建真库）；托管程序集由 `write_demo_managedassembly` 用 **`dotnet` CLI**
   现编两个真实 .NET 类库（pages.yml 已 setup-dotnet）。三张截图各覆盖一种形态：
   机器学习模型 modify=`.onnx` / add=`.safetensors` / remove=`.gguf`（另取张量模式一张），
   MIDI 三场景共用同一对 `.mid` 并另取钢琴卷帘一张，Torrent 三场景共用同一对 `.torrent`，
   抓包 modify/remove=`.pcap` / add=`.pcapng` 并另取包列表一张，PSD modify/remove=`.psd` / add=`.psb`
-  并另取图层 / 头部两张，EPUB 三场景共用同一对 `.epub` 并另取章节目录一张，
+  并另取图层 / 头部两张，EPUB 三场景共用同一对 `.epub` 并另取章节目录一张，CHM 三场景共用同一对 `.chm`
+  （ITSF 文件头 V3 + ITSP 目录头 + 单块 PMGL 目录 + 未压缩数据区；v2 改标题 / 默认主题、改主题页与配图并新增一页）
+  并另取目录条目一张，
   SQLite 三场景共用同一对 `.db`（旧：两表 + 索引 / 视图 / 触发器；新：改列 / 加表 / 改索引 / 删触发器 +
   数据增删改）并另取数据模式一张，托管程序集 modify/remove=`.dll` / add=`.exe`（v1 = 1.0.0.0，
   v2 = 2.0.0.0 且加方法 / 加类型 / 多一条 AssemblyRef）并另取类型 / 引用两张。
