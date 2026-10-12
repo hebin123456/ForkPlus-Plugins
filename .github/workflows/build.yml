@@ -60,15 +60,19 @@ jobs:
           - os: windows-latest
             name: windows-x64
             rid: win-x64
+            platformtarget: x64
           - os: ubuntu-latest
             name: linux-x64
             rid: linux-x64
+            platformtarget: x64
           - os: ubuntu-22.04-arm
             name: linux-arm64
             rid: linux-arm64
+            platformtarget: arm64
           - os: macos-latest
             name: macos-arm64
             rid: osx-arm64
+            platformtarget: arm64
 
     steps:
       - name: Checkout
@@ -104,7 +108,10 @@ jobs:
         shell: bash
         run: bash .github/scripts/fetch-third-party.sh ${{ matrix.rid }}
 
-      # 逐个插件工程按 RID 构建（插件工程位于 plugins/<AssemblyName>/，见根 README「插件开发规范」）
+      # 逐个插件工程按 RID 构建（插件工程位于 plugins/<AssemblyName>/，见根 README「插件开发规范」）。
+      # -p:PlatformTarget 必须按 RID 传：内置的 Image / Hex 插件工程固定 <PlatformTarget>x64</PlatformTarget>，
+      # 在 arm64 RID 下会与之冲突（NETSDK1032: RuntimeIdentifier platform 与 PlatformTarget 不兼容），
+      # 与宿主主仓 build.yml 同口径。
       - name: Build plugins
         shell: bash
         run: |
@@ -117,7 +124,7 @@ jobs:
           fi
           for proj in "${projects[@]}"; do
             echo "==> build $proj (${{ matrix.rid }})"
-            dotnet build "$proj" -c Release -r ${{ matrix.rid }} --nologo
+            dotnet build "$proj" -c Release -r ${{ matrix.rid }} -p:PlatformTarget=${{ matrix.platformtarget }} --nologo
           done
 
       # 打包：install-plugin-artifacts.sh 已把每个插件装进 dist/plugins/<AssemblyName>/（内含
