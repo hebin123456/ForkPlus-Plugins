@@ -50,6 +50,9 @@ namespace ForkPlus.Plugins.Epub
 
 		/// <summary>全部 zip 条目未压缩字节和。</summary>
 		internal long TotalBytes;
+
+		/// <summary>原始 EPUB 字节（「预览」模式据此重新打开 ZIP 取首章与其内联资源）；解析失败为 null。</summary>
+		internal byte[] Raw;
 	}
 
 	internal enum EpubState

@@ -7,7 +7,9 @@ namespace ForkPlus.Plugins.Chm
 	/// CHM（已编译 HTML 帮助）对比视图插件：认领 .chm，命中后由 <see cref="ChmDiffView"/>
 	/// 解析 ITSF / ITSP 头部与 PMGL 目录块，提取元数据（标题 / 默认主题 / 语言 / 格式版本等）
 	/// 与全部目录条目（<c>::DataSpace/*</c> 元数据对象 + 文档 / 图片等），
-	/// 提供「元数据」与「目录条目」两种 diff 视图；内容流若为 MSCompressed 存储，
+	/// 提供「元数据」「目录条目」两种表格 diff 视图，以及「预览」——并排双 WebView 真渲染
+	/// 两侧默认主题页（自包含 HTML，依赖宿主共享组件 <c>ForkPlus.Plugins.Ui</c> 的 HtmlPreview）；
+	/// 内容流若为 MSCompressed 存储，
 	/// 用内置的纯托管 LZX 解压器（<see cref="LzxDecoder"/>）解开后为条目算内容指纹，供内容级比对。
 	///
 	/// 路由：CHM 头部含 NUL，git 判为二进制，宿主只对**二进制差异**查询插件路由
@@ -28,13 +30,13 @@ namespace ForkPlus.Plugins.Chm
 		public string DisplayNameKey => "CHM Compare";
 
 		/// <summary>插件自身的版本号（与宿主版本解耦）。</summary>
-		public string Version => "1.0.0";
+		public string Version => "1.0.1";
 
 		/// <summary>插件显示名（英文原文，同时作为多语言缺省值）。</summary>
 		public string DisplayName => "CHM Compare";
 
 		/// <summary>一句话描述插件能力（英文原文，同时作为多语言缺省值）。</summary>
-		public string Description => "CHM (compiled HTML Help) compare view plugin: claims .chm, parses the ITSF/ITSP headers and PMGL directory blocks, and shows a metadata table (title / default topic / language / format version / counts) plus an entry-by-entry diff; MSCompressed content is unpacked with a built-in managed LZX decoder so entries can be compared by content fingerprint.";
+		public string Description => "CHM (compiled HTML Help) compare view plugin: claims .chm, parses the ITSF/ITSP headers and PMGL directory blocks, and shows a metadata table (title / default topic / language / format version / counts), an entry-by-entry diff, and a side-by-side WebView preview that renders each side's default topic page; MSCompressed content is unpacked with a built-in managed LZX decoder so entries can be compared by content fingerprint.";
 
 		/// <summary>v5.0.3：按界面语言取显示名（未覆盖的语言回退英文原文）。</summary>
 		public string GetDisplayName(string language)

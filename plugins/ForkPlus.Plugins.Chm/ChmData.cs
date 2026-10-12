@@ -59,6 +59,26 @@ namespace ForkPlus.Plugins.Chm
 
 		/// <summary>全部条目未压缩字节和。</summary>
 		internal long TotalBytes;
+
+		// ---- 预览（「预览」模式渲染默认主题页）所需的原始数据引用 ----
+
+		/// <summary>默认主题页内部路径（#SYSTEM 记录 2）；缺失为 null。</summary>
+		internal string DefaultTopic;
+
+		/// <summary>CHM 原始字节（按路径取条目内容用；与解析入参同一实例，不再拷贝）。</summary>
+		internal byte[] Raw;
+
+		/// <summary>数据区偏移（ITSF data_offset）。</summary>
+		internal long DataOffset;
+
+		/// <summary>MSCompressed 存储号；-1 表示未压缩。</summary>
+		internal int CompressedSpace = -1;
+
+		/// <summary>已解压内容流（压缩存储条目由其切片）；无压缩或未解压为 null。</summary>
+		internal byte[] Decompressed;
+
+		/// <summary>内部路径（不区分大小写）→ 条目。</summary>
+		internal Dictionary<string, ChmEntry> ByPath;
 	}
 
 	/// <summary>四态：相同 / 已变 / 仅左 / 仅右。</summary>

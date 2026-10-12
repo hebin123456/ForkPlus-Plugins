@@ -56,7 +56,8 @@ ForkPlus-Plugins/
 │   │   ├── BuiltIn/ImageDiff/…           # BinaryContentPanel / ImageData / BinaryViewerRegistry / DiffFallbackPanel…
 │   │   ├── BuiltIn/HexDiff/…             # HexDiffUserControl / HexEditor / HexFormatter / HexContentControl…
 │   │   ├── PluginCompat.cs               # 插件侧 WPF→Avalonia 兼容小件
-│   │   └── ForkPlus.Plugins.Ui.csproj    # Avalonia / AvaloniaEdit / SkiaSharp（运行期由宿主共享）
+│   │   ├── HtmlPreview/…                 # SideBySideHtmlPreview / HtmlWebViewSupport / HtmlResourceInliner（并排双 WebView 预览）
+│   │   └── ForkPlus.Plugins.Ui.csproj    # Avalonia / AvaloniaEdit / SkiaSharp / Avalonia.Controls.WebView（运行期由宿主共享）
 │   └── ForkPlus.Plugins.Media/           # 音视频插件共享解码核心（只解码不编码，FFmpeg.AutoGen 动态绑定）
 │       ├── MediaNative.cs                # 按 RID 动态绑定 FFmpeg 原生库；av_log 调级
 │       ├── MemoryAvioContext.cs          # 内存 AVIO 回调（把 git blob 直接喂给 FFmpeg，可 seek）
@@ -223,9 +224,10 @@ ForkPlus-Plugins/
 │   │   ├── Localization/
 │   │   │   └── PsdStrings.cs             # 插件自带译文（8 语言）
 │   │   └── ForkPlus.Plugins.Psd.csproj   # 零私有依赖（SkiaSharp 由宿主共享）
-│   ├── ForkPlus.Plugins.Epub/            # EPUB 电子书对比插件（元数据 / 章节目录）
+│   ├── ForkPlus.Plugins.Epub/            # EPUB 电子书对比插件（元数据 / 章节目录 / 预览）
 │   │   ├── EpubDiffPlugin.cs
-│   │   ├── EpubDiffView.cs               # 两模式视图：元数据 / 章节目录
+│   │   ├── EpubDiffView.cs               # 三模式视图：元数据 / 章节目录 / 预览（并排双 WebView）
+│   │   ├── EpubHtmlComposer.cs           # 组装首个阅读章节的自包含 HTML（内联资源）供预览
 │   │   ├── EpubParser.cs                 # ZIP 容器 + container.xml + OPF（元数据 / 清单 / 书脊）解析
 │   │   ├── EpubData.cs                   # 书籍 / 章节模型 + 元数据与章节 diff
 │   │   ├── Localization/
@@ -255,9 +257,10 @@ ForkPlus-Plugins/
 │   │   ├── Localization/
 │   │   │   └── EmlStrings.cs             # 插件自带译文（8 语言）
 │   │   └── ForkPlus.Plugins.Eml.csproj   # 零第三方依赖
-│   └── ForkPlus.Plugins.Chm/             # CHM 帮助文档对比插件（元数据 / 目录条目）
+│   └── ForkPlus.Plugins.Chm/             # CHM 帮助文档对比插件（元数据 / 目录条目 / 预览）
 │       ├── ChmDiffPlugin.cs
-│       ├── ChmDiffView.cs                # 两模式视图：元数据 / 目录条目
+│       ├── ChmDiffView.cs                # 三模式视图：元数据 / 目录条目 / 预览（并排双 WebView）
+│       ├── ChmHtmlComposer.cs            # 组装默认主题页的自包含 HTML（内联资源）供预览
 │       ├── ChmParser.cs                  # ITSF / ITSP 头部 + PMGL 目录块 + MSCompressed 内容流解压
 │       ├── ChmData.cs                    # 条目 / 元数据模型 + 元数据与条目 diff
 │       ├── LzxDecoder.cs                 # 纯托管 LZX 解压器（移植自 CHMLib 的 lzx.c）
@@ -378,7 +381,8 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
   加载器的 `Resolving` 钩子会按插件目录兜底解析私有托管依赖，但不支持同名程序集多版本并存。
 - **原生库**（`.so` / `.dll` / `.dylib`）不在上述钩子覆盖范围内，需插件自行注册
   `DllImportResolver` 从插件目录解析（参见 PDF 插件 `PdfNativeLibrary`）。
-- 版本与清单约定见「§9 插件清单（plugin.json）与安装布局」：插件自身版本统一 `1.0.0`，
+- 版本与清单约定见「§9 插件清单（plugin.json）与安装布局」：插件自身版本统一 `1.0.0`
+  （EPUB / CHM 因新增并排双 WebView「预览」为 `1.0.1`），
   `minHostVersion` 声明最低支持的主程序版本。
 
 ### 5. 宿主能力桥
@@ -418,7 +422,7 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 
 | 成员 | 说明 |
 | --- | --- |
-| `Version` | 插件**自身**版本号（v1.2.0 起本仓官方插件统一为 `1.0.0`）；与工程 `<Version>`、`plugin.json` 的 `version` 三处保持一致。 |
+| `Version` | 插件**自身**版本号（v1.2.0 起本仓官方插件统一为 `1.0.0`；v1.2.2 起新增并排双 WebView「预览」的 EPUB / CHM 升为 `1.0.1`）；与工程 `<Version>`、`plugin.json` 的 `version` 三处保持一致。 |
 | `DisplayName` | 插件显示名，约定为**英文原文**，同时作为多语言的缺省值。 |
 | `Description` | 一句话描述插件能力，约定为**英文原文**，同时作为多语言的缺省值。 |
 | `GetDisplayName(language)` | v5.0.3：按界面语言返回显示名；默认实现返回英文原文，无需多语言的插件不必覆写。 |
@@ -426,8 +430,9 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 
 约定：
 
-- 插件自身版本号统一为 **1.0.0**，三处保持一致：代码里的 `Version`（若实现 `IPluginMetadata`）、
-  工程文件的 `<Version>`、以及 `plugin.json` 的 `version`。
+- 插件自身版本号统一为 **1.0.0**（新增并排双 WebView「预览」的 EPUB / CHM 为 **1.0.1**），
+  三处保持一致：代码里的 `Version`（若实现 `IPluginMetadata`）、工程文件的 `<Version>`、
+  以及 `plugin.json` 的 `version`。
 - 名称 / 描述一律写成**英文原文**（作为缺省与回退值）；插件把各语言译文按 `语言 code → 文案`
   组织成字典，经 `GetDisplayName` / `GetDescription` 覆写，用 `PluginLocalization.Resolve`
   按宿主下发的 `PluginEnvironment.CurrentLanguage` 取译文，查不到逐级回退（当前语言 → 语言主标签
@@ -454,8 +459,8 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 | --- | --- |
 | `schemaVersion` | 清单格式版本，当前固定 `1`。 |
 | `id` | 插件唯一 Id，与代码里 `IDiffViewPlugin.Id` 一致（官方为 `forkplus.<name>`）。 |
-| `version` | 插件**自身**版本，与工程 `<Version>` 一致；本仓官方插件统一 `1.0.0`。 |
-| `minHostVersion` | **最低支持主程序版本**：宿主主程序版本 **≥** 该值才兼容并加载，否则不加载。本仓统一 `5.1.0`。 |
+| `version` | 插件**自身**版本，与工程 `<Version>` 一致；本仓官方插件统一 `1.0.0`（EPUB / CHM 为 `1.0.1`）。 |
+| `minHostVersion` | **最低支持主程序版本**：宿主主程序版本 **≥** 该值才兼容并加载，否则不加载。本仓多数为 `5.1.0`；依赖宿主 `ForkPlus.Plugins.Ui` 共享组件「并排双 WebView 预览」的 EPUB / CHM 声明 `5.1.1`。 |
 | `assembly` | 程序集名，取该插件 csproj 的 `<AssemblyName>`。 |
 
 - 安装后目录布局为 `plugins/<AssemblyName>/`（目录名=程序集名），目录内平铺 `plugin.json`、插件主 DLL、
@@ -976,13 +981,20 @@ INI / `.cfg` / `.properties` 自写解析器。
 
 - 用内置 `System.IO.Compression` 解 ZIP 容器，走 `META-INF/container.xml` 找到 OPF，
   解析其元数据（书名 / 作者 / 语言 / 标识 / 日期）、manifest（文档清单）与 spine（书脊顺序）。
-- 两模式（`Metadata / Chapters` 切换，默认元数据；CI 截图可用环境变量
-  `FORKPLUS_PLUGIN_VIEW_MODE` 预选 `chapters`）：
+- 三模式（`Metadata / Chapters / Preview` 切换，默认元数据；CI 截图可用环境变量
+  `FORKPLUS_PLUGIN_VIEW_MODE` 预选 `chapters` / `preview`）：
   - **元数据**：OPF 元数据键路径表，逐行四色标注；
-  - **章节**：spine 章节按序号对齐，逐章四色标注（manifest 缺项 / 顺序调整一目了然）。
-- **零第三方依赖**，随包进 `plugins/` 的只有插件自身主 DLL。
+  - **章节**：spine 章节按序号对齐，逐章四色标注（manifest 缺项 / 顺序调整一目了然）；
+  - **预览**：并排双 WebView 真渲染两侧**首个阅读章节**——`EpubHtmlComposer` 取出 spine 里
+    首个 `linear` 章节（缺失回退首个章节），按页面声明编码解码后，用共享的
+    `HtmlResourceInliner` 把它引用的图片 / 样式 / 字体换成 data URI，组装成自包含 HTML，
+    交给宿主共享组件 `ForkPlus.Plugins.Ui` 的 `SideBySideHtmlPreview` 渲染；WebView 不可用
+    （headless、缺 WebView2 运行时 / WPE WebKit / WebKitGTK）时两侧仅给提示（降级不报错）。
+- **零第三方依赖**（ZIP / XML 均走共享框架内置），随包进 `plugins/` 的只有插件自身主 DLL。
 - 插件实现 `IPluginMetadata`，名称「EPUB 电子书对比」（`EPUB Compare`，
-  译文见 `Localization/EpubStrings.cs`）、版本 `1.0.0` 与描述。
+  译文见 `Localization/EpubStrings.cs`）、版本 `1.0.1` 与描述。
+- 「预览」依赖宿主 **5.1.1** 起提供的共享组件 `ForkPlus.Plugins.Ui`（`HtmlPreview`），
+  `plugin.json` 的 `minHostVersion` 声明 `5.1.1`。
 
 ---
 
@@ -1065,17 +1077,23 @@ INI / `.cfg` / `.properties` 自写解析器。
   （`LzxDecoder.cs`，移植自 CHMLib 的 `lzx.c`）解开：读重置表 / `LZXC` 控制块，
   逐块解压并顺序拼成未压缩内容，再为条目计算内容指纹（SHA-256 前 8 字节），
   因此即使帮助内容被压缩，也能做**内容级**比对，而非只比体积。
-- 两模式（`Metadata / Entries` 切换，默认元数据；CI 截图可用环境变量
-  `FORKPLUS_PLUGIN_VIEW_MODE` 预选 `entries`）：
+- 三模式（`Metadata / Entries / Preview` 切换，默认元数据；CI 截图可用环境变量
+  `FORKPLUS_PLUGIN_VIEW_MODE` 预选 `entries` / `preview`）：
   - **元数据**：`title` / `default topic` / `contents file` / `index file` / `language` /
     `help format version` / `last modified` / `compressed` 与 `files` / `directories` /
     `total bytes` 等统计键路径，逐行四色标注；
   - **目录条目**：按 CHM 内部路径对齐两侧条目（目录项标注为「目录」，文件给「体积 · 内容指纹」），
-    一眼看出主题页的增删与内容改动。
+    一眼看出主题页的增删与内容改动；
+  - **预览**：并排双 WebView 真渲染两侧**默认主题页**——`ChmHtmlComposer` 取出默认主题页后，
+    用共享的 `HtmlResourceInliner` 把它引用的图片 / 样式换成 data URI，组装成自包含 HTML，
+    交给宿主共享组件 `ForkPlus.Plugins.Ui` 的 `SideBySideHtmlPreview` 渲染；WebView 不可用
+    （headless、缺 WebView2 运行时 / WPE WebKit / WebKitGTK）时两侧仅给提示（降级不报错）。
 - 元数据表上限 3000、条目表上限 2000，单侧声明大小超过 300 MB 只提示不解析。
 - **零第三方依赖**（纯托管实现，不需要 `third-party.json`），随包进 `plugins/` 的只有插件自身主 DLL。
 - 插件实现 `IPluginMetadata`，名称「CHM 帮助文档对比」（`CHM Compare`，
-  译文见 `Localization/ChmStrings.cs`）、版本 `1.0.0` 与描述。
+  译文见 `Localization/ChmStrings.cs`）、版本 `1.0.1` 与描述。
+- 「预览」依赖宿主 **5.1.1** 起提供的共享组件 `ForkPlus.Plugins.Ui`（`HtmlPreview`），
+  `plugin.json` 的 `minHostVersion` 声明 `5.1.1`。
 
 ---
 
@@ -1146,9 +1164,9 @@ INI / `.cfg` / `.properties` 自写解析器。
   机器学习模型 modify=`.onnx` / add=`.safetensors` / remove=`.gguf`（另取张量模式一张），
   MIDI 三场景共用同一对 `.mid` 并另取钢琴卷帘一张，Torrent 三场景共用同一对 `.torrent`，
   抓包 modify/remove=`.pcap` / add=`.pcapng` 并另取包列表一张，PSD modify/remove=`.psd` / add=`.psb`
-  并另取图层 / 头部两张，EPUB 三场景共用同一对 `.epub` 并另取章节目录一张，CHM 三场景共用同一对 `.chm`
+  并另取图层 / 头部两张，EPUB 三场景共用同一对 `.epub` 并另取章节目录 / 预览两张，CHM 三场景共用同一对 `.chm`
   （ITSF 文件头 V3 + ITSP 目录头 + 单块 PMGL 目录 + 未压缩数据区；v2 改标题 / 默认主题、改主题页与配图并新增一页）
-  并另取目录条目一张，
+  并另取目录条目 / 预览两张，
   SQLite 三场景共用同一对 `.db`（旧：两表 + 索引 / 视图 / 触发器；新：改列 / 加表 / 改索引 / 删触发器 +
   数据增删改）并另取数据模式一张，托管程序集 modify/remove=`.dll` / add=`.exe`（v1 = 1.0.0.0，
   v2 = 2.0.0.0 且加方法 / 加类型 / 多一条 AssemblyRef）并另取类型 / 引用两张。
@@ -1280,7 +1298,7 @@ workflow：[.github/workflows/build.yml](.github/workflows/build.yml)
   ```
 
   - **合集包版本**取自标签（`v1.2.3` → `1.2.3`）；手动触发时为 `0.0.0-dev-<短 SHA>`。
-  - **单插件包版本**固定为插件自身版本 `1.0.0`；`<Short>` 为 `AssemblyName` 去掉前缀
+  - **单插件包版本**取自插件自身版本（多数 `1.0.0`，EPUB / CHM 为 `1.0.1`）；`<Short>` 为 `AssemblyName` 去掉前缀
     `ForkPlus.Plugins.`（如 `ForkPlus.Plugins.Pdf` → `Pdf`，`ForkPlus.Plugins.Image` → `Image`）。
 
 ### 安装

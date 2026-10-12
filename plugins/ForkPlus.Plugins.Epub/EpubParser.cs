@@ -107,7 +107,10 @@ namespace ForkPlus.Plugins.Epub
 					throw new InvalidDataException("not a valid EPUB: OPF not found in zip: " + opfPath);
 				}
 				XDocument opf = LoadXml(opfEntry, opfPath);
-				return ParseOpf(archive, opf, opfPath, mimetype);
+				EpubDocument document = ParseOpf(archive, opf, opfPath, mimetype);
+				// 「预览」模式据此在 ZIP 里按章节路径取首章与其内联资源（与 CHM 的 document.Raw 同口径）。
+				document.Raw = data;
+				return document;
 			}
 		}
 
@@ -398,7 +401,7 @@ namespace ForkPlus.Plugins.Epub
 		}
 
 		/// <summary>zip 条目名大小写容错：不区分大小写按全名匹配（分隔符统一成 '/'）。</summary>
-		private static ZipArchiveEntry FindEntry(ZipArchive archive, string path)
+		internal static ZipArchiveEntry FindEntry(ZipArchive archive, string path)
 		{
 			if (string.IsNullOrEmpty(path))
 			{
@@ -458,7 +461,7 @@ namespace ForkPlus.Plugins.Epub
 		}
 
 		/// <summary>取 zip 根相对路径的目录部分（不含末尾 '/'；根目录为空串）。</summary>
-		private static string DirectoryOf(string path)
+		internal static string DirectoryOf(string path)
 		{
 			if (string.IsNullOrEmpty(path))
 			{
@@ -469,7 +472,7 @@ namespace ForkPlus.Plugins.Epub
 		}
 
 		/// <summary>把 OPF（或 nav / NCX）目录与相对 href 合成 zip 根相对路径，处理 "." / ".." 段。</summary>
-		private static string ResolvePath(string baseDir, string href)
+		internal static string ResolvePath(string baseDir, string href)
 		{
 			if (string.IsNullOrEmpty(href))
 			{

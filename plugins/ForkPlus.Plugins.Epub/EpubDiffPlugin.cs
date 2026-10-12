@@ -6,7 +6,9 @@ namespace ForkPlus.Plugins.Epub
 	/// <summary>
 	/// EPUB 电子书对比视图插件：认领 .epub，命中后由 <see cref="EpubDiffView"/> 把两侧
 	/// ZIP 容器解开（共享框架内置的 System.IO.Compression.ZipArchive），解析
-	/// container.xml → OPF（元数据 / manifest / spine），提供「元数据」与「章节」两种 diff 视图。
+	/// container.xml → OPF（元数据 / manifest / spine），提供「元数据」「章节」两种表格 diff 视图，
+	/// 以及「预览」——并排双 WebView 真渲染两侧首个阅读章节的自包含 HTML
+	/// （依赖宿主共享组件 <c>ForkPlus.Plugins.Ui</c> 的 HtmlPreview）。
 	///
 	/// 路由：EPUB 是 ZIP 二进制，git 判为二进制，宿主只对**二进制差异**查询插件路由
 	/// （用户绑定 &gt; 精确扩展名认领，不走通配兜底）——.epub 必命中本视图；
@@ -28,13 +30,13 @@ namespace ForkPlus.Plugins.Epub
 		public string DisplayNameKey => "EPUB Compare";
 
 		/// <summary>插件自身的版本号（与宿主版本解耦）。</summary>
-		public string Version => "0.0.1";
+		public string Version => "1.0.1";
 
 		/// <summary>插件显示名（英文原文，同时作为多语言缺省值）。</summary>
 		public string DisplayName => "EPUB Compare";
 
 		/// <summary>一句话描述插件能力（英文原文，同时作为多语言缺省值）。</summary>
-		public string Description => "EPUB e-book compare view plugin: claims .epub, unpacks the ZIP container (System.IO.Compression), parses container.xml and the OPF (metadata / manifest / spine), and shows a metadata table and a chapter-by-chapter diff.";
+		public string Description => "EPUB e-book compare view plugin: claims .epub, unpacks the ZIP container (System.IO.Compression), parses container.xml and the OPF (metadata / manifest / spine), and shows a metadata table, a chapter-by-chapter diff, and a side-by-side WebView preview that renders each side's first reading chapter.";
 
 		/// <summary>v5.0.3：按界面语言取显示名（未覆盖的语言回退英文原文）。</summary>
 		public string GetDisplayName(string language)

@@ -32,13 +32,13 @@ namespace ForkPlus.Plugins.Chm
 		/// <summary>插件描述译文（英文原文见 <see cref="ChmDiffPlugin.Description"/>）。</summary>
 		internal static readonly Dictionary<string, string> Descriptions = new Dictionary<string, string>
 		{
-			{ "zh-Hans", "CHM 帮助文档对比视图插件：认领 .chm，自行解析已编译 HTML 帮助的 ITSF / ITSP 头部与 PMGL 目录块，提供「元数据」与「目录条目」两种 diff 视图；MSCompressed 内容流用内置的纯托管 LZX 解压器解开后为条目算内容指纹，逐行标注「相同 / 已变 / 仅左 / 仅右」。" },
-			{ "zh-Hant", "CHM 說明檔對比檢視外掛：認領 .chm，自行解析已編譯 HTML 說明的 ITSF / ITSP 標頭與 PMGL 目錄區塊，提供「中繼資料」與「目錄項目」兩種 diff 檢視；MSCompressed 內容串流以內建的純受控 LZX 解壓器解開後為項目計算內容指紋，逐列標註「相同 / 已變 / 僅左 / 僅右」。" },
-			{ "ja-JP", "CHM ヘルプ比較ビュープラグイン: .chm を対象に、コンパイル済み HTML ヘルプの ITSF / ITSP ヘッダーと PMGL ディレクトリブロックを独自に解析し、「メタデータ」と「ディレクトリ項目」の 2 つの diff ビューを提供します。MSCompressed の内容ストリームは内蔵のマネージド LZX デコーダーで展開し、各項目の内容フィンガープリントを算出して「同一 / 変更 / 左のみ / 右のみ」で判定します。" },
-			{ "ko-KR", "CHM 도움말 비교 보기 플러그인: .chm를 대상으로 컴파일된 HTML 도움말의 ITSF / ITSP 헤더와 PMGL 디렉터리 블록을 직접 분석하여 '메타데이터'와 '디렉터리 항목' 두 가지 diff 보기를 제공합니다. MSCompressed 콘텐츠 스트림은 내장 관리형 LZX 디코더로 풀어 각 항목의 콘텐츠 지문을 계산하고 '동일 / 변경 / 왼쪽만 / 오른쪽만'으로 표시합니다." },
-			{ "fr-FR", "Plugin de vue de comparaison CHM : prend en charge .chm, analyse lui-même les en-têtes ITSF / ITSP et les blocs d'annuaire PMGL des fichiers d'aide HTML compilés, et fournit deux vues de comparaison « métadonnées » et « entrées d'annuaire » ; le flux de contenu MSCompressed est décompressé par un décodeur LZX managé intégré afin de calculer une empreinte du contenu de chaque entrée, avec le marquage identique / modifié / gauche seule / droite seule." },
-			{ "de-DE", "CHM-Hilfedokument-Vergleichsansichts-Plugin: übernimmt .chm, analysiert selbst die ITSF-/ITSP-Kopfbereiche und PMGL-Verzeichnisblöcke kompilierter HTML-Hilfen und bietet zwei Diff-Ansichten „Metadaten“ und „Verzeichniseinträge“; der MSCompressed-Inhaltsstrom wird mit einem integrierten verwalteten LZX-Dekoder entpackt, um für jeden Eintrag einen Inhalts-Fingerprint zu berechnen – jede Zeile markiert als identisch / geändert / nur links / nur rechts." },
-			{ "es-ES", "Plugin de vista de comparación de CHM: admite .chm, analiza por sí mismo las cabeceras ITSF / ITSP y los bloques de directorio PMGL de las ayudas HTML compiladas, y ofrece dos vistas de comparación «metadatos» y «entradas de directorio»; el flujo de contenido MSCompressed se descomprime con un decodificador LZX administrado integrado para calcular la huella de contenido de cada entrada, marcando cada fila como igual / modificada / solo izquierda / solo derecha." }
+			{ "zh-Hans", "CHM 帮助文档对比视图插件：认领 .chm，自行解析已编译 HTML 帮助的 ITSF / ITSP 头部与 PMGL 目录块，提供「元数据」与「目录条目」两种 diff 视图；MSCompressed 内容流用内置的纯托管 LZX 解压器解开后为条目算内容指纹，逐行标注「相同 / 已变 / 仅左 / 仅右」；另提供「预览」，并排双 WebView 真渲染两侧默认主题页。" },
+			{ "zh-Hant", "CHM 說明檔對比檢視外掛：認領 .chm，自行解析已編譯 HTML 說明的 ITSF / ITSP 標頭與 PMGL 目錄區塊，提供「中繼資料」與「目錄項目」兩種 diff 檢視；MSCompressed 內容串流以內建的純受控 LZX 解壓器解開後為項目計算內容指紋，逐列標註「相同 / 已變 / 僅左 / 僅右」；另提供「預覽」，並排雙 WebView 真渲染兩側預設主題頁。" },
+			{ "ja-JP", "CHM ヘルプ比較ビュープラグイン: .chm を対象に、コンパイル済み HTML ヘルプの ITSF / ITSP ヘッダーと PMGL ディレクトリブロックを独自に解析し、「メタデータ」と「ディレクトリ項目」の 2 つの diff ビューを提供します。MSCompressed の内容ストリームは内蔵のマネージド LZX デコーダーで展開し、各項目の内容フィンガープリントを算出して「同一 / 変更 / 左のみ / 右のみ」で判定します。さらに「プレビュー」では、左右の既定トピックページを並排デュアル WebView で実レンダリングします。" },
+			{ "ko-KR", "CHM 도움말 비교 보기 플러그인: .chm를 대상으로 컴파일된 HTML 도움말의 ITSF / ITSP 헤더와 PMGL 디렉터리 블록을 직접 분석하여 '메타데이터'와 '디렉터리 항목' 두 가지 diff 보기를 제공합니다. MSCompressed 콘텐츠 스트림은 내장 관리형 LZX 디코더로 풀어 각 항목의 콘텐츠 지문을 계산하고 '동일 / 변경 / 왼쪽만 / 오른쪽만'으로 표시합니다. 또한 '미리 보기'에서 양쪽 기본 항목 페이지를 나란히 놓인 듀얼 WebView로 실제 렌더링합니다." },
+			{ "fr-FR", "Plugin de vue de comparaison CHM : prend en charge .chm, analyse lui-même les en-têtes ITSF / ITSP et les blocs d'annuaire PMGL des fichiers d'aide HTML compilés, et fournit deux vues de comparaison « métadonnées » et « entrées d'annuaire » ; le flux de contenu MSCompressed est décompressé par un décodeur LZX managé intégré afin de calculer une empreinte du contenu de chaque entrée, avec le marquage identique / modifié / gauche seule / droite seule. Une vue « Aperçu » restitue en outre les pages de rubrique par défaut des deux côtés dans deux WebView côte à côte." },
+			{ "de-DE", "CHM-Hilfedokument-Vergleichsansichts-Plugin: übernimmt .chm, analysiert selbst die ITSF-/ITSP-Kopfbereiche und PMGL-Verzeichnisblöcke kompilierter HTML-Hilfen und bietet zwei Diff-Ansichten „Metadaten“ und „Verzeichniseinträge“; der MSCompressed-Inhaltsstrom wird mit einem integrierten verwalteten LZX-Dekoder entpackt, um für jeden Eintrag einen Inhalts-Fingerprint zu berechnen – jede Zeile markiert als identisch / geändert / nur links / nur rechts. Eine Ansicht „Vorschau“ rendert zudem die Standardthemen-Seiten beider Seiten in zwei nebeneinanderliegenden WebViews." },
+			{ "es-ES", "Plugin de vista de comparación de CHM: admite .chm, analiza por sí mismo las cabeceras ITSF / ITSP y los bloques de directorio PMGL de las ayudas HTML compiladas, y ofrece dos vistas de comparación «metadatos» y «entradas de directorio»; el flujo de contenido MSCompressed se descomprime con un decodificador LZX administrado integrado para calcular la huella de contenido de cada entrada, marcando cada fila como igual / modificada / solo izquierda / solo derecha. Una vista «Vista previa» además representa las páginas de tema predeterminadas de ambos lados en dos WebView en paralelo." }
 		};
 
 		// ---- 界面文案（key = 英文原文；含 {0} 的走 F(...) 格式化） ----
@@ -66,6 +66,17 @@ namespace ForkPlus.Plugins.Chm
 					{ "fr-FR", "Entrées" },
 					{ "de-DE", "Einträge" },
 					{ "es-ES", "Entradas" }
+				}
+			},
+			{ "Preview", new Dictionary<string, string>
+				{
+					{ "zh-Hans", "预览" },
+					{ "zh-Hant", "預覽" },
+					{ "ja-JP", "プレビュー" },
+					{ "ko-KR", "미리 보기" },
+					{ "fr-FR", "Aperçu" },
+					{ "de-DE", "Vorschau" },
+					{ "es-ES", "Vista previa" }
 				}
 			},
 			// 表头
@@ -212,6 +223,17 @@ namespace ForkPlus.Plugins.Chm
 					{ "fr-FR", "Fichier trop volumineux pour un aperçu" },
 					{ "de-DE", "Datei zu groß für die Vorschau" },
 					{ "es-ES", "Archivo demasiado grande para previsualizar" }
+				}
+			},
+			{ "Preview not available in this environment", new Dictionary<string, string>
+				{
+					{ "zh-Hans", "当前环境不支持渲染预览" },
+					{ "zh-Hant", "目前環境不支援渲染預覽" },
+					{ "ja-JP", "この環境ではプレビューをレンダリングできません" },
+					{ "ko-KR", "이 환경에서는 미리 보기를 렌더링할 수 없습니다" },
+					{ "fr-FR", "Aperçu non disponible dans cet environnement" },
+					{ "de-DE", "Vorschau in dieser Umgebung nicht verfügbar" },
+					{ "es-ES", "Vista previa no disponible en este entorno" }
 				}
 			},
 			{ "Analyzing…", new Dictionary<string, string>

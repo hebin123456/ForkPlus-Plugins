@@ -2,7 +2,8 @@
   <PropertyGroup>
     <!-- CHM 帮助文档对比视图插件：认领 .chm，自行解析已编译 HTML 帮助（ITSF/ITSP 头部 +
          PMGL 目录块），必要时用内置的纯托管 LZX 解压器（LzxDecoder）解开 MSCompressed
-         内容流，提供「元数据」与「内容」两种 diff 视图。
+         内容流，提供「元数据」「目录条目」两种表格 diff 视图，以及「预览」——并排双
+         WebView 真渲染两侧默认主题页（依赖宿主共享组件 ForkPlus.Plugins.Ui 的 HtmlPreview）。
          零第三方依赖：全部逻辑（头部解析 / LZX 解压 / 内容指纹）均为纯托管实现，
          不需要 third-party.json，随包进 plugins/ 的只有插件自身主 DLL。
          公共属性（net10.0 / AvaloniaVersion / 契约引用）见 ../Directory.Build.props。 -->
@@ -10,11 +11,20 @@
     <RootNamespace>ForkPlus.Plugins.Chm</RootNamespace>
 
     <!-- 插件自身版本（与宿主版本解耦）；偏好设置 → 插件页展示的 Version 与此一致。 -->
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
   </PropertyGroup>
   <ItemGroup>
-    <!-- 本插件视图用 Avalonia 控件纯代码构建（未使用 .axaml）。
-         运行期 Avalonia 由宿主提供，打包时不随插件分发（见 README「依赖与共享程序集」）。 -->
+    <!-- 契约 + 共享视图组件（含 HtmlPreview 并排双 WebView 预览）；Private=false：
+         运行期由宿主提供同一份程序集，不随插件分发（见 README「依赖与共享程序集」）。 -->
+    <ProjectReference Include="..\..\sdk\ForkPlus.Plugins.Abstractions\ForkPlus.Plugins.Abstractions.csproj">
+      <Private>false</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\..\sdk\ForkPlus.Plugins.Ui\ForkPlus.Plugins.Ui.csproj">
+      <Private>false</Private>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- 本插件视图用 Avalonia 控件纯代码构建（未使用 .axaml）。 -->
     <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
   </ItemGroup>
 </Project>

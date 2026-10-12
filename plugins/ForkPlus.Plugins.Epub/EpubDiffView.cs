@@ -9,6 +9,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ForkPlus.Plugins.Abstractions;
+using ForkPlus.Plugins.Ui.HtmlPreview;
 
 namespace ForkPlus.Plugins.Epub
 {
@@ -17,14 +18,18 @@ namespace ForkPlus.Plugins.Epub
 	/// container.xml → OPF（元数据 / manifest / spine），按「元数据」与「章节」两种口径对比。
 	///
 	/// 布局：顶部两栏标题（角色 + 文件名 + 大小，取宿主注入的主题画刷着色），其下状态行、
-	/// 自带的分段模式工具条（元数据 / 章节），最下是内容区。
+	/// 自带的分段模式工具条（元数据 / 章节 / 预览），最下是内容区。
 	///
-	/// 两个模式：
+	/// 三个模式：
 	/// <list type="bullet">
 	/// <item>元数据（默认）：一张四列表——「键路径 | 旧值 | 新值 | 状态」，逐行按四色标注底色，
 	/// 是看「改了哪条元数据 / 统计」的首选。</item>
 	/// <item>章节：一张四列表——「# | 旧 | 新 | 状态」，按 spine 序号对齐两侧章节
 	/// （第 i 章 · 标题（href 文件名 · 体积）），一眼看出章节的增删与挪动。</item>
+	/// <item>预览：并排双 WebView 真渲染两侧首个阅读章节——<see cref="EpubHtmlComposer"/> 把
+	/// spine 首个 linear 章节与它引用的图片 / 样式组装成自包含 HTML，交给共享的
+	/// <c>ForkPlus.Plugins.Ui.HtmlPreview.SideBySideHtmlPreview</c> 渲染；WebView 不可用
+	/// （headless、缺 WebView2 运行时 / WPE WebKit / WebKitGTK）时仅给提示。</item>
 	/// </list>
 	///
 	/// 解析与对齐在后台线程执行，控件只在 UI 线程构建；每次刷新用代次 + CancellationToken 取消上一轮。
@@ -36,16 +41,27 @@ namespace ForkPlus.Plugins.Epub
 
 		private const string ChaptersMode = "chapters";
 
+		private const string PreviewMode = "preview";
+
 		/// <summary>
 		/// CI 截图用的初始模式：无头截图脚本经环境变量 FORKPLUS_PLUGIN_VIEW_MODE 指定
-		/// （chapters，其余走默认 metadata），据此逐模式取图；正常运行时该变量为空，走默认元数据模式。
+		/// （chapters / preview，其余走默认 metadata），据此逐模式取图；正常运行时该变量为空，
+		/// 走默认元数据模式。
 		/// </summary>
 		private static readonly string InitialMode = ResolveInitialMode();
 
 		private static string ResolveInitialMode()
 		{
 			string forced = (Environment.GetEnvironmentVariable("FORKPLUS_PLUGIN_VIEW_MODE") ?? string.Empty).Trim();
-			return string.Equals(forced, ChaptersMode, StringComparison.OrdinalIgnoreCase) ? ChaptersMode : MetadataMode;
+			if (string.Equals(forced, ChaptersMode, StringComparison.OrdinalIgnoreCase))
+			{
+				return ChaptersMode;
+			}
+			if (string.Equals(forced, PreviewMode, StringComparison.OrdinalIgnoreCase))
+			{
+				return PreviewMode;
+			}
+			return MetadataMode;
 		}
 
 		/// <summary>单侧超过此大小不解析（与字幕 / 音视频 / 结构化数据插件同口径）。</summary>
@@ -87,7 +103,12 @@ namespace ForkPlus.Plugins.Epub
 
 		private readonly Button _chaptersButton;
 
+		private readonly Button _previewButton;
+
 		private readonly ContentControl _content;
+
+		/// <summary>「预览」模式的并排双 WebView 控件（懒建、复用；WebView 不可用时显示提示占位）。</summary>
+		private SideBySideHtmlPreview _preview;
 
 		private DiffViewContext _context;
 
@@ -108,6 +129,11 @@ namespace ForkPlus.Plugins.Epub
 
 		/// <summary>章节 diff（按 spine 序号对齐）。</summary>
 		private ChapterDiffResult _chapterDiff;
+
+		/// <summary>「预览」模式两侧的自包含 HTML（后台线程组装；该侧不存在 / 无章节为 null）。</summary>
+		private string _leftHtml;
+
+		private string _rightHtml;
 
 		private string _error;
 
@@ -140,6 +166,10 @@ namespace ForkPlus.Plugins.Epub
 			{
 				SetMode(ChaptersMode);
 			});
+			_previewButton = NewModeButton(EpubStrings.T("Preview"), delegate
+			{
+				SetMode(PreviewMode);
+			});
 			_content = new ContentControl
 			{
 				Margin = new Thickness(12.0, 0.0, 12.0, 12.0)
@@ -163,6 +193,7 @@ namespace ForkPlus.Plugins.Epub
 			};
 			modes.Children.Add(_metadataButton);
 			modes.Children.Add(_chaptersButton);
+			modes.Children.Add(_previewButton);
 
 			_root = new Grid
 			{
@@ -179,6 +210,7 @@ namespace ForkPlus.Plugins.Epub
 
 			StyleModeButton(_metadataButton, _mode == MetadataMode);
 			StyleModeButton(_chaptersButton, _mode == ChaptersMode);
+			StyleModeButton(_previewButton, _mode == PreviewMode);
 			PluginEnvironment.ApplyLocalization(_root);
 		}
 
@@ -211,7 +243,7 @@ namespace ForkPlus.Plugins.Epub
 			{
 				return;
 			}
-			if (modeId != MetadataMode && modeId != ChaptersMode)
+			if (modeId != MetadataMode && modeId != ChaptersMode && modeId != PreviewMode)
 			{
 				return;
 			}
@@ -222,6 +254,7 @@ namespace ForkPlus.Plugins.Epub
 			_mode = modeId;
 			StyleModeButton(_metadataButton, _mode == MetadataMode);
 			StyleModeButton(_chaptersButton, _mode == ChaptersMode);
+			StyleModeButton(_previewButton, _mode == PreviewMode);
 			UpdateStatus();
 			BuildContent();
 		}
@@ -238,6 +271,7 @@ namespace ForkPlus.Plugins.Epub
 		{
 			_metadataButton.Content = EpubStrings.T("Metadata");
 			_chaptersButton.Content = EpubStrings.T("Chapters");
+			_previewButton.Content = EpubStrings.T("Preview");
 			PluginEnvironment.ApplyLocalization(_root);
 			UpdateTitles();
 			UpdateStatus();
@@ -253,6 +287,8 @@ namespace ForkPlus.Plugins.Epub
 			_right = null;
 			_metaDiff = null;
 			_chapterDiff = null;
+			_leftHtml = null;
+			_rightHtml = null;
 			_content.Content = null;
 			_status.Text = string.Empty;
 		}
@@ -266,6 +302,8 @@ namespace ForkPlus.Plugins.Epub
 			_right = null;
 			_metaDiff = null;
 			_chapterDiff = null;
+			_leftHtml = null;
+			_rightHtml = null;
 			_error = null;
 			_srcParseError = null;
 			_dstParseError = null;
@@ -318,6 +356,9 @@ namespace ForkPlus.Plugins.Epub
 					}
 					EpubDiffResult metaDiff = EpubDiff.ComputeRows(left?.Rows, right?.Rows);
 					ChapterDiffResult chapterDiff = EpubDiff.ComputeChapters(left?.Chapters, right?.Chapters);
+					// 「预览」模式：在后台把两侧首个阅读章节组装成自包含 HTML（取内容 + 内联资源）。
+					string leftHtml = left != null ? EpubHtmlComposer.Compose(left) : null;
+					string rightHtml = right != null ? EpubHtmlComposer.Compose(right) : null;
 					Dispatcher.UIThread.Post(delegate
 					{
 						if (_generation != generation || _cts != cts)
@@ -328,6 +369,8 @@ namespace ForkPlus.Plugins.Epub
 						_right = right;
 						_metaDiff = metaDiff;
 						_chapterDiff = chapterDiff;
+						_leftHtml = leftHtml;
+						_rightHtml = rightHtml;
 						_srcParseError = srcParseError;
 						_dstParseError = dstParseError;
 						UpdateStatus();
@@ -547,7 +590,11 @@ namespace ForkPlus.Plugins.Epub
 				_content.Content = NoteText(EpubStrings.F("Failed to parse: {0}", DisplayError()));
 				return;
 			}
-			if (_mode == ChaptersMode)
+			if (_mode == PreviewMode)
+			{
+				BuildPreviewContent();
+			}
+			else if (_mode == ChaptersMode)
 			{
 				_content.Content = BuildChaptersContent();
 			}
@@ -555,6 +602,28 @@ namespace ForkPlus.Plugins.Epub
 			{
 				_content.Content = BuildMetadataContent();
 			}
+		}
+
+		/// <summary>
+		/// 「预览」模式：并排双 WebView 真渲染两侧首个阅读章节（后台组装好的自包含 HTML）。
+		/// 某侧不存在 / 无章节 → 该侧占位；WebView 不可用（headless、缺 WebView2 运行时 /
+		/// WPE WebKit / WebKitGTK）→ 两侧仅给提示文案（降级，不报错）。
+		/// </summary>
+		private void BuildPreviewContent()
+		{
+			if (_preview == null)
+			{
+				_preview = new SideBySideHtmlPreview();
+			}
+			// 占位 / 降级文案随界面语言（shared 组件默认中文，这里按插件译文覆盖）。
+			_preview.AbsentText = EpubStrings.T("not present");
+			_preview.UnavailableText = EpubStrings.T("Preview not available in this environment");
+			_preview.SetContent(
+				DisplayTitle(_left, _context?.Src),
+				_leftHtml,
+				DisplayTitle(_right, _context?.Dst),
+				_rightHtml);
+			_content.Content = _preview;
 		}
 
 		/// <summary>元数据表：「键路径 | 旧值 | 新值 | 状态」四列，逐行四色底 + 状态列彩色。</summary>

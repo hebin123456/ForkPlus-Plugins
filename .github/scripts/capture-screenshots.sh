@@ -2338,8 +2338,8 @@ capture_one() {
 	# plugin_mode 非空时经 FORKPLUS_PLUGIN_VIEW_MODE 指定插件的初始视图模式
 	# （音频 波形 / 频谱 / 封面，视频 帧条 / 单帧对比 / 播放，
 	#  结构化数据 tree，字幕 timeline，SVG structure，
-	#  机器学习模型 tensors，MIDI pianoroll，抓包 packets，PSD layers / header，EPUB chapters，
-	#  字体 metadata / codepoints，可执行文件 sections / symbols / size，证书 chain，
+	#  机器学习模型 tensors，MIDI pianoroll，抓包 packets，PSD layers / header，EPUB chapters / preview，
+	#  CHM entries / preview，字体 metadata / codepoints，可执行文件 sections / symbols / size，证书 chain，
 	#  SQLite data，托管程序集 types / references，邮件 EML parts / body）；
 	# 不设则走各插件默认模式。
 	( cd "$APPDIR" && DISPLAY="$DISPLAY_NUM" FORKPLUS_PLUGIN_VIEW_MODE="$plugin_mode" \
@@ -2647,9 +2647,11 @@ for mode in modify add remove; do
 	seed_settings
 	capture_one "$WORK/repo-epub-$mode" "EpubDiffView.SetContent" "epub-$mode.png" 4 "EPUB 插件 · $mode"
 done
-# EPUB 插件另取章节目录模式一张（modify 场景为样本）
+# EPUB 插件另取章节目录 / 预览两模式各一张（modify 场景为样本）
 seed_settings
 capture_one "$WORK/repo-epub-modify" "EpubDiffView.SetContent" "epub-chapters.png" 4 "EPUB 插件 · 章节目录" "chapters"
+seed_settings
+capture_one "$WORK/repo-epub-modify" "EpubDiffView.SetContent" "epub-preview.png" 4 "EPUB 插件 · 预览" "preview"
 # SQLite 插件三种场景各截一张（旧 / 新同一对 .db；默认表结构模式）
 for mode in modify add remove; do
 	seed_settings
@@ -2683,8 +2685,10 @@ for mode in modify add remove; do
 	seed_settings
 	capture_one "$WORK/repo-chm-$mode" "ChmDiffView.SetContent" "chm-$mode.png" 4 "CHM 插件 · $mode"
 done
-# CHM 插件另取目录条目模式一张（modify 场景为样本）
+# CHM 插件另取目录条目 / 预览两模式各一张（modify 场景为样本）
 seed_settings
 capture_one "$WORK/repo-chm-modify" "ChmDiffView.SetContent" "chm-entries.png" 4 "CHM 插件 · 目录条目" "entries"
+seed_settings
+capture_one "$WORK/repo-chm-modify" "ChmDiffView.SetContent" "chm-preview.png" 4 "CHM 插件 · 预览" "preview"
 write_metadata
 log "完成：截图已输出到 $OUT"

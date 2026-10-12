@@ -1032,11 +1032,11 @@
     {
       "id": "epub",
       "name": "EPUB 电子书对比插件 · EPUB Compare",
-      "version": "1.0.0",
-      "minHostVersion": "5.1.0",
+      "version": "1.0.1",
+      "minHostVersion": "5.1.1",
       "assembly": "ForkPlus.Plugins.Epub",
       "source": "plugins/ForkPlus.Plugins.Epub",
-      "summary": "EPUB 电子书对比视图：认领 .epub，命中后用内置 System.IO.Compression 解开 ZIP 容器，走 META-INF/container.xml 找到 OPF，解析其元数据（书名 / 作者 / 语言 / 标识 / 日期）、manifest（文档清单）与 spine（书脊顺序），提供「元数据」与「章节」两种 diff 视图，逐行标注「相同 / 已变更 / 仅左 / 仅右」。.epub 是 ZIP 二进制、自动命中本插件。单侧声明大小超过 300 MB 只给提示、不解析。",
+      "summary": "EPUB 电子书对比视图：认领 .epub，命中后用内置 System.IO.Compression 解开 ZIP 容器，走 META-INF/container.xml 找到 OPF，解析其元数据（书名 / 作者 / 语言 / 标识 / 日期）、manifest（文档清单）与 spine（书脊顺序），提供「元数据」「章节」两种表格 diff 视图，以及「预览」——把两侧首个阅读章节组装成自包含 HTML、并排双 WebView 真渲染，逐行标注「相同 / 已变更 / 仅左 / 仅右」。.epub 是 ZIP 二进制、自动命中本插件。单侧声明大小超过 300 MB 只给提示、不解析。",
       "extensions": [
         ".epub"
       ],
@@ -1060,12 +1060,17 @@
           "file": "epub-chapters.png",
           "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.epub，差异区切到 EPUB 插件的「章节」模式，两侧按 spine 序号对齐逐章比较",
           "caption": "「章节」模式（EPUB · .epub，modify 场景）：点模式栏的 <code>Chapters</code> 按钮进入章节表——一张四列表（<code># / 旧 / 新 / 状态</code>），按 spine 序号对齐两侧章节（第 i 章 · 标题（href 文件名 · 体积））。demo 里 v2 把第 2 章标题改掉并新增第 3 章，逐章标成「已变更 / 仅右」，manifest 缺项与顺序调整也一目了然。"
+        },
+        {
+          "file": "epub-preview.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.epub，差异区切到 EPUB 插件的「预览」模式，左右并排双 WebView 真渲染两侧首个阅读章节",
+          "caption": "「预览」模式（EPUB · .epub，modify 场景）：点模式栏的 <code>Preview</code> 按钮进入并排双 WebView——<code>EpubHtmlComposer</code> 在后台取出两侧 spine 首个 <code>linear</code> 章节，按页面声明编码解码后，用共享的 <code>HtmlResourceInliner</code> 把章节引用的图片 / 样式 / 字体换成 data URI，组装成自包含 HTML，交给宿主的 <code>SideBySideHtmlPreview</code>（<code>ForkPlus.Plugins.Ui</code> 共享组件）渲染；两侧各是渲染后的真实章节页面，一眼看出排版与内容差异。无头环境缺 WebView 运行时时两侧仅给「当前环境不支持渲染预览」提示（降级不报错）。"
         }
       ],
       "sections": [
         {
           "heading": "对比视图长什么样",
-          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式工具栏</strong>、<strong>内容区</strong>。标题行采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色；某一侧为 <code>null</code> 时显示 <code>不存在</code>。状态行给出 <code>EPUB compare: &lt;书名&gt; / &lt;书名&gt;</code> 与 <code>Summary: N entries · c changed · l left only · r right only</code>。模式工具栏两个 <code>Button</code>（<code>Metadata / Chapters</code>），当前项加浅蓝底 + 半粗。</p>"
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式工具栏</strong>、<strong>内容区</strong>。标题行采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色；某一侧为 <code>null</code> 时显示 <code>不存在</code>。状态行给出 <code>EPUB compare: &lt;书名&gt; / &lt;书名&gt;</code> 与 <code>Summary: N entries · c changed · l left only · r right only</code>。模式工具栏三个 <code>Button</code>（<code>Metadata / Chapters / Preview</code>），当前项加浅蓝底 + 半粗。</p>"
         },
         {
           "heading": "元数据模式：OPF 元数据键路径表",
@@ -1074,6 +1079,10 @@
         {
           "heading": "章节模式：按 spine 序号对齐",
           "html": "<p>切到 <code>chapters</code> 后由章节表渲染，是一张四列表（<code># / 旧 / 新 / 状态</code>）：按 spine 序号对齐两侧章节，每格给出「第 i 章 · 标题（href 文件名 · 体积）」，逐章四色标注。章节数上限 <code>MaxChapterRows</code>（2000），超长描述按 <code>MaxDescriptionChars</code>（120）截断展示。</p>"
+        },
+        {
+          "heading": "预览模式：并排双 WebView 真渲染首个阅读章节",
+          "html": "<p>切到 <code>preview</code> 后，<code>EpubHtmlComposer.Compose</code> 取出 spine 里首个 <code>linear</code> 章节（全为 <code>linear=\"no\"</code> 时回退首个章节），按页面声明的编码解码，再用共享的 <code>HtmlResourceInliner</code> 把章节引用的图片 / 样式 / 字体替换成 data URI，组装成<strong>自包含 HTML</strong>（无需自定义协议即可渲染）；两侧分别交给宿主共享组件 <code>ForkPlus.Plugins.Ui</code> 的 <code>SideBySideHtmlPreview</code>（基于官方 <code>Avalonia.Controls.WebView</code>：Windows=WebView2 / macOS=WKWebView / Linux=WPE WebKit，缺失回退 WebKitGTK）并排渲染。该侧不存在 / 无章节时显示占位；WebView 不可用（headless、缺运行时）时两侧仅给「当前环境不支持渲染预览」提示——<strong>降级只提示，不报错</strong>。HTML 在后台线程组装，与解析同代次取消。</p>"
         },
         {
           "heading": "解析：ZIP → container.xml → OPF",
@@ -1260,11 +1269,11 @@
     {
       "id": "chm",
       "name": "CHM 帮助文档对比插件 · CHM Compare",
-      "version": "1.0.0",
-      "minHostVersion": "5.1.0",
+      "version": "1.0.1",
+      "minHostVersion": "5.1.1",
       "assembly": "ForkPlus.Plugins.Chm",
       "source": "plugins/ForkPlus.Plugins.Chm",
-      "summary": "CHM 帮助文档对比视图：认领 .chm，命中后自行解析已编译 HTML 帮助的 ITSF / ITSP 头部与 PMGL 目录块（纯托管、零第三方依赖，内含可解开 MSCompressed 内容流的托管 LZX 解压器），提取元数据（标题 / 默认主题 / 目录与索引文件 / 语言 / 帮助格式版本 / 压缩参数 / 条目统计）与全部目录条目（/#SYSTEM 等元数据对象 + 文档 / 图片等，文件带内容指纹），提供「元数据」与「目录条目」两种 diff 视图，逐行标注「相同 / 已变 / 仅左 / 仅右」。.chm 头部含 NUL、git 判二进制，自动命中本插件。单侧声明大小超过 300 MB 只给提示、不解析。",
+      "summary": "CHM 帮助文档对比视图：认领 .chm，命中后自行解析已编译 HTML 帮助的 ITSF / ITSP 头部与 PMGL 目录块（纯托管、零第三方依赖，内含可解开 MSCompressed 内容流的托管 LZX 解压器），提取元数据（标题 / 默认主题 / 目录与索引文件 / 语言 / 帮助格式版本 / 压缩参数 / 条目统计）与全部目录条目（/#SYSTEM 等元数据对象 + 文档 / 图片等，文件带内容指纹），提供「元数据」「目录条目」两种表格 diff 视图，以及「预览」——把默认主题页组装成自包含 HTML、并排双 WebView 真渲染，逐行标注「相同 / 已变 / 仅左 / 仅右」。.chm 头部含 NUL、git 判二进制，自动命中本插件。单侧声明大小超过 300 MB 只给提示、不解析。",
       "extensions": [
         ".chm"
       ],
@@ -1288,12 +1297,17 @@
           "file": "chm-entries.png",
           "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.chm，差异区切到 CHM 插件的「目录条目」模式，按 CHM 内部路径对齐逐条比较",
           "caption": "「目录条目」模式（CHM · .chm，modify 场景）：点模式栏的「目录条目」按钮进入条目表——一张四列表（<code>路径 / 旧值 / 新值 / 状态</code>），按 CHM 内部路径（不区分大小写）对齐两侧条目：文件给出「体积 · 内容指纹」（SHA-256 前 8 字节 hex），目录项标注「目录」。demo 里 <code>/#SYSTEM</code>（含标题 / 默认主题等 #SYSTEM 记录）与 <code>/images/logo.png</code> 因内容改动、指纹不同标成「已变」，新增的 <code>/advanced.html</code> 标成「仅右」，<code>/getting-started.html</code> 与 <code>/images/</code> 目录项保持不变——一眼看出条目的增删与内容改动。"
+        },
+        {
+          "file": "chm-preview.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.chm，差异区切到 CHM 插件的「预览」模式，左右并排双 WebView 真渲染两侧默认主题页",
+          "caption": "「预览」模式（CHM · .chm，modify 场景）：点模式栏的「预览」按钮进入并排双 WebView——<code>ChmHtmlComposer</code> 取出两侧默认主题页，用共享的 <code>HtmlResourceInliner</code> 把页面引用的图片 / 样式换成 data URI，组装成自包含 HTML，交给宿主的 <code>SideBySideHtmlPreview</code>（<code>ForkPlus.Plugins.Ui</code> 共享组件）渲染；demo 的 v2 把默认主题改成 <code>getting-started.html</code>，两侧各是渲染后的真实主题页，一眼看出排版与内容差异。无头环境缺 WebView 运行时时两侧仅给「当前环境不支持渲染预览」提示（降级不报错）。"
         }
       ],
       "sections": [
         {
           "heading": "对比视图长什么样",
-          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式工具栏</strong>、<strong>内容区</strong>。标题行采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色，文字形如 <code>旧 · sample.chm · 12 KB</code>（角色名取 <code>PluginEnvironment.Translate</code>，文件名取 <code>Path.GetFileName</code>，体积取 <code>PluginSizeFormat.ReadableFileSize</code>）；某一侧为 <code>null</code> 时显示 <code>不存在</code>。状态行给出 <code>CHM compare: &lt;标题&gt; / &lt;标题&gt;</code>（标题取 <code>/#SYSTEM</code> 记录 3，缺失回退文件名）、<code>entries: 左 / 右</code>，以及 <code>Summary: N 项 · c 已变 · l 仅左 · r 仅右</code>。模式工具栏两个 <code>Button</code>（<code>元数据 / 目录条目</code>），当前项加浅蓝底 + 半粗。</p>"
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式工具栏</strong>、<strong>内容区</strong>。标题行采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色，文字形如 <code>旧 · sample.chm · 12 KB</code>（角色名取 <code>PluginEnvironment.Translate</code>，文件名取 <code>Path.GetFileName</code>，体积取 <code>PluginSizeFormat.ReadableFileSize</code>）；某一侧为 <code>null</code> 时显示 <code>不存在</code>。状态行给出 <code>CHM compare: &lt;标题&gt; / &lt;标题&gt;</code>（标题取 <code>/#SYSTEM</code> 记录 3，缺失回退文件名）、<code>entries: 左 / 右</code>，以及 <code>Summary: N 项 · c 已变 · l 仅左 · r 仅右</code>。模式工具栏三个 <code>Button</code>（<code>元数据 / 目录条目 / 预览</code>），当前项加浅蓝底 + 半粗。</p>"
         },
         {
           "heading": "元数据模式：头部 / 统计键路径表",
@@ -1304,12 +1318,16 @@
           "html": "<p>切到「目录条目」后由条目表渲染，是一张四列表（<code>路径 / 旧值 / 新值 / 状态</code>）：按 CHM 内部路径（<strong>不区分大小写</strong>）对齐两侧条目，文件给出「体积 · 内容指纹」（SHA-256 前 8 字节 hex），目录项（路径以 <code>/</code> 结尾）标注「目录」。<code>ChmDiff.ComputeEntries</code> 判定：长度不同即「已变」；长度相同且两侧都有指纹时按指纹判定；仅一侧有 = 仅左 / 仅右。条目数上限 <code>MaxEntryRows</code>（2000），超出截断并在表下注明。</p>"
         },
         {
+          "heading": "预览模式：并排双 WebView 真渲染默认主题页",
+          "html": "<p>切到「预览」后，<code>ChmHtmlComposer</code> 取出两侧默认主题页（取 <code>/#SYSTEM</code> 记录的 <code>default topic</code>），用共享的 <code>HtmlResourceInliner</code> 把页面引用的图片 / 样式替换成 data URI，组装成<strong>自包含 HTML</strong>（无需自定义协议即可渲染）；两侧分别交给宿主共享组件 <code>ForkPlus.Plugins.Ui</code> 的 <code>SideBySideHtmlPreview</code>（基于官方 <code>Avalonia.Controls.WebView</code>：Windows=WebView2 / macOS=WKWebView / Linux=WPE WebKit，缺失回退 WebKitGTK）并排渲染。该侧不存在 / 无默认主题页时显示占位；WebView 不可用（headless、缺运行时）时两侧仅给「当前环境不支持渲染预览」提示——<strong>降级只提示，不报错</strong>。HTML 在后台线程组装，与解析同代次取消。</p>"
+        },
+        {
           "heading": "解析：ITSF / ITSP 头部 + PMGL 目录 + LZX 解压",
           "html": "<p><code>ChmParser</code> 纯托管解析（与 CHMLib 同口径）：读 <code>ITSF</code> 文件头（V3 0x60 字节：签名 / 版本 / 最后修改时间 / 语言 ID / 目录区 <code>dir_offset</code>·<code>dir_len</code> / 数据区 <code>data_offset</code>）与 <code>ITSP</code> 目录头（0x54 字节：块长 / 索引根 / 头页号），沿 <code>block_next</code> 串链表遍历 <code>PMGL</code> 叶子块，得到「内部路径 + space + 数据偏移 + 未压缩长度」全部条目（含 <code>/#SYSTEM</code>、<code>::DataSpace/*</code> 元数据对象）。<code>::DataSpace/NameList</code> 给出 <code>MSCompressed</code> 的存储号；<code>Content</code> / <code>ControlData</code> / <code>ResetTable</code> 三件套齐全时，用内置托管 <code>LzxDecoder</code>（窗口 2<sup>15</sup>..2<sup>21</sup>、Huffman 快查表、verbatim / aligned 块、E8 预处理、按重置表逐块解压）解开内容流，再为条目算内容指纹。单条目指纹上限 4 MB、总量预算 64 MB、解压上限 64 MB，超限自动退化为「仅比长度」。解析异常转成 <code>error</code> 文本由状态行显示。</p>"
         },
         {
           "heading": "零第三方依赖与路由",
-          "html": "<p>头部解析 / 目录遍历 / LZX 解压 / 内容指纹全用共享框架内置的 <code>System.*</code>（+ 视图用 Avalonia），因此<strong>不分发任何私有托管或原生依赖</strong>，随包进 <code>plugins/</code> 的只有插件自身主 DLL。CHM 头部含 NUL，宿主只对<strong>二进制</strong>差异查询插件路由，自动命中本视图，无需手动绑定；若用户已在设置里把 <code>.chm</code> 绑定到别的插件，则以用户绑定为准（优先级最高）。单侧声明大小超过 <code>MaxSideBytes</code>（<code>300 * 1024 * 1024</code>，即 300 MB）时只显示提示、两侧都不解析。解析与对齐都在后台线程，控件只在 UI 线程构建；每次刷新 / 切模式用「代次 <code>_generation</code> + <code>CancellationTokenSource</code>」取消上一轮。</p>"
+          "html": "<p>头部解析 / 目录遍历 / LZX 解压 / 内容指纹全用共享框架内置的 <code>System.*</code>（视图用 Avalonia；「预览」用的 <code>HtmlPreview</code> 来自宿主共享组件 <code>ForkPlus.Plugins.Ui</code>，其底层官方 <code>Avalonia.Controls.WebView</code> 也由宿主提供），因此<strong>不分发任何私有托管或原生依赖</strong>，随包进 <code>plugins/</code> 的只有插件自身主 DLL。「预览」依赖宿主 <strong>5.1.1</strong> 起的共享组件，故 <code>plugin.json</code> 的 <code>minHostVersion</code> 声明 <code>5.1.1</code>。CHM 头部含 NUL，宿主只对<strong>二进制</strong>差异查询插件路由，自动命中本视图，无需手动绑定；若用户已在设置里把 <code>.chm</code> 绑定到别的插件，则以用户绑定为准（优先级最高）。单侧声明大小超过 <code>MaxSideBytes</code>（<code>300 * 1024 * 1024</code>，即 300 MB）时只显示提示、两侧都不解析。解析与对齐都在后台线程，控件只在 UI 线程构建；每次刷新 / 切模式用「代次 <code>_generation</code> + <code>CancellationTokenSource</code>」取消上一轮。</p>"
         }
       ]
     }

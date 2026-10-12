@@ -9,6 +9,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ForkPlus.Plugins.Abstractions;
+using ForkPlus.Plugins.Ui.HtmlPreview;
 
 namespace ForkPlus.Plugins.Chm
 {
@@ -20,14 +21,18 @@ namespace ForkPlus.Plugins.Chm
 	/// 内容流的纯托管 LZX 解压）；<see cref="ChmDiff"/> 负责两个口径的对齐。
 	///
 	/// 布局：顶部两栏标题（角色 + 文件名 + 大小，取宿主注入的主题画刷着色），其下状态行、
-	/// 自带的分段模式工具条（元数据 / 目录条目），最下是内容区。
+	/// 自带的分段模式工具条（元数据 / 目录条目 / 预览），最下是内容区。
 	///
-	/// 两个模式：
+	/// 三个模式：
 	/// <list type="bullet">
 	/// <item>元数据（默认）：一张四列表——「键路径 | 旧值 | 新值 | 状态」，逐行按四色标注底色，
 	/// 是看「标题 / 默认主题 / 语言 / 格式版本 / 统计」等改动的首选。</item>
 	/// <item>目录条目：一张四列表——「路径 | 旧 | 新 | 状态」，按 CHM 内部路径对齐两侧条目
 	/// （目录项标注为「目录」，文件给出体积与内容指纹），一眼看出条目的增删与内容改动。</item>
+	/// <item>预览：并排双 WebView 真渲染两侧默认主题页——<see cref="ChmHtmlComposer"/> 把
+	/// <c>#SYSTEM</c> 记录 2 的默认主题（缺失回退第一个 HTML 条目）与它引用的图片 / 样式 /
+	/// 脚本组装成自包含 HTML，交给共享的 <c>ForkPlus.Plugins.Ui.HtmlPreview.SideBySideHtmlPreview</c>
+	/// 渲染；WebView 不可用（headless、缺 WebView2 运行时 / WPE WebKit / WebKitGTK）时仅给提示。</item>
 	/// </list>
 	///
 	/// 解析与对齐在后台线程执行，控件只在 UI 线程构建；每次刷新用代次 + CancellationToken 取消上一轮。
@@ -39,16 +44,27 @@ namespace ForkPlus.Plugins.Chm
 
 		private const string EntriesMode = "entries";
 
+		private const string PreviewMode = "preview";
+
 		/// <summary>
 		/// CI 截图用的初始模式：无头截图脚本经环境变量 FORKPLUS_PLUGIN_VIEW_MODE 指定
-		/// （entries，其余走默认 metadata），据此逐模式取图；正常运行时该变量为空，走默认元数据模式。
+		/// （entries / preview，其余走默认 metadata），据此逐模式取图；正常运行时该变量为空，
+		/// 走默认元数据模式。
 		/// </summary>
 		private static readonly string InitialMode = ResolveInitialMode();
 
 		private static string ResolveInitialMode()
 		{
 			string forced = (Environment.GetEnvironmentVariable("FORKPLUS_PLUGIN_VIEW_MODE") ?? string.Empty).Trim();
-			return string.Equals(forced, EntriesMode, StringComparison.OrdinalIgnoreCase) ? EntriesMode : MetadataMode;
+			if (string.Equals(forced, EntriesMode, StringComparison.OrdinalIgnoreCase))
+			{
+				return EntriesMode;
+			}
+			if (string.Equals(forced, PreviewMode, StringComparison.OrdinalIgnoreCase))
+			{
+				return PreviewMode;
+			}
+			return MetadataMode;
 		}
 
 		/// <summary>单侧超过此大小不解析（与 EPUB / 字幕 / 音视频插件同口径）。</summary>
@@ -90,7 +106,12 @@ namespace ForkPlus.Plugins.Chm
 
 		private readonly Button _entriesButton;
 
+		private readonly Button _previewButton;
+
 		private readonly ContentControl _content;
+
+		/// <summary>「预览」模式的并排双 WebView 控件（懒建、复用；WebView 不可用时显示提示占位）。</summary>
+		private SideBySideHtmlPreview _preview;
 
 		private DiffViewContext _context;
 
@@ -111,6 +132,11 @@ namespace ForkPlus.Plugins.Chm
 
 		/// <summary>目录条目 diff（按内部路径对齐）。</summary>
 		private ChmEntryDiffResult _entryDiff;
+
+		/// <summary>「预览」模式两侧的自包含 HTML（后台线程组装；无默认主题 / 该侧不存在为 null）。</summary>
+		private string _leftHtml;
+
+		private string _rightHtml;
 
 		private string _error;
 
@@ -143,6 +169,10 @@ namespace ForkPlus.Plugins.Chm
 			{
 				SetMode(EntriesMode);
 			});
+			_previewButton = NewModeButton(ChmStrings.T("Preview"), delegate
+			{
+				SetMode(PreviewMode);
+			});
 			_content = new ContentControl
 			{
 				Margin = new Thickness(12.0, 0.0, 12.0, 12.0)
@@ -166,6 +196,7 @@ namespace ForkPlus.Plugins.Chm
 			};
 			modes.Children.Add(_metadataButton);
 			modes.Children.Add(_entriesButton);
+			modes.Children.Add(_previewButton);
 
 			_root = new Grid
 			{
@@ -182,6 +213,7 @@ namespace ForkPlus.Plugins.Chm
 
 			StyleModeButton(_metadataButton, _mode == MetadataMode);
 			StyleModeButton(_entriesButton, _mode == EntriesMode);
+			StyleModeButton(_previewButton, _mode == PreviewMode);
 			PluginEnvironment.ApplyLocalization(_root);
 		}
 
@@ -214,7 +246,7 @@ namespace ForkPlus.Plugins.Chm
 			{
 				return;
 			}
-			if (modeId != MetadataMode && modeId != EntriesMode)
+			if (modeId != MetadataMode && modeId != EntriesMode && modeId != PreviewMode)
 			{
 				return;
 			}
@@ -225,6 +257,7 @@ namespace ForkPlus.Plugins.Chm
 			_mode = modeId;
 			StyleModeButton(_metadataButton, _mode == MetadataMode);
 			StyleModeButton(_entriesButton, _mode == EntriesMode);
+			StyleModeButton(_previewButton, _mode == PreviewMode);
 			UpdateStatus();
 			BuildContent();
 		}
@@ -241,6 +274,7 @@ namespace ForkPlus.Plugins.Chm
 		{
 			_metadataButton.Content = ChmStrings.T("Metadata");
 			_entriesButton.Content = ChmStrings.T("Entries");
+			_previewButton.Content = ChmStrings.T("Preview");
 			PluginEnvironment.ApplyLocalization(_root);
 			UpdateTitles();
 			UpdateStatus();
@@ -256,6 +290,8 @@ namespace ForkPlus.Plugins.Chm
 			_right = null;
 			_metaDiff = null;
 			_entryDiff = null;
+			_leftHtml = null;
+			_rightHtml = null;
 			_content.Content = null;
 			_status.Text = string.Empty;
 		}
@@ -269,6 +305,8 @@ namespace ForkPlus.Plugins.Chm
 			_right = null;
 			_metaDiff = null;
 			_entryDiff = null;
+			_leftHtml = null;
+			_rightHtml = null;
 			_error = null;
 			_srcParseError = null;
 			_dstParseError = null;
@@ -321,6 +359,9 @@ namespace ForkPlus.Plugins.Chm
 					}
 					ChmRowDiffResult metaDiff = ChmDiff.ComputeRows(left?.Rows, right?.Rows);
 					ChmEntryDiffResult entryDiff = ChmDiff.ComputeEntries(left?.Entries, right?.Entries);
+					// 「预览」模式：在后台把两侧默认主题页组装成自包含 HTML（取内容 + 内联资源）。
+					string leftHtml = left != null ? ChmHtmlComposer.Compose(left) : null;
+					string rightHtml = right != null ? ChmHtmlComposer.Compose(right) : null;
 					Dispatcher.UIThread.Post(delegate
 					{
 						if (_generation != generation || _cts != cts)
@@ -331,6 +372,8 @@ namespace ForkPlus.Plugins.Chm
 						_right = right;
 						_metaDiff = metaDiff;
 						_entryDiff = entryDiff;
+						_leftHtml = leftHtml;
+						_rightHtml = rightHtml;
 						_srcParseError = srcParseError;
 						_dstParseError = dstParseError;
 						UpdateStatus();
@@ -550,7 +593,11 @@ namespace ForkPlus.Plugins.Chm
 				_content.Content = NoteText(ChmStrings.F("Failed to parse: {0}", DisplayError()));
 				return;
 			}
-			if (_mode == EntriesMode)
+			if (_mode == PreviewMode)
+			{
+				BuildPreviewContent();
+			}
+			else if (_mode == EntriesMode)
 			{
 				_content.Content = BuildEntriesContent();
 			}
@@ -645,6 +692,34 @@ namespace ForkPlus.Plugins.Chm
 				HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
 				VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
 			};
+		}
+
+		/// <summary>
+		/// 「预览」模式：并排双 WebView 真渲染两侧默认主题页（后台组装好的自包含 HTML）。
+		/// 某侧不存在 / 无默认主题 → 该侧占位；WebView 不可用（headless、缺 WebView2 运行时 /
+		/// WPE WebKit / WebKitGTK）→ 两侧仅给提示文案（降级，不报错）。
+		/// </summary>
+		private void BuildPreviewContent()
+		{
+			if (_preview == null)
+			{
+				_preview = new SideBySideHtmlPreview();
+			}
+			// 占位 / 降级文案随界面语言（shared 组件默认中文，这里按插件译文覆盖）。
+			_preview.AbsentText = DisplayAbsentText();
+			_preview.UnavailableText = ChmStrings.T("Preview not available in this environment");
+			_preview.SetContent(
+				DisplayTitle(_left, _context?.Src),
+				_leftHtml,
+				DisplayTitle(_right, _context?.Dst),
+				_rightHtml);
+			_content.Content = _preview;
+		}
+
+		/// <summary>不存在占位文案（与表格口径一致的「not present」译文，缺失回退）。</summary>
+		private static string DisplayAbsentText()
+		{
+			return ChmStrings.T("not present");
 		}
 
 		/// <summary>四列表加一行：可带四色底（Border 跨四列）+ 状态列彩色；首列为等宽字体（键路径 / 路径）。</summary>

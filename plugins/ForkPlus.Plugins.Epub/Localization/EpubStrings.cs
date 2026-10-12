@@ -32,13 +32,13 @@ namespace ForkPlus.Plugins.Epub
 		/// <summary>插件描述译文（英文原文见 <see cref="EpubDiffPlugin.Description"/>）。</summary>
 		internal static readonly Dictionary<string, string> Descriptions = new Dictionary<string, string>
 		{
-			{ "zh-Hans", "EPUB 电子书对比视图插件：认领 .epub，用共享框架内置的 ZipArchive 解开 ZIP 容器，解析 container.xml → OPF（元数据 / manifest / spine），提供「元数据」与「章节」两种 diff 视图，逐行标注「相同 / 已变 / 仅左 / 仅右」。" },
-			{ "zh-Hant", "EPUB 電子書對比檢視外掛：認領 .epub，以共享框架內建的 ZipArchive 解開 ZIP 容器，解析 container.xml → OPF（元資料 / manifest / spine），提供「元資料」與「章節」兩種 diff 檢視，逐行標註「相同 / 已變 / 僅左 / 僅右」。" },
-			{ "ja-JP", "EPUB 電子書籍比較ビュープラグイン: .epub を対象に、共有フレームワーク内蔵の ZipArchive で ZIP コンテナを展開し、container.xml → OPF（メタデータ / manifest / spine）を解析して「メタデータ」と「章」の 2 つの diff ビューを提供します。各行を「同一 / 変更 / 左のみ / 右のみ」で判定します。" },
-			{ "ko-KR", "EPUB 전자책 비교 보기 플러그인: .epub를 처리하고 공유 프레임워크 내장 ZipArchive로 ZIP 컨테이너를 풀어 container.xml → OPF(메타데이터 / manifest / spine)를 분석하며 '메타데이터'와 '챕터' 두 가지 diff 보기를 제공합니다. 각 행을 '동일 / 변경 / 왼쪽만 / 오른쪽만'으로 표시합니다." },
-			{ "fr-FR", "Plugin de vue de comparaison EPUB : prend en charge .epub, ouvre le conteneur ZIP via le ZipArchive intégré du framework partagé, analyse container.xml → OPF (métadonnées / manifest / spine) et fournit deux vues de comparaison « métadonnées » et « chapitres », en marquant chaque ligne identique / modifiée / gauche seule / droite seule." },
-			{ "de-DE", "EPUB-E-Book-Vergleichsansichts-Plugin: übernimmt .epub, öffnet den ZIP-Container mit der im gemeinsam genutzten Framework eingebauten ZipArchive-Klasse, analysiert container.xml → OPF (Metadaten / Manifest / Spine) und bietet zwei Diff-Ansichten „Metadaten“ und „Kapitel“, jede Zeile markiert als identisch / geändert / nur links / nur rechts." },
-			{ "es-ES", "Plugin de vista de comparación de EPUB: admite .epub, abre el contenedor ZIP con el ZipArchive integrado del marco compartido, analiza container.xml → OPF (metadatos / manifest / spine) y ofrece dos vistas de comparación «metadatos» y «capítulos», marcando cada fila como igual / modificada / solo izquierda / solo derecha." }
+			{ "zh-Hans", "EPUB 电子书对比视图插件：认领 .epub，用共享框架内置的 ZipArchive 解开 ZIP 容器，解析 container.xml → OPF（元数据 / manifest / spine），提供「元数据」与「章节」两种 diff 视图，逐行标注「相同 / 已变 / 仅左 / 仅右」；另提供「预览」，并排双 WebView 真渲染两侧首个阅读章节。" },
+			{ "zh-Hant", "EPUB 電子書對比檢視外掛：認領 .epub，以共享框架內建的 ZipArchive 解開 ZIP 容器，解析 container.xml → OPF（元資料 / manifest / spine），提供「元資料」與「章節」兩種 diff 檢視，逐行標註「相同 / 已變 / 僅左 / 僅右」；另提供「預覽」，並排雙 WebView 真渲染兩側首個閱讀章節。" },
+			{ "ja-JP", "EPUB 電子書籍比較ビュープラグイン: .epub を対象に、共有フレームワーク内蔵の ZipArchive で ZIP コンテナを展開し、container.xml → OPF（メタデータ / manifest / spine）を解析して「メタデータ」と「章」の 2 つの diff ビューを提供します。各行を「同一 / 変更 / 左のみ / 右のみ」で判定します。さらに「プレビュー」では、左右の最初の本文チャプターを並排デュアル WebView で実レンダリングします。" },
+			{ "ko-KR", "EPUB 전자책 비교 보기 플러그인: .epub를 처리하고 공유 프레임워크 내장 ZipArchive로 ZIP 컨테이너를 풀어 container.xml → OPF(메타데이터 / manifest / spine)를 분석하며 '메타데이터'와 '챕터' 두 가지 diff 보기를 제공합니다. 각 행을 '동일 / 변경 / 왼쪽만 / 오른쪽만'으로 표시합니다. 또한 '미리 보기'에서 양쪽 첫 읽기 챕터를 나란히 놓인 듀얼 WebView로 실제 렌더링합니다." },
+			{ "fr-FR", "Plugin de vue de comparaison EPUB : prend en charge .epub, ouvre le conteneur ZIP via le ZipArchive intégré du framework partagé, analyse container.xml → OPF (métadonnées / manifest / spine) et fournit deux vues de comparaison « métadonnées » et « chapitres », en marquant chaque ligne identique / modifiée / gauche seule / droite seule. Une vue « Aperçu » restitue en outre le premier chapitre de lecture des deux côtés dans deux WebView côte à côte." },
+			{ "de-DE", "EPUB-E-Book-Vergleichsansichts-Plugin: übernimmt .epub, öffnet den ZIP-Container mit der im gemeinsam genutzten Framework eingebauten ZipArchive-Klasse, analysiert container.xml → OPF (Metadaten / Manifest / Spine) und bietet zwei Diff-Ansichten „Metadaten“ und „Kapitel“, jede Zeile markiert als identisch / geändert / nur links / nur rechts. Eine Ansicht „Vorschau“ rendert zudem das erste Lesekapitel beider Seiten in zwei nebeneinanderliegenden WebViews." },
+			{ "es-ES", "Plugin de vista de comparación de EPUB: admite .epub, abre el contenedor ZIP con el ZipArchive integrado del marco compartido, analiza container.xml → OPF (metadatos / manifest / spine) y ofrece dos vistas de comparación «metadatos» y «capítulos», marcando cada fila como igual / modificada / solo izquierda / solo derecha. Una vista «Vista previa» además representa el primer capítulo de lectura de ambos lados en dos WebView en paralelo." }
 		};
 
 		// ---- 界面文案（key = 英文原文；含 {0} 的走 F(...) 格式化） ----
@@ -66,6 +66,17 @@ namespace ForkPlus.Plugins.Epub
 					{ "fr-FR", "Chapitres" },
 					{ "de-DE", "Kapitel" },
 					{ "es-ES", "Capítulos" }
+				}
+			},
+			{ "Preview", new Dictionary<string, string>
+				{
+					{ "zh-Hans", "预览" },
+					{ "zh-Hant", "預覽" },
+					{ "ja-JP", "プレビュー" },
+					{ "ko-KR", "미리 보기" },
+					{ "fr-FR", "Aperçu" },
+					{ "de-DE", "Vorschau" },
+					{ "es-ES", "Vista previa" }
 				}
 			},
 			// 表头
@@ -190,6 +201,17 @@ namespace ForkPlus.Plugins.Epub
 					{ "fr-FR", "Fichier trop volumineux pour un aperçu" },
 					{ "de-DE", "Datei zu groß für die Vorschau" },
 					{ "es-ES", "Archivo demasiado grande para previsualizar" }
+				}
+			},
+			{ "Preview not available in this environment", new Dictionary<string, string>
+				{
+					{ "zh-Hans", "当前环境不支持渲染预览" },
+					{ "zh-Hant", "目前環境不支援渲染預覽" },
+					{ "ja-JP", "この環境ではプレビューをレンダリングできません" },
+					{ "ko-KR", "이 환경에서는 미리 보기를 렌더링할 수 없습니다" },
+					{ "fr-FR", "Aperçu non disponible dans cet environnement" },
+					{ "de-DE", "Vorschau in dieser Umgebung nicht verfügbar" },
+					{ "es-ES", "Vista previa no disponible en este entorno" }
 				}
 			},
 			{ "Analyzing…", new Dictionary<string, string>

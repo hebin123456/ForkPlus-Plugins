@@ -202,6 +202,14 @@ namespace ForkPlus.Plugins.Chm
 
 			ComputeHashes(data, dataOffset, entries, compressedSpace, decompressed);
 
+			// 预览所需的原始数据引用（「预览」模式据此按路径取默认主题页与其内联资源）。
+			document.DefaultTopic = defaultTopic;
+			document.Raw = data;
+			document.DataOffset = dataOffset;
+			document.CompressedSpace = compressedSpace;
+			document.Decompressed = decompressed;
+			document.ByPath = byPath;
+
 			BuildRows(document, version, lastModified, itsfLangId, itspLangId, blockLen, defaultTopic, contentsFile, indexFile, compressedSpace >= 0, windowSize, resetInterval, decompressed != null);
 			return document;
 		}
@@ -442,7 +450,6 @@ namespace ForkPlus.Plugins.Chm
 		/// <summary>按路径取条目原始（已解压）字节：仅用于 #SYSTEM / NameList 等小对象。</summary>
 		private static byte[] GetEntryBytes(Dictionary<string, ChmEntry> byPath, string path, byte[] data, long dataOffset, int compressedSpace, byte[] decompressed)
 		{
-			// 支持带 / 与不带 / 两种写法（正常对象带前导 '/'，元数据对象不带）。
 			if (!byPath.TryGetValue(path, out ChmEntry entry) && !byPath.TryGetValue("/" + path, out entry))
 			{
 				return null;
@@ -452,6 +459,56 @@ namespace ForkPlus.Plugins.Chm
 				return SliceDecompressed(decompressed, entry);
 			}
 			return ReadRaw(data, dataOffset, entry);
+		}
+
+		/// <summary>
+		/// 按内部路径取条目原始（已解压）字节——供「预览」模式组装默认主题页与其内联资源。
+		/// 查到目录 / 查不到返回 null。
+		/// </summary>
+		internal static byte[] GetEntryBytes(ChmDocument document, string path)
+		{
+			ChmEntry entry = FindEntry(document, path);
+			if (entry == null || entry.IsDirectory)
+			{
+				return null;
+			}
+			if (document.CompressedSpace >= 0 && entry.Space == document.CompressedSpace && document.Decompressed != null)
+			{
+				return SliceDecompressed(document.Decompressed, entry);
+			}
+			return ReadRaw(document.Raw, document.DataOffset, entry);
+		}
+
+		/// <summary>按内部路径在 ByPath 里取条目：不区分大小写，容错前导 '/' 与 '\' 分隔符；
+		/// 查不到返回 null。</summary>
+		internal static ChmEntry FindEntry(ChmDocument document, string path)
+		{
+			Dictionary<string, ChmEntry> byPath = document?.ByPath;
+			if (byPath == null || string.IsNullOrEmpty(path))
+			{
+				return null;
+			}
+			string normalized = path.Replace('\\', '/');
+			if (byPath.TryGetValue(normalized, out ChmEntry entry))
+			{
+				return entry;
+			}
+			if (normalized.Length == 0)
+			{
+				return null;
+			}
+			if (normalized[0] != '/')
+			{
+				if (byPath.TryGetValue("/" + normalized, out entry))
+				{
+					return entry;
+				}
+			}
+			else if (byPath.TryGetValue(normalized.Substring(1), out entry))
+			{
+				return entry;
+			}
+			return null;
 		}
 
 		/// <summary>未压缩对象直读（data_offset + start，长度 length）；越界返回 null。</summary>
