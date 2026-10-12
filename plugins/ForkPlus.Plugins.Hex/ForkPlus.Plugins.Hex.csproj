@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- 内置 Hex 对比插件（迁自宿主主仓 src/ForkPlus.Plugins.Hex，v1.2.0 起随插件仓分发）：
+         二进制文件的通配兜底（原 forkplus.binary 职责并入）——默认 side-by-side
+         文件卡片（BinaryContentPanel）+ Hex 对比切换（HexDiffUserControl 懒加载），
+         渲染内核与图片插件里的「Hex」模式页共用同一 ForkPlus.Plugins.Ui 组件。
+         公共属性（net10.0 / Nullable / LangVersion / AvaloniaVersion / 契约引用）见
+         ../Directory.Build.props；契约与共享组件经 ProjectReference 引用、Private=false。 -->
+    <AssemblyName>ForkPlus.Plugins.Hex</AssemblyName>
+    <RootNamespace>ForkPlus.Plugins.Hex</RootNamespace>
+    <PlatformTarget>x64</PlatformTarget>
+
+    <!-- 插件自身版本统一为 1.0.0（与插件仓合集包版本解耦）。 -->
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\sdk\ForkPlus.Plugins.Abstractions\ForkPlus.Plugins.Abstractions.csproj">
+      <Private>false</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\..\sdk\ForkPlus.Plugins.Ui\ForkPlus.Plugins.Ui.csproj">
+      <Private>false</Private>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+  </ItemGroup>
+</Project>

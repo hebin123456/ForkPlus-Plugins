@@ -10,10 +10,12 @@
 #   linux-arm64  → ubuntu-22.04-arm / linux-arm64（原生 ARM64 runner，公开仓库免费）
 #   macos-arm64  → macos-latest     / osx-arm64
 #
-# 出包内容：每个平台的包内是 plugins/ 目录，含各插件的**自身主 DLL + 私有依赖（托管 / 原生）+ 许可声明**。
+# 出包内容（v1.2.0 起每插件一个目录）：每个平台的包内是 plugins/ 目录，其下**每个插件一个子目录**
+#   plugins/<AssemblyName>/（内含 plugin.json、插件主 DLL、私有依赖（托管 / 原生）+ 许可声明）。
 #   契约（ForkPlus.Plugins.Abstractions）/ 共享组件（ForkPlus.Plugins.Ui）/ Avalonia / NLog
 #   等均由宿主在运行期提供，绝不随插件包分发（详见 README「依赖与共享程序集」）。
-#   包名：ForkPlus-Plugins-<版本>-<平台>.zip
+#   合集包：ForkPlus-Plugins-<插件仓版本>-<平台>.zip（含全部插件）；
+#   单插件包：ForkPlus-Plugins-<Short>-1.0.0-<平台>.zip（每插件一个，<Short>=AssemblyName 去前缀）。
 #
 # 新增插件无需改本文件：构建与打包按 plugins/*/*.csproj 自动发现。
 
@@ -91,6 +93,8 @@ jobs:
           fi
           echo "PLUGIN_VERSION=$version" >> "$GITHUB_ENV"
           echo "packaging version: $version"
+          # 单插件包固定用**插件自身版本** 1.0.0（各插件 csproj 的 <Version>），与插件仓合集包版本解耦。
+          echo "PLUGIN_ASSEMBLY_VERSION=1.0.0" >> "$GITHUB_ENV"
 
       # 三方件原生库：从三方件仓（hebin123456/ForkPlus-Plugins-Third_Party）的**最新 Release**
       # 按 index.json 校验 sha256 后取本 RID 的交付件，解出运行期库到 third_party/<component>/<rid>/，
@@ -116,8 +120,12 @@ jobs:
             dotnet build "$proj" -c Release -r ${{ matrix.rid }} --nologo
           done
 
-      # 打包：每个插件装「自身主 DLL + 私有依赖（托管 / 原生）+ 许可声明」，放入 plugins/。
-      # 宿主共享程序集（契约 / Avalonia / SkiaSharp / NLog…）由 install-plugin-artifacts.sh 排除。
+      # 打包：install-plugin-artifacts.sh 已把每个插件装进 dist/plugins/<AssemblyName>/（内含
+      # plugin.json、插件主 DLL、私有依赖（托管 / 原生）与许可声明）；宿主共享程序集（契约 / Ui /
+      # Avalonia / SkiaSharp / NLog…）由脚本排除。产出两类包，包内顶层结构一致（plugins/<AssemblyName>/...）：
+      #   合集包   ForkPlus-Plugins-${PLUGIN_VERSION}-<平台>.zip              （含全部插件）
+      #   单插件包 ForkPlus-Plugins-<Short>-${PLUGIN_ASSEMBLY_VERSION}-<平台>.zip（每插件一个）
+      #   <Short> = AssemblyName 去掉前缀 ForkPlus.Plugins.（如 ForkPlus.Plugins.Pdf → Pdf）。
       - name: Package
         shell: bash
         run: |
@@ -132,30 +140,52 @@ jobs:
             count=$((count + 1))
           done
           echo "packaged $count plugin(s)"
-          zip_name="ForkPlus-Plugins-${PLUGIN_VERSION}-${{ matrix.name }}.zip"
-          # 打包成 zip 统一走 python 的 zipfile，条目名一律用正斜杠（zip 规范）。此前 windows 走
-          # PowerShell 的 Compress-Archive，它把条目分隔符写成反斜杠（plugins\xxx.dll），在 Linux /
-          # macOS 上解压会得到带反斜杠字面量的文件名——交付件必须四平台都能正常解压。
-          # 与 capture-screenshots.sh / fetch-third-party.sh 同思路：不依赖 zip / unzip 外部工具。
+          # 打包统一走 python 的 zipfile，条目名一律用正斜杠（zip 规范）。此前 windows 走 PowerShell 的
+          # Compress-Archive，它把条目分隔符写成反斜杠（plugins\xxx.dll），在 Linux / macOS 上解压会得到
+          # 带反斜杠字面量的文件名——交付件必须四平台都能正常解压。与 capture-screenshots.sh /
+          # fetch-third-party.sh 同思路：不依赖 zip / unzip 外部工具。
           # windows runner 通常只有 python（无 python3），选择方式与 install-plugin-artifacts.sh 一致。
           py=python3
           command -v python3 >/dev/null 2>&1 || py=python
           # ↓ heredoc 正文与结束符按本块的基础缩进书写（YAML 会剥掉该缩进，渲染出来即第 0 列）；
           #   再多缩进或顶格写都会让 heredoc 不结束 / YAML 解析失败。
-          "$py" - "$zip_name" <<'PY'
+          "$py" - "${{ matrix.name }}" "$PLUGIN_VERSION" "$PLUGIN_ASSEMBLY_VERSION" <<'PY'
           import os
           import sys
           import zipfile
 
-          out = sys.argv[1]
-          with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
-              for root, _, files in os.walk("dist"):
+          platform, plugin_version, assembly_version = sys.argv[1], sys.argv[2], sys.argv[3]
+
+
+          def add_tree(zf, base, arcroot):
+              # 把 base 目录整棵树写进 zip；条目名用正斜杠，统一以 arcroot 为前缀。
+              for root, _, files in os.walk(base):
                   for name in files:
                       path = os.path.join(root, name)
-                      # 去掉 dist 前缀，包内即 plugins/...；分隔符按 zip 规范统一为正斜杠。
-                      zf.write(path, os.path.relpath(path, "dist").replace(os.sep, "/"))
+                      arc = os.path.join(arcroot, os.path.relpath(path, base))
+                      zf.write(path, arc.replace(os.sep, "/"))
+
+
+          # 合集包：dist/ 下即 plugins/...，去掉 dist 前缀。
+          combined = "ForkPlus-Plugins-%s-%s.zip" % (plugin_version, platform)
+          with zipfile.ZipFile(combined, "w", zipfile.ZIP_DEFLATED) as zf:
+              add_tree(zf, "dist", "")
+          print(combined)
+
+          # 单插件包：dist/plugins/<AssemblyName>/ → plugins/<AssemblyName>/...（与合集包内结构一致）。
+          plugins_root = os.path.join("dist", "plugins")
+          prefix = "ForkPlus.Plugins."
+          for assembly in sorted(os.listdir(plugins_root)):
+              sub = os.path.join(plugins_root, assembly)
+              if not os.path.isdir(sub):
+                  continue
+              short = assembly[len(prefix):] if assembly.startswith(prefix) else assembly
+              out = "ForkPlus-Plugins-%s-%s-%s.zip" % (short, assembly_version, platform)
+              with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+                  add_tree(zf, sub, os.path.join("plugins", assembly))
+              print(out)
           PY
-          ls -la "$zip_name"
+          ls -la *.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

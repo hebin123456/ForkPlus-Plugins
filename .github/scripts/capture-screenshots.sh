@@ -7,7 +7,9 @@
 # 全流程（与用户诉求一一对应）：
 #   ① 构建仓库内插件（plugins/*/*.csproj）
 #   ② 下载最新的 ForkPlus（linux-x64 发行包）
-#   ③ 把插件产物（主 DLL + 私有依赖 + 原生库）装入 ForkPlus 的 plugins/ 目录
+#   ③ 把插件产物（plugin.json + 主 DLL + 私有依赖 + 原生库）装入 ForkPlus 的
+#      plugins/<AssemblyName>/ 子目录（v1.2.0 起每插件一个目录，目录名=程序集名；
+#      宿主 5.1.0 起按 plugins/<目录>/plugin.json 扫描加载）
 #   ④ 准备 demo 仓库：PDF / Office / 压缩包 / 字体 / 可执行文件 / 证书 / 音频 / 视频 /
 #      结构化数据 / DBC / 字幕 / SVG / 机器学习模型 / MIDI / Torrent / 抓包 / PSD / EPUB /
 #      SQLite / 托管程序集 / 邮件 EML 各三种 diff 场景（修改 / 新增 / 删除），
@@ -96,7 +98,10 @@ download_forkplus() {
 
 # ── ③ 安装插件产物 ───────────────────────────────────────────────────────────
 install_plugins() {
-	log "把插件产物（主 DLL + 私有依赖 + 原生库）装入 ForkPlus 的 plugins/ 目录"
+	log "把插件产物（plugin.json + 主 DLL + 私有依赖 + 原生库）装入 ForkPlus 的 plugins/<AssemblyName>/ 子目录"
+	# v1.2.0 起为「每插件一个子目录」布局：install-plugin-artifacts.sh 自己按 <AssemblyName>
+	# 拼出 plugins/<AssemblyName>/ 子目录，并把插件目录根的 plugin.json 一并拷入——与 CI 打包、
+	# 宿主 5.1.0 的扫描方式一致。这里只负责对每个插件工程调用该脚本。
 	mkdir -p "$APPDIR/plugins"
 	shopt -s nullglob
 	local count=0

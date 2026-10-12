@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- 内置图片对比插件（迁自宿主主仓 src/ForkPlus.Plugins.Image，v1.2.0 起随插件仓分发）：
+         图片/GIF/动图对比视图（并排/Swipe/洋葱皮/Hex + LFS smudge）。
+         二进制通配兜底职责在 Hex 插件（forkplus.hex），本插件只认图片扩展名；
+         文件卡片/回退面板等共享组件在 ForkPlus.Plugins.Ui。
+         公共属性（net10.0 / Nullable / LangVersion / AvaloniaVersion / 契约引用）见
+         ../Directory.Build.props；契约与共享组件经 ProjectReference 引用、Private=false
+         （不打进插件产物，运行期由宿主提供同一份程序集）。 -->
+    <AssemblyName>ForkPlus.Plugins.Image</AssemblyName>
+    <RootNamespace>ForkPlus.Plugins.Image</RootNamespace>
+    <PlatformTarget>x64</PlatformTarget>
+
+    <!-- 插件自身版本统一为 1.0.0（与插件仓合集包版本解耦）。 -->
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\sdk\ForkPlus.Plugins.Abstractions\ForkPlus.Plugins.Abstractions.csproj">
+      <Private>false</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\..\sdk\ForkPlus.Plugins.Ui\ForkPlus.Plugins.Ui.csproj">
+      <Private>false</Private>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Avalonia 版本必须与宿主严格一致（见根 Directory.Build.props 的 AvaloniaVersion）；
+         运行期由宿主提供，打包时不随插件分发。 -->
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+  </ItemGroup>
+</Project>

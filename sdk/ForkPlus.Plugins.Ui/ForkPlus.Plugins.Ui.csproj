@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- 对比视图共享组件工程（迁自宿主主仓 src/ForkPlus.Plugins.Ui）：
+         宿主单文件视图与多个插件视图共用的 UI 组件——图片侧 ZoomPan/AnimatedImage/ImageData/
+         BinaryViewerRegistry/BinaryContentPanel（文件卡片+图片渲染单侧面板）/DiffFallbackPanel，
+         Hex 侧 HexEditor/HexContentControl/HexDiffUserControl。
+         宿主与插件工程都静态引用本工程（与 Abstractions 一样是进程内共享程序集，
+         不参与 plugins/ 动态分发，install-plugin-artifacts.sh 会排除 ForkPlus.Plugins.Ui.dll）。
+         命名空间保持 ForkPlus.Plugins.BuiltIn.* 不变（ns 与程序集解耦）。
+         公共属性（net10.0 / Nullable / LangVersion / AvaloniaVersion）见根 Directory.Build.props。 -->
+    <AssemblyName>ForkPlus.Plugins.Ui</AssemblyName>
+    <RootNamespace>ForkPlus.Plugins.Ui</RootNamespace>
+    <PlatformTarget>x64</PlatformTarget>
+
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 本工程使用契约公开面上的类型，经 ProjectReference 引用（同 plugins/ 的 Private=false 约定）。 -->
+    <ProjectReference Include="..\ForkPlus.Plugins.Abstractions\ForkPlus.Plugins.Abstractions.csproj">
+      <Private>false</Private>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+    <!-- HexEditor 派生自 AvaloniaEdit 的 TextEditor，版本与宿主一致。 -->
+    <PackageReference Include="Avalonia.AvaloniaEdit" Version="12.0.0" />
+    <!-- AnimatedImage 用 SKCodec 解 GIF/WebP/APNG；与宿主经 Avalonia.Desktop 解析到的
+         SkiaSharp 3.119.4 一致，避免版本漂移。运行期由宿主提供，不随插件分发。 -->
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
+  </ItemGroup>
+</Project>

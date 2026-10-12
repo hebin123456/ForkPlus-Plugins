@@ -2,12 +2,15 @@
 #
 # ForkPlus-Plugins · 单插件产物安装
 #
-# 把**一个**插件工程的构建产物装进目标 plugins/ 目录，供 CI 打包与截图流程共用：
-#   - 插件自身主 DLL（<AssemblyName>.dll）
-#   - 私有托管依赖（如 PDF 插件的 Docnet.Core.dll）
-#   - 私有原生库（如 PDF 插件的 pdfium.so / pdfium.dll / pdfium.dylib）
-#   - 第三方许可声明（由插件的 third-party.json + licenses/ 全文合并为
-#     <AssemblyName>.THIRD-PARTY-NOTICES.txt，见 collect-third-party-notices.py）
+# 把**一个**插件工程的构建产物装进目标 plugins/ 目录下**该插件自己的子目录**
+# （v1.2.0 起：每插件一个目录，目录名=程序集名），供 CI 打包与截图流程共用：
+#   <目标 plugins 目录>/<AssemblyName>/
+#     ├── plugin.json                        # 插件清单（宿主 5.1.0 起按 plugins/<目录>/plugin.json 扫描）
+#     ├── <AssemblyName>.dll                 # 插件自身主 DLL
+#     ├── 私有托管依赖（如 PDF 插件的 Docnet.Core.dll）
+#     ├── 私有原生库（如 PDF 插件的 pdfium.so / pdfium.dll / pdfium.dylib）
+#     └── <AssemblyName>.THIRD-PARTY-NOTICES.txt
+#         （由插件的 third-party.json + licenses/ 全文合并，见 collect-third-party-notices.py）
 #
 # 宿主共享程序集（契约 ForkPlus.Plugins.Abstractions / ForkPlus.Plugins.Ui、
 # Avalonia、SkiaSharp、HarfBuzzSharp、NLog、MicroCom…）一律**不**随插件分发——
@@ -45,8 +48,19 @@ is_shared() {
 	esac
 }
 
-mkdir -p "$dest"
-cp "$outdir/$assembly.dll" "$dest/"
+# 安装目标：<目标 plugins 目录>/<AssemblyName>/（宿主 5.1.0 起的加载布局）。
+plugindir="$dest/$assembly"
+
+# 清单文件必须已存在：宿主按 plugins/<目录>/plugin.json 扫描，缺失则插件无法被识别。
+if [ ! -f "$projdir/plugin.json" ]; then
+	echo "install-plugin-artifacts: 缺少 $projdir/plugin.json（每个插件目录根须提供清单文件，请先补齐）" >&2
+	exit 1
+fi
+
+mkdir -p "$plugindir"
+cp "$outdir/$assembly.dll" "$plugindir/"
+# 清单随插件子目录一起安装/打包。
+cp "$projdir/plugin.json" "$plugindir/plugin.json"
 
 # 私有托管依赖 + 私有原生库（linux: *.so / *.so.<major> / macos: *.dylib / windows: *.dll）。
 # FFmpeg 的 LGPL 共享库在 Linux 上按 SONAME 命名（libavformat.so.63），故须一并匹配 *.so.*。
@@ -58,7 +72,7 @@ for f in "$outdir"/*.dll "$outdir"/*.so "$outdir"/*.so.* "$outdir"/*.dylib; do
 		echo "  skip shared: $base"
 		continue
 	fi
-	cp "$f" "$dest/"
+	cp "$f" "$plugindir/"
 done
 
 # 第三方许可声明：按插件的 third-party.json 登记表合并 licenses/ 全文。
@@ -70,7 +84,7 @@ if command -v python3 >/dev/null 2>&1; then
 else
 	python_bin=python
 fi
-"$python_bin" "$script_dir/collect-third-party-notices.py" plugin "$projdir" "$dest/$assembly.THIRD-PARTY-NOTICES.txt"
+"$python_bin" "$script_dir/collect-third-party-notices.py" plugin "$projdir" "$plugindir/$assembly.THIRD-PARTY-NOTICES.txt"
 
-echo "  installed: $assembly.dll" >&2
-echo "$dest/$assembly.dll"
+echo "  installed: $plugindir/$assembly.dll" >&2
+echo "$plugindir/$assembly.dll"

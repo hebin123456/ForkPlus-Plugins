@@ -3,6 +3,8 @@
   <Project Path="sdk/ForkPlus.Plugins.Abstractions/ForkPlus.Plugins.Abstractions.csproj" />
   <!-- 共享解码核心（sdk/），音视频插件的私有依赖 -->
   <Project Path="sdk/ForkPlus.Plugins.Media/ForkPlus.Plugins.Media.csproj" />
+  <!-- 对比视图共享组件（sdk/），图片 / Hex 插件与宿主共用 -->
+  <Project Path="sdk/ForkPlus.Plugins.Ui/ForkPlus.Plugins.Ui.csproj" />
   <!-- 插件（plugins/），新增插件在此登记 -->
   <Project Path="plugins/ForkPlus.Plugins.Example/ForkPlus.Plugins.Example.csproj" />
   <Project Path="plugins/ForkPlus.Plugins.Pdf/ForkPlus.Plugins.Pdf.csproj" />
@@ -26,4 +28,7 @@
   <Project Path="plugins/ForkPlus.Plugins.Sqlite/ForkPlus.Plugins.Sqlite.csproj" />
   <Project Path="plugins/ForkPlus.Plugins.ManagedAssembly/ForkPlus.Plugins.ManagedAssembly.csproj" />
   <Project Path="plugins/ForkPlus.Plugins.Eml/ForkPlus.Plugins.Eml.csproj" />
+  <!-- 主仓迁入的内置插件：图片对比 / Hex 二进制兜底 -->
+  <Project Path="plugins/ForkPlus.Plugins.Image/ForkPlus.Plugins.Image.csproj" />
+  <Project Path="plugins/ForkPlus.Plugins.Hex/ForkPlus.Plugins.Hex.csproj" />
 </Solution>

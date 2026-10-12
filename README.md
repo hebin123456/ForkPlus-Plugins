@@ -49,6 +49,11 @@ ForkPlus-Plugins/
 │       ├── PluginSizeFormat.cs           # 文件尺寸格式化
 │       ├── NullAttribute.cs              # 可空性标注
 │       └── ForkPlus.Plugins.Abstractions.csproj
+│   ├── ForkPlus.Plugins.Ui/              # 对比视图共享组件（主仓 src/ForkPlus.Plugins.Ui 的源码镜像）
+│   │   ├── BuiltIn/ImageDiff/…           # BinaryContentPanel / ImageData / BinaryViewerRegistry / DiffFallbackPanel…
+│   │   ├── BuiltIn/HexDiff/…             # HexDiffUserControl / HexEditor / HexFormatter / HexContentControl…
+│   │   ├── PluginCompat.cs               # 插件侧 WPF→Avalonia 兼容小件
+│   │   └── ForkPlus.Plugins.Ui.csproj    # Avalonia / AvaloniaEdit / SkiaSharp（运行期由宿主共享）
 │   └── ForkPlus.Plugins.Media/           # 音视频插件共享解码核心（只解码不编码，FFmpeg.AutoGen 动态绑定）
 │       ├── MediaNative.cs                # 按 RID 动态绑定 FFmpeg 原生库；av_log 调级
 │       ├── MemoryAvioContext.cs          # 内存 AVIO 回调（把 git blob 直接喂给 FFmpeg，可 seek）
@@ -67,7 +72,8 @@ ForkPlus-Plugins/
 │   │   ├── ExampleDiffView.cs
 │   │   ├── Localization/
 │   │   │   └── ExampleStrings.cs         # 插件自带译文（8 语言；元数据 + 界面文案）
-│   │   └── ForkPlus.Plugins.Example.csproj
+│   │   ├── ForkPlus.Plugins.Example.csproj
+│   │   └── plugin.json                   # 插件清单（宿主 5.1.0 起按 plugins/<目录>/plugin.json 扫描）
 │   ├── ForkPlus.Plugins.Pdf/             # PDF 对比插件（左右两栏逐页并排渲染旧 / 新 PDF）
 │   │   ├── PdfDiffPlugin.cs
 │   │   ├── PdfDiffView.cs
@@ -290,7 +296,7 @@ public sealed class MyDiffPlugin : IDiffViewPlugin, IPluginMetadata
 
     // IPluginMetadata（可选）：宿主「偏好设置 → 插件」页展示的名称 / 版本 / 描述
     // 名称与描述约定为**英文原文**（缺省语言）；多语言由 GetDisplayName / GetDescription 覆写提供
-    public string Version => "0.1.0";
+    public string Version => "1.0.0";
     public string DisplayName => "My Compare";
     public string Description => "One sentence on what this plugin compares.";
 
@@ -345,21 +351,23 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 
 插件与宿主之间存在两个**静态共享**程序集，运行期由宿主提供，**插件不得随包分发**：
 
-- `ForkPlus.Plugins.Abstractions`（契约）
-- `ForkPlus.Plugins.Ui`（共享视图组件，如需复用）
+- `ForkPlus.Plugins.Abstractions`（契约，源码镜像在 `sdk/ForkPlus.Plugins.Abstractions/`）
+- `ForkPlus.Plugins.Ui`（共享视图组件，源码镜像在 `sdk/ForkPlus.Plugins.Ui/`）
 
 约束：
 
 - **禁止引用 ForkPlus 主工程类型**。一切宿主能力经 `IDiffViewHost` / `PluginEnvironment` 获取。
 - 契约经 `ProjectReference` 引用且 `Private=false`（`plugins/Directory.Build.props` 已统一配置，无需逐插件重复）。
-- 不要把 `ForkPlus.Plugins.Abstractions.dll`、`Avalonia*.dll`、`NLog*.dll` 等宿主已加载的程序集放进 `plugins/`。
+- 不要把 `ForkPlus.Plugins.Abstractions.dll` / `ForkPlus.Plugins.Ui.dll`、`Avalonia*.dll`、`NLog*.dll` 等宿主已加载的程序集放进 `plugins/`。
   同名程序集以先加载者为准，重复分发会造成类型身份漂移（宿主与插件各持一份 `Type`，`is/as` 判定全部失效）。
 - **Avalonia 版本必须与宿主严格一致**（当前 `12.1.1`，见根 `Directory.Build.props` 的 `AvaloniaVersion`）。
   版本漂移会在运行期出现 XAML IL 加载失败 / `MissingMethodException` 类崩溃。
-- 若确有私有依赖，与插件 DLL 放在 `plugins/` 同目录即可 —— 加载器的 `Resolving` 钩子会兜底解析。
-  但不支持同名程序集多版本并存。
+- 每个插件在自己的 `plugins/<AssemblyName>/` 子目录内平铺：`plugin.json`、主 DLL、私有依赖（托管 / 原生）。
+  加载器的 `Resolving` 钩子会按插件目录兜底解析私有托管依赖，但不支持同名程序集多版本并存。
 - **原生库**（`.so` / `.dll` / `.dylib`）不在上述钩子覆盖范围内，需插件自行注册
   `DllImportResolver` 从插件目录解析（参见 PDF 插件 `PdfNativeLibrary`）。
+- 版本与清单约定见「§9 插件清单（plugin.json）与安装布局」：插件自身版本统一 `1.0.0`，
+  `minHostVersion` 声明最低支持的主程序版本。
 
 ### 5. 宿主能力桥
 
@@ -398,7 +406,7 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 
 | 成员 | 说明 |
 | --- | --- |
-| `Version` | 插件**自身**版本号，与宿主版本解耦，建议语义化（如 `"0.1.0"`）；与工程 `<Version>` 保持一致。 |
+| `Version` | 插件**自身**版本号（v1.2.0 起本仓官方插件统一为 `1.0.0`）；与工程 `<Version>`、`plugin.json` 的 `version` 三处保持一致。 |
 | `DisplayName` | 插件显示名，约定为**英文原文**，同时作为多语言的缺省值。 |
 | `Description` | 一句话描述插件能力，约定为**英文原文**，同时作为多语言的缺省值。 |
 | `GetDisplayName(language)` | v5.0.3：按界面语言返回显示名；默认实现返回英文原文，无需多语言的插件不必覆写。 |
@@ -406,14 +414,44 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 
 约定：
 
-- 版本号与工程文件的 `<Version>` 保持一致（本仓库示例、PDF、Office 与压缩包插件当前均为 **0.1.0**；
-  字体、可执行文件、证书三个插件为 **0.0.1**，随首个 v1.0.3 Release 一并分发）。
+- 插件自身版本号统一为 **1.0.0**，三处保持一致：代码里的 `Version`（若实现 `IPluginMetadata`）、
+  工程文件的 `<Version>`、以及 `plugin.json` 的 `version`。
 - 名称 / 描述一律写成**英文原文**（作为缺省与回退值）；插件把各语言译文按 `语言 code → 文案`
   组织成字典，经 `GetDisplayName` / `GetDescription` 覆写，用 `PluginLocalization.Resolve`
   按宿主下发的 `PluginEnvironment.CurrentLanguage` 取译文，查不到逐级回退（当前语言 → 语言主标签
   → 英文 → 英文原文）。`DisplayNameKey` 仍用于宿主扩展名绑定列表的翻译 key。
 - 语言 code 与宿主界面语言一致：`en` / `zh-Hans` / `zh-Hant` / `ja-JP` / `ko-KR` / `fr-FR` /
   `de-DE` / `es-ES`；`en` 不写入字典（英文原文即缺省）。
+
+### 9. 插件清单（plugin.json）与安装布局
+
+每个插件目录根都有一份 `plugin.json`——宿主 **5.1.0+** 启动时按 `plugins/<目录>/plugin.json` 扫描并加载。
+字段**固定为 5 个**（不要加多余字段）：
+
+```json
+{
+  "schemaVersion": 1,
+  "id": "forkplus.pdf",
+  "version": "1.0.0",
+  "minHostVersion": "5.1.0",
+  "assembly": "ForkPlus.Plugins.Pdf"
+}
+```
+
+| 字段 | 说明 |
+| --- | --- |
+| `schemaVersion` | 清单格式版本，当前固定 `1`。 |
+| `id` | 插件唯一 Id，与代码里 `IDiffViewPlugin.Id` 一致（官方为 `forkplus.<name>`）。 |
+| `version` | 插件**自身**版本，与工程 `<Version>` 一致；本仓官方插件统一 `1.0.0`。 |
+| `minHostVersion` | **最低支持主程序版本**：宿主主程序版本 **≥** 该值才兼容并加载，否则不加载。本仓统一 `5.1.0`。 |
+| `assembly` | 程序集名，取该插件 csproj 的 `<AssemblyName>`。 |
+
+- 安装后目录布局为 `plugins/<AssemblyName>/`（目录名=程序集名），目录内平铺 `plugin.json`、插件主 DLL、
+  私有托管依赖、私有原生库、`<AssemblyName>.THIRD-PARTY-NOTICES.txt`。
+- `install-plugin-artifacts.sh` 按 `<AssemblyName>` 落位子目录并拷入 `plugin.json`；插件目录缺少
+  `plugin.json` 会报错退出（须先补齐清单）。宿主共享程序集（契约 / Ui / Avalonia / SkiaSharp…）不随插件分发。
+- 分发两种包（内部结构一致）：合集包 `ForkPlus-Plugins-<插件仓版本>-<平台>.zip`；单插件包
+  `ForkPlus-Plugins-<Short>-1.0.0-<平台>.zip`（`<Short>` = 程序集名去前缀 `ForkPlus.Plugins.`）。
 
 ---
 
@@ -424,7 +462,7 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 渲染左右两列只读信息面板（路径 / 声明大小 / 可读字节数 / LFS 引用）。
 
 同时实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「示例对比」（英文原文
-`Example Compare`，8 语言译文见 `Localization/ExampleStrings.cs`）、版本 `0.1.0` 与描述。
+`Example Compare`，8 语言译文见 `Localization/ExampleStrings.cs`）、版本 `1.0.0` 与描述。
 
 写新插件的最快路径：**复制示例目录 → 改工程名、命名空间、`Id`、扩展名**。
 
@@ -448,7 +486,7 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 > `sample.pdf` 特意夹带 NUL 字节以确保这一点。
 
 插件同样实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「PDF 对比」（英文原文
-`PDF Compare`，8 语言译文见 `Localization/PdfStrings.cs`）、版本 `0.1.0` 与描述。
+`PDF Compare`，8 语言译文见 `Localization/PdfStrings.cs`）、版本 `1.0.0` 与描述。
 
 ---
 
@@ -485,7 +523,7 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 > 因此必然命中本插件而非 Hex 兜底。
 
 插件同样实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「Office 对比」（英文原文
-`Office Compare`，8 语言译文见 `Localization/OfficeStrings.cs`）、版本 `0.1.0` 与描述。
+`Office Compare`，8 语言译文见 `Localization/OfficeStrings.cs`）、版本 `1.0.0` 与描述。
 
 ---
 
@@ -533,7 +571,7 @@ zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可�
 > 命中本插件而非 Hex 兜底。
 
 插件同样实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「压缩包对比」（英文原文
-`Archive Compare`，8 语言译文见 `Localization/ArchiveStrings.cs`）、版本 `0.1.0` 与描述。
+`Archive Compare`，8 语言译文见 `Localization/ArchiveStrings.cs`）、版本 `1.0.0` 与描述。
 
 ---
 
@@ -565,7 +603,7 @@ zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可�
 
 本插件**零私有依赖**（SkiaSharp 为宿主共享程序集，不随包分发）。插件实现 `IPluginMetadata`，向宿主
 「偏好设置 → 插件」页暴露名称「字体对比」（英文原文 `Font Compare`，8 语言译文见
-`Localization/FontStrings.cs`）、版本 `0.0.1` 与描述。
+`Localization/FontStrings.cs`）、版本 `1.0.0` 与描述。
 
 ---
 
@@ -595,7 +633,7 @@ zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可�
 > `libfoo.so.1.2.3` 扩展名是 `.3`，路由不到本插件——这是宿主按扩展名路由的固有限制。
 
 插件实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「可执行文件对比」（英文原文
-`Executable Compare`，8 语言译文见 `Localization/ExecutableStrings.cs`）、版本 `0.0.1` 与描述。
+`Executable Compare`，8 语言译文见 `Localization/ExecutableStrings.cs`）、版本 `1.0.0` 与描述。
 
 ---
 
@@ -635,7 +673,7 @@ zip 中央目录未加密，条目名 / 大小 / 整包 MD5 无需密码即可�
 > 文本差异固定由内置文本编辑器渲染。因此扩展名里故意不列它们，避免「声明了却从不生效」的假象。
 
 插件实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「证书对比」（英文原文
-`Certificate Compare`，8 语言译文见 `Localization/CertificateStrings.cs`）、版本 `0.0.1` 与描述。
+`Certificate Compare`，8 语言译文见 `Localization/CertificateStrings.cs`）、版本 `1.0.0` 与描述。
 
 ---
 
@@ -666,7 +704,7 @@ INI / `.cfg` / `.properties` 自写解析器。
 打包时合并成 `ForkPlus.Plugins.Structured.THIRD-PARTY-NOTICES.txt`（见「第三方许可管理」）。
 
 插件实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「结构化数据对比」（英文原文
-`Structured Data Compare`，8 语言译文见 `Localization/StructuredStrings.cs`）、版本 `0.0.1` 与描述。
+`Structured Data Compare`，8 语言译文见 `Localization/StructuredStrings.cs`）、版本 `1.0.0` 与描述。
 
 ---
 
@@ -692,7 +730,7 @@ INI / `.cfg` / `.properties` 自写解析器。
 > 绑定到本插件。
 
 插件实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「字幕对比」（英文原文
-`Subtitle Compare`，8 语言译文见 `Localization/SubtitleStrings.cs`）、版本 `0.0.1` 与描述。
+`Subtitle Compare`，8 语言译文见 `Localization/SubtitleStrings.cs`）、版本 `1.0.0` 与描述。
 
 ---
 
@@ -718,7 +756,7 @@ INI / `.cfg` / `.properties` 自写解析器。
 > 命中**；要使用本视图，需在宿主「偏好设置 → 扩展名绑定」里把 `.svg` 绑定到本插件。
 
 插件实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「SVG 对比」（英文原文
-`SVG Compare`，8 语言译文见 `Localization/SvgStrings.cs`）、版本 `0.0.1` 与描述。
+`SVG Compare`，8 语言译文见 `Localization/SvgStrings.cs`）、版本 `1.0.0` 与描述。
 
 ---
 
@@ -752,7 +790,7 @@ INI / `.cfg` / `.properties` 自写解析器。
 打包时合并成 `ForkPlus.Plugins.Dbc.THIRD-PARTY-NOTICES.txt`（见「第三方许可管理」）。
 
 插件实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「DBC 对比」（英文原文
-`DBC Compare`，8 语言译文见 `Localization/DbcStrings.cs`）、版本 `0.1.0` 与描述。
+`DBC Compare`，8 语言译文见 `Localization/DbcStrings.cs`）、版本 `1.0.0` 与描述。
 
 ---
 
@@ -790,7 +828,7 @@ INI / `.cfg` / `.properties` 自写解析器。
 `Audio output unavailable`，可视化照常显示——异常绝不冒泡到宿主。
 
 插件实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「音频对比」（英文原文
-`Audio Compare`，8 语言译文见 `Localization/AudioStrings.cs`）、版本 `0.0.1` 与描述。
+`Audio Compare`，8 语言译文见 `Localization/AudioStrings.cs`）、版本 `1.0.0` 与描述。
 
 ---
 
@@ -827,7 +865,7 @@ INI / `.cfg` / `.properties` 自写解析器。
 帧条 / 单帧的像素差异比按 `MediaLimits.PixelDiffThreshold`（24，逐通道最大差）计。
 
 插件实现 `IPluginMetadata`，向宿主「偏好设置 → 插件」页暴露名称「视频对比」（英文原文
-`Video Compare`，8 语言译文见 `Localization/VideoStrings.cs`）、版本 `0.0.1` 与描述。
+`Video Compare`，8 语言译文见 `Localization/VideoStrings.cs`）、版本 `1.0.0` 与描述。
 
 ---
 
@@ -846,7 +884,7 @@ INI / `.cfg` / `.properties` 自写解析器。
 - diff 一次算全、模式只过滤展示；300 MB 阈值同取方案 A，后台解析 + 代次取消。
 - **零第三方依赖**，随包进 `plugins/` 的只有插件自身主 DLL。
 - 插件实现 `IPluginMetadata`，名称「机器学习模型对比」（`ML Model Compare`，
-  译文见 `Localization/MlModelStrings.cs`）、版本 `0.0.1` 与描述。
+  译文见 `Localization/MlModelStrings.cs`）、版本 `1.0.0` 与描述。
 
 ---
 
@@ -862,7 +900,7 @@ INI / `.cfg` / `.properties` 自写解析器。
   - **钢琴卷帘**：两侧按同一时间刻度上下并排的卷帘条，音块四色染色，直观看哪里挪了 / 加了 / 删了。
 - **零第三方依赖**，随包进 `plugins/` 的只有插件自身主 DLL。
 - 插件实现 `IPluginMetadata`，名称「MIDI 对比」（`MIDI Compare`，
-  译文见 `Localization/MidiStrings.cs`）、版本 `0.0.1` 与描述。
+  译文见 `Localization/MidiStrings.cs`）、版本 `1.0.0` 与描述。
 
 ---
 
@@ -877,7 +915,7 @@ INI / `.cfg` / `.properties` 自写解析器。
   避免 `{N} bytes` 字面相同把真的改动了误判成相同。
 - **零第三方依赖**，随包进 `plugins/` 的只有插件自身主 DLL。
 - 插件实现 `IPluginMetadata`，名称「种子文件对比」（`Torrent Compare`，
-  译文见 `Localization/TorrentStrings.cs`）、版本 `0.0.1` 与描述。
+  译文见 `Localization/TorrentStrings.cs`）、版本 `1.0.0` 与描述。
 
 ---
 
@@ -896,7 +934,7 @@ INI / `.cfg` / `.properties` 自写解析器。
 - 单侧包数上限 200000（超出记 Truncated）、包列表保留 2000 条，统计仍按全部包计算。
 - **零第三方依赖**，随包进 `plugins/` 的只有插件自身主 DLL。
 - 插件实现 `IPluginMetadata`，名称「网络抓包对比」（`Packet Capture Compare`，
-  译文见 `Localization/PcapStrings.cs`）、版本 `0.0.1` 与描述。
+  译文见 `Localization/PcapStrings.cs`）、版本 `1.0.0` 与描述。
 
 ---
 
@@ -915,7 +953,7 @@ INI / `.cfg` / `.properties` 自写解析器。
 - 不做像素级合成，只解析骨架与缩略图，大文件也能秒开；300 MB 阈值同取方案 A。
 - SkiaSharp 由宿主共享（与字体插件同口径），随包进 `plugins/` 的只有插件自身主 DLL。
 - 插件实现 `IPluginMetadata`，名称「PSD 图层对比」（`PSD Compare`，
-  译文见 `Localization/PsdStrings.cs`）、版本 `0.0.1` 与描述。
+  译文见 `Localization/PsdStrings.cs`）、版本 `1.0.0` 与描述。
 
 ---
 
@@ -932,7 +970,7 @@ INI / `.cfg` / `.properties` 自写解析器。
   - **章节**：spine 章节按序号对齐，逐章四色标注（manifest 缺项 / 顺序调整一目了然）。
 - **零第三方依赖**，随包进 `plugins/` 的只有插件自身主 DLL。
 - 插件实现 `IPluginMetadata`，名称「EPUB 电子书对比」（`EPUB Compare`，
-  译文见 `Localization/EpubStrings.cs`）、版本 `0.0.1` 与描述。
+  译文见 `Localization/EpubStrings.cs`）、版本 `1.0.0` 与描述。
 
 ---
 
@@ -955,7 +993,7 @@ INI / `.cfg` / `.properties` 自写解析器。
   Truncated）、长值截断 120 字符，单侧声明大小超过 300 MB 只提示不解析；B 树遍历用「已访问页集合」防环。
 - **零第三方依赖**，随包进 `plugins/` 的只有插件自身主 DLL。
 - 插件实现 `IPluginMetadata`，名称「SQLite 数据库对比」（`SQLite Compare`，
-  译文见 `Localization/SqliteStrings.cs`）、版本 `0.0.1` 与描述。
+  译文见 `Localization/SqliteStrings.cs`）、版本 `1.0.0` 与描述。
 
 ---
 
@@ -979,7 +1017,7 @@ INI / `.cfg` / `.properties` 自写解析器。
 - 类型上限 5000、单类型成员上限 200、引用上限 500（超出记 Truncated），单侧声明大小超过 300 MB 只提示不解析。
 - **零第三方依赖**（全为共享框架内置类型），随包进 `plugins/` 的只有插件自身主 DLL。
 - 插件实现 `IPluginMetadata`，名称「托管程序集对比」（`Managed Assembly Compare`，
-  译文见 `Localization/ManagedAssemblyStrings.cs`）、版本 `0.0.1` 与描述。
+  译文见 `Localization/ManagedAssemblyStrings.cs`）、版本 `1.0.0` 与描述。
 
 ---
 
@@ -1000,7 +1038,7 @@ INI / `.cfg` / `.properties` 自写解析器。
 - 邮件头上限 200、部件上限 200、正文行上限 2000，单侧声明大小超过 300 MB 只提示不解析。
 - **零第三方依赖**（全为共享框架内置的 `System.*`），随包进 `plugins/` 的只有插件自身主 DLL。
 - 插件实现 `IPluginMetadata`，名称「邮件对比」（`EML Compare`，
-  译文见 `Localization/EmlStrings.cs`）、版本 `0.0.1` 与描述。
+  译文见 `Localization/EmlStrings.cs`）、版本 `1.0.0` 与描述。
 
 ---
 
@@ -1177,56 +1215,39 @@ workflow：[.github/workflows/build.yml](.github/workflows/build.yml)
   | linux-arm64 | `ubuntu-22.04-arm` | `linux-arm64` |
   | macos-arm64 | `macos-latest` | `osx-arm64` |
 
-- **出包**：每个平台构建一遍全部插件，用 `install-plugin-artifacts.sh` 把每个插件的
-  **主 DLL + 私有依赖（托管程序集 / 原生库）+ 第三方许可声明** 打进一个包；
-  宿主共享程序集（契约 / Avalonia / SkiaSharp / NLog…）由脚本排除，不随插件分发：
+- **出包**：每个平台构建一遍全部插件，用 `install-plugin-artifacts.sh` 把每个插件装进包内
+  `plugins/<AssemblyName>/` 子目录（目录名=程序集名），内含 `plugin.json`、**主 DLL + 私有依赖
+  （托管程序集 / 原生库）+ 第三方许可声明**；宿主共享程序集（契约 / Ui / Avalonia / SkiaSharp /
+  NLog…）由脚本排除，不随插件分发。每个平台产出**两类包**（内部结构一致）：
 
   ```
-  ForkPlus-Plugins-<版本>-<平台>.zip
+  ForkPlus-Plugins-<插件仓版本>-<平台>.zip      # 合集包：含全部插件
+  ForkPlus-Plugins-<Short>-1.0.0-<平台>.zip     # 单插件包：每插件一个
   └── plugins/
-      ├── ForkPlus.Plugins.Example.dll
-      ├── ForkPlus.Plugins.Pdf.dll
-      ├── Docnet.Core.dll                    # PDF 插件私有依赖
-      ├── pdfium.so                          # PDF 插件私有原生库（按平台）
-      ├── ForkPlus.Plugins.Pdf.THIRD-PARTY-NOTICES.txt   # 三方许可声明（Docnet.Core / PDFium）
-      ├── ForkPlus.Plugins.Office.dll
-      ├── DocumentFormat.OpenXml.dll         # Office 插件私有依赖
-      ├── DocumentFormat.OpenXml.Framework.dll
-      ├── System.IO.Packaging.dll
-      ├── ForkPlus.Plugins.Office.THIRD-PARTY-NOTICES.txt # 三方许可声明（Open XML SDK 等）
-      ├── ForkPlus.Plugins.Archive.dll
-      ├── SharpCompress.dll                  # 压缩包插件私有依赖
-      ├── ForkPlus.Plugins.Archive.THIRD-PARTY-NOTICES.txt # 三方许可声明（SharpCompress）
-      ├── ForkPlus.Plugins.Font.dll          # 字体插件（零私有依赖）
-      ├── ForkPlus.Plugins.Executable.dll    # 可执行文件插件（零私有依赖）
-      ├── ForkPlus.Plugins.Certificate.dll
-      ├── System.Security.Cryptography.Pkcs.dll # 证书插件私有依赖
-      ├── ForkPlus.Plugins.Certificate.THIRD-PARTY-NOTICES.txt # 三方许可声明（Pkcs）
-      ├── ForkPlus.Plugins.Structured.dll
-      ├── YamlDotNet.dll                     # 结构化数据插件私有依赖
-      ├── Tomlyn.dll                         # 结构化数据插件私有依赖
-      ├── ForkPlus.Plugins.Structured.THIRD-PARTY-NOTICES.txt # 三方许可声明（YamlDotNet / Tomlyn）
-      ├── ForkPlus.Plugins.Dbc.dll
-      ├── DbcParserLib.dll                   # DBC 插件私有依赖
-      ├── ForkPlus.Plugins.Dbc.THIRD-PARTY-NOTICES.txt # 三方许可声明（DbcParserLib）
-      ├── ForkPlus.Plugins.Subtitle.dll      # 字幕插件（零私有依赖）
-      ├── ForkPlus.Plugins.Svg.dll           # SVG 插件（零私有依赖）
-      ├── ForkPlus.Plugins.Audio.dll
-      ├── ForkPlus.Plugins.Video.dll
-      ├── ForkPlus.Plugins.Media.dll         # 音视频插件共享解码核心（私有依赖）
-      ├── FFmpeg.AutoGen.dll                 # 音视频绑定（私有依赖）
-      ├── libavformat.so.63                  # 音视频私有原生库（按平台 / SONAME）
-      ├── libavcodec.so.63 …
-      ├── ForkPlus.Plugins.Audio.THIRD-PARTY-NOTICES.txt   # 三方许可声明（FFmpeg / FFmpeg.AutoGen）
-      ├── ForkPlus.Plugins.Video.THIRD-PARTY-NOTICES.txt   # 同上
-      └── …（其余插件）
+      ├── ForkPlus.Plugins.Pdf/
+      │   ├── plugin.json
+      │   ├── ForkPlus.Plugins.Pdf.dll
+      │   ├── Docnet.Core.dll                   # PDF 插件私有依赖
+      │   ├── pdfium.so                         # PDF 插件私有原生库（按平台）
+      │   └── ForkPlus.Plugins.Pdf.THIRD-PARTY-NOTICES.txt
+      ├── ForkPlus.Plugins.Office/
+      │   ├── plugin.json
+      │   ├── ForkPlus.Plugins.Office.dll
+      │   ├── DocumentFormat.OpenXml.dll        # Office 插件私有依赖
+      │   └── ForkPlus.Plugins.Office.THIRD-PARTY-NOTICES.txt
+      ├── ForkPlus.Plugins.Audio/ …             # 含 Media 共享解码核心 / FFmpeg 原生库等私有依赖
+      └── …（其余插件，每插件一个 plugins/<AssemblyName>/ 子目录）
   ```
 
-  版本号取自标签（`v1.2.3` → `1.2.3`）；手动触发时为 `0.0.0-dev-<短 SHA>`。
+  - **合集包版本**取自标签（`v1.2.3` → `1.2.3`）；手动触发时为 `0.0.0-dev-<短 SHA>`。
+  - **单插件包版本**固定为插件自身版本 `1.0.0`；`<Short>` 为 `AssemblyName` 去掉前缀
+    `ForkPlus.Plugins.`（如 `ForkPlus.Plugins.Pdf` → `Pdf`，`ForkPlus.Plugins.Image` → `Image`）。
 
 ### 安装
 
-解压包，把 `plugins/` 目录下的 DLL 拷入 ForkPlus 安装目录的 `plugins/`（已存在则覆盖），重启 ForkPlus 生效。
+解压包，把 `plugins/` 下的**每个子目录**（`plugins/<AssemblyName>/`）拷入 ForkPlus 安装目录的
+`plugins/`（已存在则覆盖），重启 ForkPlus 生效。宿主 **5.1.0** 起按 `plugins/<目录>/plugin.json`
+扫描插件，并校验 `minHostVersion`（主程序版本 ≥ 该值才兼容，否则不加载）。
 
 ---
 

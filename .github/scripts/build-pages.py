@@ -141,6 +141,7 @@ def main():
             "PLUGIN_NAME": p.get("name", p["id"]),
             "PLUGIN_SUMMARY": p.get("summary", ""),
             "PLUGIN_VERSION": p.get("version", "-"),
+            "PLUGIN_MIN_HOST_VERSION": p.get("minHostVersion", "-"),
             "PLUGIN_ASSEMBLY": p.get("assembly", "-"),
             "PLUGIN_SOURCE": p.get("source", "-"),
             "PLUGIN_EXTENSIONS": ext_codes(p.get("extensions", [])) or "<code>*</code>",

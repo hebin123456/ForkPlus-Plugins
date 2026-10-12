@@ -6,7 +6,7 @@
     <RootNamespace>ForkPlus.Plugins.Audio</RootNamespace>
 
     <!-- 插件自身版本（与宿主版本解耦）。 -->
-    <Version>0.0.1</Version>
+    <Version>1.0.0</Version>
 
     <!-- 本插件带私有依赖：共享解码核心 ForkPlus.Plugins.Media.dll + FFmpeg.AutoGen（托管绑定）
          + 按 RID 的 FFmpeg 原生库。类库工程默认不拷 PackageReference 资产，这里显式开启。 -->
