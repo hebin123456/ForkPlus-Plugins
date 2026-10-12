@@ -8,13 +8,15 @@
 
 ForkPlus 对比视图插件仓库。
 
-ForkPlus 的「文件对比视图」是插件化的：宿主启动时扫描可执行文件旁的 `plugins/` 目录，
-加载其中的 DLL 并发现 `IDiffViewPlugin` 实现，再按文件扩展名把对应文件的对比视图路由给插件。
+ForkPlus 的「文件对比视图」是插件化的：宿主启动时扫描可执行文件旁 `plugins/` 目录下每个插件
+子目录的 `plugin.json` 清单，校验最低支持主程序版本（`minHostVersion`）后加载对应程序集，
+发现 `IDiffViewPlugin` 实现，再按文件扩展名把对应文件的对比视图路由给插件。
 主仓 ForkPlus 只内置图片（`forkplus.image`）与二进制 / Hex（`forkplus.hex`）两个视图插件，
 本仓库用于承载官方与第三方扩展的对比视图插件。
 
 - **插件形态**：进程内 DLL（与宿主同一进程，非独立进程、不走 JSON 协议）
-- **加载目录**：ForkPlus 安装目录下的 `plugins/`（扫描其中的 `*.dll`，一个 DLL 一个插件）
+- **加载目录**：ForkPlus 安装目录下的 `plugins/`；每个插件独占一个子目录
+  （`plugins/<AssemblyName>/`，目录内含 `plugin.json` 清单），依赖彼此隔离、可整目录卸载
 - **契约程序集**：`ForkPlus.Plugins.Abstractions`（运行期由宿主提供，插件不随包分发）
 - **目标平台**：与 ForkPlus 四平台一致 —— Windows x64 / Linux x64 / Linux ARM64 / macOS ARM64
 
@@ -26,7 +28,7 @@ ForkPlus 的「文件对比视图」是插件化的：宿主启动时扫描可�
 ForkPlus-Plugins/
 ├── .github/
 │   ├── scripts/
-│   │   ├── install-plugin-artifacts.sh   # 单插件产物安装（主 DLL + 私有依赖 + 原生库，排除宿主共享程序集）
+│   │   ├── install-plugin-artifacts.sh   # 插件产物安装（按 <AssemblyName> 子目录落位：plugin.json + 主 DLL + 私有依赖 + 原生库，排除宿主共享程序集）
 │   │   ├── fetch-third-party.sh          # 按 RID 取三方件仓最新 Release 的原生库（校验 sha256，不锁版本）
 │   │   ├── collect-third-party-notices.py# 由插件登记表 + licenses/ 全文生成第三方许可声明
 │   │   ├── capture-screenshots.sh        # Pages 截图采集（装插件 → 无头启动 ForkPlus → 截图）
