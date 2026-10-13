@@ -28,6 +28,8 @@
 #   DISPLAY_NUM  Xvfb 显示号（默认 :77）
 #   SCREEN_W/H   虚拟屏尺寸（默认 1920x1280）
 #   CLICK_X      demo 仓库文件行的点击横向位置（默认屏宽 33%）
+#   CAPTURE_RETRIES  单场景触发对比视图的最大尝试次数（默认 3）。无头 X 环境偶有点击未命中
+#                    （时序抖动），而脚本是「单场景失败即整轮失败」，故允许整场景重试。
 #   PLUGIN_VERSION  站点「Plugins 版本」徽章文案；不传则由 git describe 推（CI 由 pages.yml
 #                   的「Resolve plugins version」步传入：tag 推送用 tag 名，分支推送用最近 tag）
 #
@@ -2446,6 +2448,8 @@ dismiss_dialogs() {
 # ── ⑥ 启动并截图 ─────────────────────────────────────────────────────────────
 # 打开单个仓库，逐行扫过差异区的文件行；日志一出现目标插件的 marker 就整屏截图。
 # marker 由各插件在 SetContent 里写日志给出；日志从头读起，自动加载或点击触发都能命中。
+# 无头 X 环境的点击偶发未命中（时序抖动），单次失败即会让整轮 Pages 失败，故整个场景
+# 允许重试 CAPTURE_RETRIES 次（默认 3）：每次重新启动 ForkPlus、清空日志后重扫。
 capture_one() {
 	local repo="$1" marker="$2" outfile="$3" settle="$4" label="$5" plugin_mode="${6:-}"
 	log "启动 ForkPlus 打开 $repo（$label）"
@@ -2457,41 +2461,70 @@ capture_one() {
 	#  CHM entries / preview，前端代码 source，字体 metadata / codepoints，可执行文件 sections / symbols / size，
 	#  证书 chain，SQLite data，托管程序集 types / references，邮件 EML parts / body）；
 	# 不设则走各插件默认模式。
-	( cd "$APPDIR" && DISPLAY="$DISPLAY_NUM" FORKPLUS_PLUGIN_VIEW_MODE="$plugin_mode" \
-		./ForkPlus "$repo" >"$WORK/forkplus.log" 2>&1 & )
 
-	local ok=0
-	# 等待主窗口期间持续关闭启动期模态弹窗（git 版本提示等会阻塞主窗口创建）
-	for _ in $(seq 1 90); do
-		if DISPLAY="$DISPLAY_NUM" wmctrl -l 2>/dev/null | grep -q 'ForkPlus$'; then ok=1; break; fi
-		dismiss_dialogs 1
-		sleep 1
-	done
-	[ "$ok" = 1 ] || die "ForkPlus 主窗口未出现（见 $WORK/forkplus.log）"
-	sleep 3
-	# 主窗口出现后仍可能有「更新内容」等延迟一帧弹出的模态窗
-	dismiss_dialogs 10
-	sleep 2
-
-	# 插件加载确认（日志）
 	local logfile="$HOME/.local/share/ForkPlus/logs/fork.log"
-	grep -q "Diff view plugins loaded" "$logfile" 2>/dev/null \
-		&& grep "Diff view plugins loaded" "$logfile" | tail -n1 \
-		|| echo "  （未找到插件加载日志，继续）"
+	local cap_retries="${CAPTURE_RETRIES:-3}"
+	local attempt y hit=0
 
-	local start_y=$(( SCREEN_H * 45 / 100 ))
-	local end_y=$(( SCREEN_H * 99 / 100 ))
-	local y hit=0
-	# 每点一行就看整份日志是否已含 marker：视图若在启动时已加载，第一轮即命中
-	for (( y=start_y; y<=end_y; y+=12 )); do
-		DISPLAY="$DISPLAY_NUM" xdotool mousemove "$CLICK_X" "$y" click 1 2>/dev/null || true
-		sleep 1.2
-		if [ -f "$logfile" ] && grep -qF "$marker" "$logfile"; then
-			hit=1
+	for (( attempt=1; attempt<=cap_retries; attempt++ )); do
+		if [ "$attempt" -gt 1 ]; then
+			log "  重试 $attempt/$cap_retries：$label"
+		fi
+
+		# 上一轮残留的进程与日志先清干净：避免旧进程占用窗口 / 旧 marker 造成误判。
+		# （seed_settings 已在整轮开始时建好目录，这里只清日志文件。）
+		pkill -x ForkPlus 2>/dev/null || true
+		for _ in $(seq 1 10); do
+			if ! pgrep -x ForkPlus >/dev/null 2>&1; then break; fi
+			sleep 1
+		done
+		rm -f "$logfile"
+
+		( cd "$APPDIR" && DISPLAY="$DISPLAY_NUM" FORKPLUS_PLUGIN_VIEW_MODE="$plugin_mode" \
+			./ForkPlus "$repo" >"$WORK/forkplus.log" 2>&1 & )
+
+		local ok=0
+		# 等待主窗口期间持续关闭启动期模态弹窗（git 版本提示等会阻塞主窗口创建）
+		for _ in $(seq 1 90); do
+			if DISPLAY="$DISPLAY_NUM" wmctrl -l 2>/dev/null | grep -q 'ForkPlus$'; then ok=1; break; fi
+			dismiss_dialogs 1
+			sleep 1
+		done
+		if [ "$ok" != 1 ]; then
+			echo "  ForkPlus 主窗口未出现（见 $WORK/forkplus.log），本轮跳过"
+			continue
+		fi
+		sleep 3
+		# 主窗口出现后仍可能有「更新内容」等延迟一帧弹出的模态窗
+		dismiss_dialogs 10
+		sleep 2
+
+		# 插件加载确认（日志）
+		grep -q "Diff view plugins loaded" "$logfile" 2>/dev/null \
+			&& grep "Diff view plugins loaded" "$logfile" | tail -n1 \
+			|| echo "  （未找到插件加载日志，继续）"
+
+		local start_y=$(( SCREEN_H * 45 / 100 ))
+		local end_y=$(( SCREEN_H * 99 / 100 ))
+		hit=0
+		# 每点一行就看整份日志是否已含 marker：视图若在启动时已加载，第一轮即命中
+		for (( y=start_y; y<=end_y; y+=12 )); do
+			DISPLAY="$DISPLAY_NUM" xdotool mousemove "$CLICK_X" "$y" click 1 2>/dev/null || true
+			sleep 1.2
+			if [ -f "$logfile" ] && grep -qF "$marker" "$logfile"; then
+				hit=1
+				break
+			fi
+		done
+		if [ "$hit" = 1 ]; then
 			break
 		fi
+		echo "  未命中（marker=$marker），本轮结束"
 	done
-	[ "$hit" = 1 ] || die "未能触发「$label」对比视图（marker=$marker，见 $logfile）"
+
+	if [ "$hit" != 1 ]; then
+		die "未能触发「$label」对比视图（marker=$marker，已重试 ${CAPTURE_RETRIES:-3} 次，见 $logfile）"
+	fi
 	echo "  $label：命中文件行 y=$y"
 
 	sleep "$settle"
