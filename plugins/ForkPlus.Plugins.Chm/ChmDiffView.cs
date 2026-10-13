@@ -703,7 +703,14 @@ namespace ForkPlus.Plugins.Chm
 		{
 			if (_preview == null)
 			{
-				_preview = new SideBySideHtmlPreview();
+				// 宿主把插件视图挂进「提交页」的 ItemsControl → Expander → ScrollViewer 链
+				// （见 RevisionSummaryUserControl.axaml），纵向测量是无界的：星行按 Auto 解析，
+				// 原生 WebView 的自然高度近 0，会被折叠成 1px 导致预览空白。给预览控件一个最小
+				// 高度，让它在无界测量下仍拿到确定高度；宿主给出确定高度时星行照常填满，不受影响。
+				_preview = new SideBySideHtmlPreview
+				{
+					MinHeight = 420.0
+				};
 			}
 			// 占位 / 降级文案随界面语言（shared 组件默认中文，这里按插件译文覆盖）。
 			_preview.AbsentText = DisplayAbsentText();
