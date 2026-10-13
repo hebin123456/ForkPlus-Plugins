@@ -1330,6 +1330,68 @@
           "html": "<p>头部解析 / 目录遍历 / LZX 解压 / 内容指纹全用共享框架内置的 <code>System.*</code>（视图用 Avalonia；「预览」用的 <code>HtmlPreview</code> 来自宿主共享组件 <code>ForkPlus.Plugins.Ui</code>，其底层官方 <code>Avalonia.Controls.WebView</code> 也由宿主提供），因此<strong>不分发任何私有托管或原生依赖</strong>，随包进 <code>plugins/</code> 的只有插件自身主 DLL。「预览」依赖宿主 <strong>5.1.1</strong> 起的共享组件，故 <code>plugin.json</code> 的 <code>minHostVersion</code> 声明 <code>5.1.1</code>。CHM 头部含 NUL，宿主只对<strong>二进制</strong>差异查询插件路由，自动命中本视图，无需手动绑定；若用户已在设置里把 <code>.chm</code> 绑定到别的插件，则以用户绑定为准（优先级最高）。单侧声明大小超过 <code>MaxSideBytes</code>（<code>300 * 1024 * 1024</code>，即 300 MB）时只显示提示、两侧都不解析。解析与对齐都在后台线程，控件只在 UI 线程构建；每次刷新 / 切模式用「代次 <code>_generation</code> + <code>CancellationTokenSource</code>」取消上一轮。</p>"
         }
       ]
+    },
+    {
+      "id": "frontend",
+      "name": "前端代码预览对比插件 · Frontend Preview",
+      "version": "1.0.0",
+      "minHostVersion": "5.1.1",
+      "assembly": "ForkPlus.Plugins.Frontend",
+      "source": "plugins/ForkPlus.Plugins.Frontend",
+      "summary": "前端代码预览对比视图：认领 .html / .htm / .vue，命中后把两侧各自组装成自包含 HTML——.html / .htm 归一 charset 后原样呈现，.vue 交给随包内嵌的 Vue 3 全量运行时（含模板编译器，MIT）做运行期模板编译——交给宿主共享组件 ForkPlus.Plugins.Ui 的并排双 WebView 真渲染；另提供「源码」模式并排查看原始代码。无头环境缺 WebView 运行时时「渲染」模式仅给提示（降级不报错），可切「源码」模式。页面里以相对路径引用的外部 css / js / 图片无法解析（插件只拿到仓库相对路径），仅自包含页面能完整渲染——已在描述与「渲染」模式内容区顶部如实标注。单侧声明大小超过 300 MB 只给提示、不组装。",
+      "extensions": [
+        ".html",
+        ".htm",
+        ".vue"
+      ],
+      "screenshots": [
+        {
+          "file": "frontend-modify.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.html，差异区由前端代码插件以「渲染」模式并排双 WebView 真渲染两侧自包含页面",
+          "caption": "「修改」对比（前端代码 · .html，1920×1280 完整界面，未裁切）：默认停在「渲染」模式。顶部两栏标题由宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色，文字形如 <code>旧 · sample.html · …</code> / <code>新 · …</code>；状态行给出 <code>前端对比：sample.html / sample.html · 内容有差异</code>。内容区顶部一行浅色小字如实标注「页面里以相对路径引用的外部 css / js / 图片无法解析，可能缺失。」；其下是并排双 WebView——左右两侧各渲染 demo 的自包含卡片页（v2 把版本徽章从 <code>v1</code> 换成 <code>v2</code>、列表项从「Old: export to PNG only.」换成「New: export to SVG.」并新增一项），一眼看出排版与内容的真实差异。无头环境缺 WebView 运行时时两侧仅给「当前环境不支持渲染预览」提示（降级不报错）。"
+        },
+        {
+          "file": "frontend-add.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 add: sample.vue，差异区右栏由插件随包内嵌的 Vue 3 运行时渲染新增的 Vue 单文件组件，左栏显示不存在占位",
+          "caption": "「新增」对比（前端代码 · .vue）：提交给仓库新增了 <code>sample.vue</code>，旧侧不存在。左栏标题写 <code>旧 · 不存在</code>，右栏标题 <code>已创建 · sample.vue · …</code>；右栏 <code>VueComponentCompiler</code> 现场把 Options API 单文件组件（<code>&lt;template&gt;</code> + <code>&lt;script&gt;</code> + <code>&lt;style&gt;</code>）组装成自包含 HTML——内联随包 Vue 3 全量运行做运行期模板编译——渲染出卡片页：标题 <code>ForkPlus Vue Preview</code>、可点的计数按钮 <code>Clicked 0 times</code>（<code>@click</code> 已接线）、版本徽章 <code>version 2</code> 与 <code>v-for</code> 列表项。一眼看出是纯新增的 Vue 组件真渲染，而非解析失败或占位空白。"
+        },
+        {
+          "file": "frontend-remove.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.htm，差异区左栏渲染被删除的自包含页面，右栏显示不存在占位",
+          "caption": "「删除」对比（前端代码 · .htm）：提交删除了 <code>sample.htm</code>，新侧不存在。左栏标题 <code>已删除 · sample.htm · …</code> 下「渲染」模式真渲染被删页面的完整卡片，右栏标题 <code>新 · 不存在</code>。删除场景同样可见完整内容，而不是空白。"
+        },
+        {
+          "file": "frontend-source.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.html，差异区切到前端代码插件的「源码」模式，左右两栏并排显示等宽原始代码",
+          "caption": "「源码」模式（前端代码 · .html，modify 场景）：点模式栏的「源码」按钮切到两栏并排的原始代码（等宽、只读、可选中，各带文件名小标题与独立滚动条）。当「渲染」模式看不出差异、或页面引用了无法解析的外部资源时，源码模式是可靠的兜底口径。单侧超过 20 万字符时只显示前若干字符并在栏下注明「仅显示前 N 个字符」。"
+        }
+      ],
+      "sections": [
+        {
+          "heading": "对比视图长什么样",
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式工具栏</strong>、<strong>内容区</strong>。标题行采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色，文字形如 <code>旧 · sample.html · 12 KB</code>（角色名取 <code>PluginEnvironment.Translate</code>，文件名取 <code>Path.GetFileName</code>，体积取 <code>PluginSizeFormat.ReadableFileSize</code>）；某一侧为 <code>null</code> 时显示 <code>不存在</code>。状态行给出 <code>前端对比：&lt;标题&gt; / &lt;标题&gt;</code>，再按情况追加「内容有差异 / 无差异 / 一侧不存在，仅显示另一侧。」；两侧内容相同则显示「无差异」。模式工具栏两个 <code>Button</code>（<code>渲染 / 源码</code>），当前项加浅蓝底 + 半粗。</p>"
+        },
+        {
+          "heading": "渲染模式：并排双 WebView 真渲染自包含页面",
+          "html": "<p>默认的「渲染」模式把两侧源码在后台各自组装成<strong>自包含 HTML</strong>，交给宿主共享组件 <code>ForkPlus.Plugins.Ui</code> 的 <code>SideBySideHtmlPreview</code>（基于官方 <code>Avalonia.Controls.WebView</code>：Windows=WebView2 / macOS=WKWebView / Linux=WPE WebKit，缺失回退 WebKitGTK）并排渲染。<code>.html</code> / <code>.htm</code> 归一 <code>&lt;meta charset&gt;</code> 为 UTF-8（与宿主按 UTF-8 解码一致）后原样呈现；某侧不存在 / 无内容时该侧占位；WebView 不可用（headless、缺 WebView2 运行时 / WPE WebKit / WebKitGTK）时两侧仅给「当前环境不支持渲染预览」提示——<strong>降级只提示，不报错</strong>。内容区顶部固定一行小字如实标注「页面里以相对路径引用的外部 css / js / 图片无法解析，可能缺失。」。HTML 在后台线程组装，控件只在 UI 线程构建。</p>"
+        },
+        {
+          "heading": "源码模式：并排看原始代码",
+          "html": "<p>点「源码」按钮切到两栏并排的原始代码：等宽字体（<code>Consolas, Menlo, DejaVu Sans Mono, Courier New, monospace</code>）、只读、可选中、各自独立滚动（<code>SelectableTextBlock</code> + <code>ScrollViewer</code>），每栏带文件名小标题。是「渲染」模式看不出差异或页面引用外部资源时的可靠兜底。单侧展示上限 <code>MaxSourceChars</code>（<code>200000</code> 字符），超出只显示前段并在栏下注明「仅显示前 N 个字符（共 M 个）」，避免超长文件拖死 UI。源码解码：优先宿主 Hex 预载流，其次侧内容懒加载，再次 LFS 本地缓存。</p>"
+        },
+        {
+          "heading": "Vue 单文件组件：随包 Vue 3 运行时编译",
+          "html": "<p>认领的 <code>.vue</code> 由 <code>VueComponentCompiler</code> 组装：提取顶层 <code>&lt;template&gt;</code>（按同名标签深度配对，兼容内部嵌套 <code>&lt;template&gt;</code>）/ <code>&lt;script&gt;</code> / <code>&lt;script setup&gt;</code> / <code>&lt;style&gt;</code> 块，把 <strong>Vue 3 全量构建</strong>（<code>Assets/vue.global.prod.js</code>，168 KB，MIT，随包内嵌为嵌入式资源）内联进页面，运行期对 <code>template</code> 做编译并 <code>Vue.createApp(...).mount('#app')</code>——<strong>离线自包含</strong>，无需网络、无需自定义协议，WebView <code>NavigateToString</code> 即可显示。这不是完整的 <code>@vue/compiler-sfc</code>，而是<strong>尽力而为</strong>的轻量转换：Options API 的 <code>export default {...}</code> 改写成 <code>return {...}</code>、<code>import { ... } from 'vue'</code> 变成从全局 <code>Vue</code> 解构；<code>&lt;script setup&gt;</code> 整体包成 <code>setup()</code> 并按顶层声明（<code>const/let/var</code> 具名与解构、<code>function</code>）自动 <code>return</code> 收集绑定；其它 import（本地文件 / npm 包）无法解析，按未定义占位。任何解析 / 运行期异常都在页面内以红色文本呈现，保证「渲染」模式始终有可见结果，而不是静默失败。</p>"
+        },
+        {
+          "heading": "路由与已知限制",
+          "html": "<p><code>.html</code> / <code>.htm</code> / <code>.vue</code> 是<strong>文本</strong>文件，git 默认判文本、走内置文本编辑器；宿主 <strong>5.0.5</strong> 起文本差异也会查询插件路由（<code>DiffViewPluginRegistry.ResolveClaimed</code>：用户绑定 &gt; 精确扩展名认领，不含 <code>\"*\"</code> 通配兜底），本插件以精确扩展名显式认领，因此<strong>默认即自动接管</strong>；用户在「偏好设置 → 扩展名绑定」里的绑定优先于自动路由（优先级最高）。<strong>已知限制（如实标注）</strong>：插件只拿到仓库相对路径，拿不到工作区绝对路径，因此页面里以相对路径引用的<strong>外部</strong> css / js / 图片无法解析——只有自包含（样式 / 脚本内联）的页面能完整渲染，「渲染」模式会在内容区顶部注明；单侧声明大小超过 <code>MaxSideBytes</code>（<code>300 * 1024 * 1024</code>，即 300 MB）时只显示提示、两侧都不组装。读取与组装都在后台线程，控件只在 UI 线程构建；每次刷新 / 切模式用「代次 <code>_generation</code> + <code>CancellationTokenSource</code>」取消上一轮；CI 截图可用环境变量 <code>FORKPLUS_PLUGIN_VIEW_MODE</code> 预选 <code>source</code> 模式（其余走默认 <code>render</code>）。</p>"
+        },
+        {
+          "heading": "第三方依赖：随包内嵌 Vue 3",
+          "html": "<p>随包进 <code>plugins/</code> 的只有插件自身主 DLL，而 Vue 3 全量运行时（<code>vue.global.prod.js</code>，<strong>3.5.43</strong>，<strong>MIT</strong>）作为<strong>嵌入式资源编进主 DLL</strong>（运行期从 <code>Assembly.GetManifestResourceStream(\"vue.global.prod.js\")</code> 读出，懒加载 + 进程级缓存），因此不额外分发独立文件；第三方声明登记在 <code>third-party.json</code>，许可全文见 <code>licenses/vue/LICENSE.txt</code>，由脚本合并进 <code>ForkPlus.Plugins.Frontend.THIRD-PARTY-NOTICES.txt</code>。除 Vue 外无任何第三方托管 / 原生依赖（Avalonia 与「渲染」用的 <code>HtmlPreview</code> 共享组件均由宿主运行期提供）。「渲染」依赖宿主 <strong>5.1.1</strong> 起的共享组件，故 <code>plugin.json</code> 的 <code>minHostVersion</code> 声明 <code>5.1.1</code>。</p>"
+        }
+      ]
     }
   ]
 }

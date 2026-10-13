@@ -257,16 +257,26 @@ ForkPlus-Plugins/
 │   │   ├── Localization/
 │   │   │   └── EmlStrings.cs             # 插件自带译文（8 语言）
 │   │   └── ForkPlus.Plugins.Eml.csproj   # 零第三方依赖
-│   └── ForkPlus.Plugins.Chm/             # CHM 帮助文档对比插件（元数据 / 目录条目 / 预览）
-│       ├── ChmDiffPlugin.cs
-│       ├── ChmDiffView.cs                # 三模式视图：元数据 / 目录条目 / 预览（并排双 WebView）
-│       ├── ChmHtmlComposer.cs            # 组装默认主题页的自包含 HTML（内联资源）供预览
-│       ├── ChmParser.cs                  # ITSF / ITSP 头部 + PMGL 目录块 + MSCompressed 内容流解压
-│       ├── ChmData.cs                    # 条目 / 元数据模型 + 元数据与条目 diff
-│       ├── LzxDecoder.cs                 # 纯托管 LZX 解压器（移植自 CHMLib 的 lzx.c）
+│   ├── ForkPlus.Plugins.Chm/             # CHM 帮助文档对比插件（元数据 / 目录条目 / 预览）
+│   │   ├── ChmDiffPlugin.cs
+│   │   ├── ChmDiffView.cs                # 三模式视图：元数据 / 目录条目 / 预览（并排双 WebView）
+│   │   ├── ChmHtmlComposer.cs            # 组装默认主题页的自包含 HTML（内联资源）供预览
+│   │   ├── ChmParser.cs                  # ITSF / ITSP 头部 + PMGL 目录块 + MSCompressed 内容流解压
+│   │   ├── ChmData.cs                    # 条目 / 元数据模型 + 元数据与条目 diff
+│   │   ├── LzxDecoder.cs                 # 纯托管 LZX 解压器（移植自 CHMLib 的 lzx.c）
+│   │   ├── Localization/
+│   │   │   └── ChmStrings.cs             # 插件自带译文（8 语言）
+│   │   └── ForkPlus.Plugins.Chm.csproj   # 零第三方依赖（纯托管解析 + 内置 LZX 解压）
+│   └── ForkPlus.Plugins.Frontend/        # 前端代码预览对比插件（渲染 / 源码，.html / .htm / .vue）
+│       ├── FrontendDiffPlugin.cs
+│       ├── FrontendDiffView.cs           # 两模式视图：渲染（并排双 WebView）/ 源码
+│       ├── VueComponentCompiler.cs       # 把 Vue SFC 组装成自包含 HTML（随包内嵌 Vue 3 运行时编译）
+│       ├── Assets/
+│       │   └── vue.global.prod.js        # Vue 3.5.43 全量构建（MIT，嵌入式资源，168 KB）
 │       ├── Localization/
-│       │   └── ChmStrings.cs             # 插件自带译文（8 语言）
-│       └── ForkPlus.Plugins.Chm.csproj   # 零第三方依赖（纯托管解析 + 内置 LZX 解压）
+│       │   └── FrontendStrings.cs        # 插件自带译文（7 语言）
+│       ├── plugin.json / third-party.json# 插件清单 / 第三方声明登记（Vue.js）
+│       └── ForkPlus.Plugins.Frontend.csproj # 唯一第三方：内嵌 Vue 3 运行时
 ├── licenses/                             # 第三方许可全文仓库（按组件分目录，集中管理）
 │   ├── docnet-core/LICENSE.txt           # Docnet.Core（MIT）
 │   ├── open-xml-sdk/LICENSE.txt          # Open XML SDK（MIT）
@@ -278,7 +288,8 @@ ForkPlus-Plugins/
 │   ├── miniaudio/LICENSE.txt             # miniaudio 音频输出后端（Unlicense OR MIT-0）
 │   ├── yamldotnet/LICENSE.txt            # YamlDotNet（MIT）
 │   ├── tomlyn/LICENSE.txt                # Tomlyn（BSD-2-Clause）
-│   └── dbcparserlib/LICENSE.txt          # DbcParserLib（MIT）
+│   ├── dbcparserlib/LICENSE.txt          # DbcParserLib（MIT）
+│   └── vue/LICENSE.txt                   # Vue.js（MIT）
 ├── third_party/                          # 三方件「件与锁」：清单入库，二进制不入库（构建前取件）
 │   ├── ffmpeg/manifest.json              # FFmpeg 来源 / 许可 / 运行期库 / 各 RID 说明（版本以三方件仓为准）
 │   ├── ffmpeg/<rid>/*.dll|*.so.*|*.dylib# 实际原生件（由 fetch-third-party.sh 取入）
@@ -460,7 +471,7 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 | `schemaVersion` | 清单格式版本，当前固定 `1`。 |
 | `id` | 插件唯一 Id，与代码里 `IDiffViewPlugin.Id` 一致（官方为 `forkplus.<name>`）。 |
 | `version` | 插件**自身**版本，与工程 `<Version>` 一致；本仓官方插件统一 `1.0.0`（EPUB / CHM 为 `1.0.1`）。 |
-| `minHostVersion` | **最低支持主程序版本**：宿主主程序版本 **≥** 该值才兼容并加载，否则不加载。本仓多数为 `5.1.0`；依赖宿主 `ForkPlus.Plugins.Ui` 共享组件「并排双 WebView 预览」的 EPUB / CHM 声明 `5.1.1`。 |
+| `minHostVersion` | **最低支持主程序版本**：宿主主程序版本 **≥** 该值才兼容并加载，否则不加载。本仓多数为 `5.1.0`；依赖宿主 `ForkPlus.Plugins.Ui` 共享组件「并排双 WebView 预览」的 EPUB / CHM / 前端代码声明 `5.1.1`。 |
 | `assembly` | 程序集名，取该插件 csproj 的 `<AssemblyName>`。 |
 
 - 安装后目录布局为 `plugins/<AssemblyName>/`（目录名=程序集名），目录内平铺 `plugin.json`、插件主 DLL、
@@ -1097,6 +1108,44 @@ INI / `.cfg` / `.properties` 自写解析器。
 
 ---
 
+## 前端代码预览对比插件
+
+[plugins/ForkPlus.Plugins.Frontend](plugins/ForkPlus.Plugins.Frontend) 认领 `.html` / `.htm` / `.vue`：
+改样式、改脚本、改模板之后，除了看代码，还能**并排真渲染**两侧页面，一眼看清改动的视觉效果。
+
+- 两模式（`Render / Source` 两个按钮切换，默认渲染；CI 截图可用环境变量
+  `FORKPLUS_PLUGIN_VIEW_MODE` 预选 `source`）：
+  - **渲染**：把两侧源码在后台各自组装成**自包含 HTML**，交给宿主共享组件 `ForkPlus.Plugins.Ui`
+    的 `SideBySideHtmlPreview`（基于官方 `Avalonia.Controls.WebView`：Windows=WebView2 /
+    macOS=WKWebView / Linux=WPE WebKit，缺失回退 WebKitGTK）并排双 WebView 真渲染。
+    `.html` / `.htm` 归一 `<meta charset>` 为 UTF-8 后原样呈现；`.vue` 走运行期编译（见下）。
+    WebView 不可用（headless、缺 WebView2 运行时 / WPE WebKit / WebKitGTK）时两侧仅给
+    「当前环境不支持渲染预览」提示（降级不报错），可切「源码」模式。
+  - **源码**：左右两栏并排看两侧原始代码（等宽、只读、可选中、各自独立滚动），
+    是「渲染」看不出差异、或页面引用外部资源时的可靠兜底；单侧超过 20 万字符只显示前段并注明。
+- **Vue 单文件组件运行期编译**：`VueComponentCompiler` 提取顶层 `<template>` / `<script>` /
+  `<script setup>` / `<style>` 块，内联**随包 Vue 3 全量构建**（`Assets/vue.global.prod.js`，
+  3.5.43，MIT，嵌入式资源，168 KB）后执行 `Vue.createApp(...).mount('#app')`——**离线自包含**，
+  无需网络、无需自定义协议。这是**尽力而为**的轻量转换（非完整 `@vue/compiler-sfc`）：
+  Options API 的 `export default {...}` 改写为 `return {...}`、`import { ... } from 'vue'`
+  变成从全局 `Vue` 解构；`<script setup>` 包成 `setup()` 并按顶层声明自动 `return` 收集绑定；
+  其它 import 无法解析按未定义占位；任何异常都在页面内以红色文本呈现，不静默失败。
+- **路由**：三者是**文本**文件，宿主 **5.0.5** 起文本差异也会查询插件路由
+  （`DiffViewPluginRegistry.ResolveClaimed`：用户绑定 > 精确扩展名认领），本插件以精确扩展名显式认领，
+  **默认即自动接管**；用户在「偏好设置 → 扩展名绑定」里的绑定优先（优先级最高）。
+- **已知限制（如实标注）**：插件只拿到仓库相对路径、拿不到工作区绝对路径，因此页面里以相对路径
+  引用的**外部** css / js / 图片无法解析——只有自包含页面能完整渲染，「渲染」模式会在内容区顶部注明。
+- 单侧声明大小超过 300 MB 只提示不组装；读取与组装在后台线程，控件只在 UI 线程构建，
+  每次刷新 / 切模式用「代次 + `CancellationTokenSource`」取消上一轮。
+- **唯一第三方依赖为内嵌的 Vue 3 运行时**（登记于 `third-party.json`，全文见 `licenses/vue/LICENSE.txt`，
+  脚本合并进 `ForkPlus.Plugins.Frontend.THIRD-PARTY-NOTICES.txt`）；随包进 `plugins/` 的只有插件自身主 DLL。
+- 插件实现 `IPluginMetadata`，名称「前端代码预览对比」（`Frontend Preview`，
+  译文见 `Localization/FrontendStrings.cs`）、版本 `1.0.0` 与描述。
+- 「渲染」依赖宿主 **5.1.1** 起提供的共享组件 `ForkPlus.Plugins.Ui`（`HtmlPreview`），
+  `plugin.json` 的 `minHostVersion` 声明 `5.1.1`。
+
+---
+
 ## Pages 截图约定
 
 插件对比视图的截图由 CI 在真实 ForkPlus 中现场采集（无头 X + 整屏截图），并随 Pages 一起发布上线；
@@ -1120,7 +1169,7 @@ INI / `.cfg` / `.properties` 自写解析器。
   机器学习模型插件即 `mlmodel-*.png`，MIDI 插件即 `midi-*.png`，Torrent 插件即 `torrent-*.png`，
   抓包插件即 `pcap-*.png`，PSD 插件即 `psd-*.png`，EPUB 插件即 `epub-*.png`，
   SQLite 插件即 `sqlite-*.png`，托管程序集插件即 `managedassembly-*.png`，邮件 EML 插件即 `eml-*.png`，
-  CHM 插件即 `chm-*.png`）；
+  CHM 插件即 `chm-*.png`，前端代码插件即 `frontend-*.png`）；
 - 截图规格：整屏 `1920×1280`，完整软件界面，不做局部裁切；
 - 缺任一场景视为截图不完整；插件新增变更形态时，同步补对应场景截图与 `plugins.json` 登记。
 - demo 素材由采集脚本现场构造（PDF 用 `write_demo_pdf`，Office 用 `write_demo_office`，
@@ -1170,6 +1219,12 @@ INI / `.cfg` / `.properties` 自写解析器。
   SQLite 三场景共用同一对 `.db`（旧：两表 + 索引 / 视图 / 触发器；新：改列 / 加表 / 改索引 / 删触发器 +
   数据增删改）并另取数据模式一张，托管程序集 modify/remove=`.dll` / add=`.exe`（v1 = 1.0.0.0，
   v2 = 2.0.0.0 且加方法 / 加类型 / 多一条 AssemblyRef）并另取类型 / 引用两张。
+- **前端代码** demo（`write_demo_frontend`）三场景各用一种扩展名（modify=`.html` / add=`.vue` /
+  remove=`.htm`），样本都是**自包含**页面（样式 / 脚本内联，不引用外部相对资源），因此「渲染」模式
+  能完整呈现；`.vue` 用 Options API 单文件组件（模板 + script + style），交给随包内嵌的 Vue 3
+  运行时做运行期编译。样本仍是**纯文本**，脚本比照上面文本格式的做法，在 demo 仓库用 `.gitattributes`
+  的 `-diff` 让差异走插件而非内置文本编辑器；渲染三场景各一张，另取「源码」模式一张
+  （用 `FORKPLUS_PLUGIN_VIEW_MODE=source` 预选）。
 - 采集脚本在构建插件前先跑 [fetch-third-party.sh](.github/scripts/fetch-third-party.sh) 从三方件仓
   最新 Release 取原生件并校验 sha256，否则音视频插件按 RID 拷不出原生库。
 
@@ -1179,7 +1234,8 @@ INI / `.cfg` / `.properties` 自写解析器。
 
 插件分发的第三方组件（如 PDF 插件的 Docnet.Core / PDFium、Office 插件的 Open XML SDK、
 压缩包插件的 SharpCompress、证书插件的 System.Security.Cryptography.Pkcs、结构化数据插件的
-YamlDotNet / Tomlyn、DBC 插件的 DbcParserLib、音视频插件的 FFmpeg / FFmpeg.AutoGen / miniaudio）
+YamlDotNet / Tomlyn、DBC 插件的 DbcParserLib、音视频插件的 FFmpeg / FFmpeg.AutoGen / miniaudio、
+前端代码插件内嵌的 Vue.js）
 **统一登记、集中存放、按包合并**，单一事实来源是两处：
 
 1. **`licenses/`** —— 各组件许可全文的中央仓库，按组件分目录（`licenses/<组件>/LICENSE.txt`）。

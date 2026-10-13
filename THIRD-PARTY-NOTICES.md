@@ -18,6 +18,7 @@
 | System.IO.Packaging | 8.0.1 | MIT | Copyright (c) .NET Foundation and Contributors | [ForkPlus.Plugins.Office](plugins/ForkPlus.Plugins.Office) | [LICENSE.txt](licenses/dotnet-runtime/LICENSE.txt) |
 | System.Security.Cryptography.Pkcs | 10.0.0 | MIT | Copyright (c) .NET Foundation and Contributors | [ForkPlus.Plugins.Certificate](plugins/ForkPlus.Plugins.Certificate) | [LICENSE.txt](licenses/dotnet-runtime/LICENSE.txt) |
 | Tomlyn | 0.19.0 | BSD-2-Clause | Copyright (c) 2019-2026, Alexandre Mutel | [ForkPlus.Plugins.Structured](plugins/ForkPlus.Plugins.Structured) | [LICENSE.txt](licenses/tomlyn/LICENSE.txt) |
+| Vue.js | 3.5.43 | MIT | Copyright (c) 2018-present, Yuxi (Evan) You and Vue contributors | [ForkPlus.Plugins.Frontend](plugins/ForkPlus.Plugins.Frontend) | [LICENSE.txt](licenses/vue/LICENSE.txt) |
 | YamlDotNet | 16.3.0 | MIT | Copyright (c) 2008-2014 Antoine Aubry and contributors | [ForkPlus.Plugins.Structured](plugins/ForkPlus.Plugins.Structured) | [LICENSE.txt](licenses/yamldotnet/LICENSE.txt) |
 | miniaudio | 0.11.25 | Unlicense OR MIT-0 | Copyright 2025 David Reid | [ForkPlus.Plugins.Audio](plugins/ForkPlus.Plugins.Audio)、[ForkPlus.Plugins.Video](plugins/ForkPlus.Plugins.Video) | [LICENSE.txt](licenses/miniaudio/LICENSE.txt) |
 

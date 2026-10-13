@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- 前端代码对比视图插件：认领 .html / .htm / .vue，把两侧源码组装成自包含 HTML，
+         交给宿主共享组件 ForkPlus.Plugins.Ui 的 HtmlPreview（并排双 WebView）真渲染；
+         另提供「源码」模式并排看原始代码。
+         .vue 走随包内嵌的 Vue 3 全量运行时（Assets/vue.global.prod.js，MIT，见 third-party.json）
+         做运行期模板编译，无需联网、无第三方 NuGet。
+         公共属性（net10.0 / AvaloniaVersion / 契约引用）见 ../Directory.Build.props。 -->
+    <AssemblyName>ForkPlus.Plugins.Frontend</AssemblyName>
+    <RootNamespace>ForkPlus.Plugins.Frontend</RootNamespace>
+
+    <!-- 插件自身版本（与宿主版本解耦）；偏好设置 → 插件页展示的 Version 与此一致。 -->
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 契约 + 共享视图组件（含 HtmlPreview 并排双 WebView 预览）；Private=false：
+         运行期由宿主提供同一份程序集，不随插件分发（见 README「依赖与共享程序集」）。 -->
+    <ProjectReference Include="..\..\sdk\ForkPlus.Plugins.Abstractions\ForkPlus.Plugins.Abstractions.csproj">
+      <Private>false</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\..\sdk\ForkPlus.Plugins.Ui\ForkPlus.Plugins.Ui.csproj">
+      <Private>false</Private>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- 本插件视图用 Avalonia 控件纯代码构建（未使用 .axaml）。
+         运行期 Avalonia 由宿主提供，打包时不随插件分发（见 README「依赖与共享程序集」）。 -->
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- 内嵌 Vue 3 全量运行时（含模板编译器）：随插件主 DLL 一起分发，运行期从程序集资源读出
+         再内联进预览页面——离线自包含，不依赖网络与自定义协议。
+         LogicalName 固定，读取处用 Assembly.GetManifestResourceStream("vue.global.prod.js")。 -->
+    <EmbeddedResource Include="Assets\vue.global.prod.js">
+      <LogicalName>vue.global.prod.js</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+</Project>

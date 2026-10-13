@@ -2170,6 +2170,121 @@ print("  demo eml ->", target, "(" + version + ")")
 PY
 }
 
+# 前端代码 demo：三场景各用一种扩展名（modify=.html / add=.vue / remove=.htm）。
+# 样本都是**自包含**页面（样式 / 脚本内联，不引用外部相对资源），因此插件的「渲染」模式能完整呈现；
+# .vue 用 Options API 单文件组件（模板 + script + style），交给插件随包内嵌的 Vue 3 运行时做运行期编译。
+# 样本是纯文本，靠 .gitattributes 的 `-diff` 让差异走插件而非内置文本编辑器。
+write_demo_frontend() {
+	local repo="$1" version="$2" ext="$3"
+	python3 - "$repo" "$version" "$ext" <<'PY'
+import os, sys
+repo, version, ext = sys.argv[1], sys.argv[2], sys.argv[3]
+is_new = version == "v2"
+
+STYLE = """    body { margin: 0; padding: 24px; background: #f6f7f9; color: #1f2933;
+           font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+    .card { max-width: 560px; background: #ffffff; border: 1px solid #d7dce1;
+            border-radius: 12px; padding: 22px 24px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+    h1 { margin: 0 0 10px; font-size: 20px; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 999px;
+             font-size: 12px; font-weight: 600; }
+    .v1 { background: #fde8e8; color: #c0392b; }
+    .v2 { background: #e6f4ea; color: #2e9e5b; }
+    .muted { color: #7b8794; font-size: 13px; }
+    button { margin-top: 12px; padding: 6px 12px; border-radius: 6px;
+             border: 1px solid #c3cad1; background: #f0f2f5; cursor: pointer; }
+    ul { margin: 14px 0 0; padding-left: 20px; line-height: 1.8; }"""
+
+def html_doc(badge_cls, badge_text, extra_li):
+    items = [
+        "Rendered live in the plugin's side-by-side WebView",
+        "New: export to SVG." if is_new else "Old: export to PNG only.",
+    ]
+    if extra_li:
+        items.append(extra_li)
+    lis = "\n".join("      <li>%s</li>" % i for i in items)
+    return """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ForkPlus Frontend Demo</title>
+<style>
+%s
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>ForkPlus Frontend Preview</h1>
+    <span class="badge %s">%s</span>
+    <p class="muted">Self-contained page rendered by the plugin.</p>
+    <ul>
+%s
+    </ul>
+  </div>
+</body>
+</html>
+""" % (STYLE, badge_cls, badge_text, lis)
+
+def vue_doc():
+    items = [
+        "Rendered by the bundled Vue 3 runtime",
+        "New: export to SVG." if is_new else "Old: export to PNG only.",
+    ]
+    if is_new:
+        items.append("Added in v2: dark badge")
+    items_js = ",\n          ".join("'%s'" % i for i in items)
+    version_no = 2 if is_new else 1
+    badge = "v2" if is_new else "v1"
+    return """<template>
+  <div class="card">
+    <h1>{{ title }}</h1>
+    <span class="badge" :class="badgeClass">version {{ version }}</span>
+    <button @click="count++">Clicked {{ count }} times</button>
+    <ul>
+      <li v-for="item in items" :key="item">{{ item }}</li>
+    </ul>
+  </div>
+</template>
+
+<script>
+export default {
+  data() {
+    return {
+      title: 'ForkPlus Vue Preview',
+      version: %d,
+      badgeClass: '%s',
+      count: 0,
+      items: [
+          %s
+      ]
+    };
+  }
+};
+</script>
+
+<style>
+%s
+</style>
+""" % (version_no, badge, items_js, STYLE)
+
+if ext == "vue":
+    target = os.path.join(repo, "sample.vue")
+    content = vue_doc()
+elif ext == "htm":
+    target = os.path.join(repo, "sample.htm")
+    content = html_doc("v2" if is_new else "v1", "version 2" if is_new else "version 1",
+                       "Added in v2: extra item" if is_new else None)
+else:
+    target = os.path.join(repo, "sample.html")
+    content = html_doc("v2" if is_new else "v1", "version 2" if is_new else "version 1",
+                       "Added in v2: extra item" if is_new else None)
+
+with open(target, "w", encoding="utf-8") as f:
+    f.write(content)
+print("  demo frontend ->", target, "(" + version + ")")
+PY
+}
+
 # 三类文本格式 demo 仓库共用一套骨架：
 #   ① 写 .gitattributes 给样本加 `-diff`——宿主只对二进制差异查询插件路由，这样样本虽仍是
 #      合法文本，差异却会走插件（否则截图会落到内置文本编辑器上）；
@@ -2339,8 +2454,8 @@ capture_one() {
 	# （音频 波形 / 频谱 / 封面，视频 帧条 / 单帧对比 / 播放，
 	#  结构化数据 tree，字幕 timeline，SVG structure，
 	#  机器学习模型 tensors，MIDI pianoroll，抓包 packets，PSD layers / header，EPUB chapters / preview，
-	#  CHM entries / preview，字体 metadata / codepoints，可执行文件 sections / symbols / size，证书 chain，
-	#  SQLite data，托管程序集 types / references，邮件 EML parts / body）；
+	#  CHM entries / preview，前端代码 source，字体 metadata / codepoints，可执行文件 sections / symbols / size，
+	#  证书 chain，SQLite data，托管程序集 types / references，邮件 EML parts / body）；
 	# 不设则走各插件默认模式。
 	( cd "$APPDIR" && DISPLAY="$DISPLAY_NUM" FORKPLUS_PLUGIN_VIEW_MODE="$plugin_mode" \
 		./ForkPlus "$repo" >"$WORK/forkplus.log" 2>&1 & )
@@ -2506,6 +2621,11 @@ prepare_repo_text eml remove "sample.eml" write_demo_eml
 prepare_repo_binary chm modify write_demo_chm chm
 prepare_repo_binary chm add write_demo_chm chm
 prepare_repo_binary chm remove write_demo_chm chm
+# 前端代码 demo：三场景各用一种扩展名（modify=.html / add=.vue / remove=.htm）；
+# 样本是自包含页面 / Vue 单文件组件，纯文本，靠 .gitattributes 的 `-diff` 走插件路由。
+prepare_repo_text frontend modify "sample.html" write_demo_frontend html
+prepare_repo_text frontend add "sample.vue" write_demo_frontend vue
+prepare_repo_text frontend remove "sample.htm" write_demo_frontend htm
 start_x
 # PDF 插件三种场景各截一张：修改 / 新增 / 删除
 for mode in modify add remove; do
@@ -2690,5 +2810,13 @@ seed_settings
 capture_one "$WORK/repo-chm-modify" "ChmDiffView.SetContent" "chm-entries.png" 4 "CHM 插件 · 目录条目" "entries"
 seed_settings
 capture_one "$WORK/repo-chm-modify" "ChmDiffView.SetContent" "chm-preview.png" 4 "CHM 插件 · 预览" "preview"
+# 前端代码插件三种场景各截一张（渲染模式；modify=.html / add=.vue / remove=.htm）
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-frontend-$mode" "FrontendDiffView.SetContent" "frontend-$mode.png" 4 "前端代码插件 · $mode"
+done
+# 前端代码插件另取「源码」模式一张（modify 场景为样本）
+seed_settings
+capture_one "$WORK/repo-frontend-modify" "FrontendDiffView.SetContent" "frontend-source.png" 4 "前端代码插件 · 源码" "source"
 write_metadata
 log "完成：截图已输出到 $OUT"
