@@ -75,12 +75,18 @@ jobs:
       # 系统字体（fonts-dejavu、fonts-liberation）、cc + binutils（编译 ELF/ar）与 openssl（造证书）；
       # 音频 / 视频 demo 用 ffmpeg CLI 现造样本（插件自身用随包分发的 FFmpeg 原生库解码，
       # 与这里造样本用的系统 ffmpeg 相互独立）。
+      # 另需 WebView 引擎：CHM / EPUB 插件的「预览」模式经官方 Avalonia.Controls.WebView
+      # （Linux = WPE WebKit，缺失回退 WebKitGTK）真渲染默认主题页——缺 libwebkit2gtk-4.1-0 时
+      # HtmlWebViewSupport 探测不到引擎，两侧只显示「当前环境不支持渲染预览」占位（截图即
+      # chm-preview / epub-preview 两张全是提示文案）。libgl1-mesa-dri 供软件 GL 合成使用
+      # （--no-install-recommends 下不会被 webkit 自动带入，须显式安装）。
       - name: Install headless toolchain
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             xvfb x11-utils xdotool openbox imagemagick wmctrl unzip \
-            fonts-dejavu fonts-liberation gcc binutils openssl ffmpeg
+            fonts-dejavu fonts-liberation gcc binutils openssl ffmpeg \
+            libwebkit2gtk-4.1-0 libgl1-mesa-dri
 
       - name: Capture plugin diff screenshots
         run: bash .github/scripts/capture-screenshots.sh
