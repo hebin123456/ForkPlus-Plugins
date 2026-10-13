@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -191,6 +193,9 @@ namespace ForkPlus.Plugins.Video
 		private DiffViewContext _context;
 
 		private IDiffViewHost _host;
+
+		/// <summary>v1.2.4：上一次下发内容的签名——同内容重复下发（窗口重新激活刷新）时跳过重建。</summary>
+		private string _contentSignature;
 
 		private CancellationTokenSource _cts;
 
@@ -420,8 +425,16 @@ namespace ForkPlus.Plugins.Video
 
 		public void SetContent(DiffViewContext context, IDiffViewHost host)
 		{
-			_context = context;
 			_host = host;
+			// v1.2.4：同内容重复下发（典型：窗口重新激活触发的刷新）直接跳过，避免重新探测 / 抽帧 /
+			// 重建播放器。能证明内容等价才跳过，否则照常重新装配。
+			string signature = ComputeContentSignature(context);
+			if (signature != null && string.Equals(signature, _contentSignature, StringComparison.Ordinal))
+			{
+				return;
+			}
+			_contentSignature = signature;
+			_context = context;
 			_srcTitle.Foreground = context?.SrcTitleBrush;
 			_dstTitle.Foreground = context?.DstTitleBrush;
 			_src = null;
@@ -430,6 +443,91 @@ namespace ForkPlus.Plugins.Video
 			// CI 截图定位用：日志里必须出现 VideoDiffView.SetContent。
 			PluginLog.Info($"VideoDiffView.SetContent src='{context?.Src?.Path ?? "<none>"}' dst='{context?.Dst?.Path ?? "<none>"}'");
 			StartRender();
+		}
+
+		// ---- 内容签名（v1.2.4：同内容重复下发去重） ----
+
+		/// <summary>把视图可观察到的全部输入折成一个签名：路径 / 角色 / 声明大小 / LFS 指针 /
+		/// 标题画刷颜色 / 字节内容（SHA-256）。任何一项不同都得到不同签名，照常重新装配；
+		/// 不可回退的流用唯一值代表「无法证明相等」，同样不会误判为相同。</summary>
+		private static string ComputeContentSignature(DiffViewContext context)
+		{
+			if (context == null)
+			{
+				return null;
+			}
+			StringBuilder builder = new StringBuilder();
+			builder.Append(context.FilePath).Append('\u0001')
+				.Append(context.ShowTitle ? '1' : '0').Append('\u0001')
+				.Append((int)context.SrcRole).Append('\u0001')
+				.Append((int)context.DstRole).Append('\u0001')
+				.Append(BrushKey(context.SrcTitleBrush)).Append('\u0001')
+				.Append(BrushKey(context.DstTitleBrush)).Append('\u0001');
+			AppendSideSignature(builder, context.Src);
+			AppendSideSignature(builder, context.Dst);
+			AppendStreamHash(builder, context.HexSrc);
+			AppendStreamHash(builder, context.HexDst);
+			return builder.ToString();
+		}
+
+		private static void AppendSideSignature(StringBuilder builder, DiffSideContent side)
+		{
+			if (side == null)
+			{
+				builder.Append("<none>").Append('\u0001');
+				return;
+			}
+			builder.Append(side.Path).Append('\u0002')
+				.Append(side.IsTracked ? '1' : '0').Append('\u0002')
+				.Append(side.Size ?? -1L).Append('\u0002')
+				.Append(side.Lfs?.Sha256).Append('\u0002')
+				.Append(side.Lfs?.Size ?? -1L).Append('\u0002')
+				.Append(side.IsLfsImage ? '1' : '0').Append('\u0002');
+			AppendStreamHash(builder, side.Data);
+			builder.Append('\u0001');
+		}
+
+		private static void AppendStreamHash(StringBuilder builder, Stream stream)
+		{
+			builder.Append(HashStream(stream)).Append('\u0002');
+		}
+
+		/// <summary>流内容哈希：可回退流按 SHA-256（取哈希后复位位置，不影响后续读取）；
+		/// 不可回退 / 读取失败用唯一值，保证不会被误判为「与上次相同」。</summary>
+		private static string HashStream(Stream stream)
+		{
+			if (stream == null)
+			{
+				return null;
+			}
+			if (!stream.CanSeek)
+			{
+				return Guid.NewGuid().ToString("N");
+			}
+			long position = stream.Position;
+			try
+			{
+				stream.Position = 0L;
+				return Convert.ToHexString(SHA256.HashData(stream));
+			}
+			catch (Exception)
+			{
+				return Guid.NewGuid().ToString("N");
+			}
+			finally
+			{
+				stream.Position = position;
+			}
+		}
+
+		/// <summary>标题画刷标识：取颜色值（同色视为同渲染，不受画刷实例更换影响），无法取值时退回 ToString。</summary>
+		private static string BrushKey(IBrush brush)
+		{
+			if (brush == null)
+			{
+				return null;
+			}
+			return brush is ISolidColorBrush solid ? solid.Color.ToString() : brush.ToString();
 		}
 
 		public void SetMode(string modeId)
@@ -493,6 +591,7 @@ namespace ForkPlus.Plugins.Video
 			DisposePlayback();
 			_context = null;
 			_host = null;
+			_contentSignature = null;
 			_src = null;
 			_dst = null;
 			_playbackImage = null;
