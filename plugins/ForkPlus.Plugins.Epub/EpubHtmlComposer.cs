@@ -14,6 +14,11 @@ namespace ForkPlus.Plugins.Epub
 	/// 字体换成 data URI——内容与资源都取自 EPUB 自身，无需注册自定义协议，WebView
 	/// <c>NavigateToString</c> 即可正确显示。章节链接（<c>.xhtml/.html</c>）不内联，保持可读的 href。
 	///
+	/// 内联受预算约束：Windows WebView2 的 <c>NavigateToString</c> 有 2MB 硬限制，超限导航直接
+	/// 失败且无任何提示（预览区一片空白）。因此只内联网页资源（图片 / 样式 / 脚本 / 字体 / 媒体），
+	/// 并按 base64 膨胀记账，逼近预算的资源保留原引用——页面其余部分照常渲染，宁可图片缺失
+	/// 也不让整页挂掉。
+	///
 	/// 尽力而为：编码不在 .NET 内置集（如 GBK）或引用的资源在 ZIP 里找不到时，退化为原样 /
 	/// 保留原引用，不抛异常（返回 null 表示该侧无章节可渲染，视图显示占位）。
 	/// </summary>
@@ -49,7 +54,8 @@ namespace ForkPlus.Plugins.Epub
 					}
 					string html = DecodeHtml(bytes);
 					string baseDir = EpubParser.DirectoryOf(chapter.Href);
-					return HtmlResourceInliner.Inline(html, url => Resolve(archive, baseDir, url));
+					InlineBudget budget = new InlineBudget(html.Length);
+					return HtmlResourceInliner.Inline(html, url => Resolve(archive, baseDir, url, budget));
 				}
 			}
 			catch (Exception)
@@ -72,13 +78,14 @@ namespace ForkPlus.Plugins.Epub
 			return document.Chapters[0];
 		}
 
-		/// <summary>解析一条引用（相对章节路径）为 ZIP 内条目的 data URI；章节链接 / 查不到返回 null。</summary>
-		private static HtmlResourceInliner.InlinedResource Resolve(ZipArchive archive, string baseDir, string url)
+		/// <summary>解析一条引用（相对章节路径）为 ZIP 内条目的 data URI；章节链接 /
+		/// 非网页资源 / 超内联预算 / 查不到返回 null。</summary>
+		private static HtmlResourceInliner.InlinedResource Resolve(ZipArchive archive, string baseDir, string url, InlineBudget budget)
 		{
 			string clean = StripQueryAndAnchor(url);
-			if (string.IsNullOrEmpty(clean) || IsChapterLink(clean))
+			if (string.IsNullOrEmpty(clean) || IsChapterLink(clean) || !IsWebResourcePath(clean))
 			{
-				return null; // 章节链接不内联，保持可读的 href
+				return null; // 章节链接 / 非网页资源不内联，保持可读的 href
 			}
 			string path = EpubParser.ResolvePath(baseDir, clean);
 			if (string.IsNullOrEmpty(path))
@@ -90,8 +97,43 @@ namespace ForkPlus.Plugins.Epub
 			{
 				return null;
 			}
+			if (!budget.TryReserve(entry.Length))
+			{
+				return null; // 超预算：保留原引用，保住整页可渲染
+			}
 			byte[] bytes = ReadAllBytes(entry);
 			return bytes == null ? null : new HtmlResourceInliner.InlinedResource(bytes, null);
+		}
+
+		/// <summary>
+		/// 内联预算：自包含文档的字符数必须低于 Windows WebView2 <c>NavigateToString</c> 的
+		/// 2MB 硬限制，否则导航静默失败、预览一片空白。base64 内联按 4/3 膨胀计入；
+		/// 超预算的资源不再内联（保留原引用）。
+		/// </summary>
+		private sealed class InlineBudget
+		{
+			// 目标 90 万字符：内联产物（base64 / HTML）以 ASCII 为主，字符数与 UTF-16 字节数
+			// 两条口径都稳低于 2MB 限制。
+			private const long MaxChars = 900_000;
+
+			private long _usedChars;
+
+			public InlineBudget(long initialChars)
+			{
+				_usedChars = initialChars;
+			}
+
+			/// <summary>预估把 data（base64 后）内联进文档是否仍在预算内；在则记账并返回 true。</summary>
+			public bool TryReserve(long dataBytes)
+			{
+				long chars = (dataBytes * 4 + 2) / 3 + 64; // base64 膨胀 + "data:…;base64," 前缀开销
+				if (_usedChars + chars > MaxChars)
+				{
+					return false;
+				}
+				_usedChars += chars;
+				return true;
+			}
 		}
 
 		/// <summary>去掉 URL 的查询串与锚点。</summary>
@@ -135,6 +177,51 @@ namespace ForkPlus.Plugins.Epub
 				case ".xml":
 				case ".opf":
 				case ".ncx":
+					return true;
+				default:
+					return false;
+			}
+		}
+
+		/// <summary>是否为可内联的网页资源（图片 / 样式 / 脚本 / 字体 / 媒体）。其它附件类型
+		/// 不内联，避免 data URI 把文档撑爆预算。</summary>
+		private static bool IsWebResourcePath(string path)
+		{
+			string ext;
+			try
+			{
+				ext = Path.GetExtension(path ?? string.Empty).ToLowerInvariant();
+			}
+			catch (Exception)
+			{
+				return false;
+			}
+			switch (ext)
+			{
+				case ".png":
+				case ".jpg":
+				case ".jpeg":
+				case ".gif":
+				case ".webp":
+				case ".bmp":
+				case ".svg":
+				case ".ico":
+				case ".avif":
+				case ".apng":
+				case ".css":
+				case ".js":
+				case ".mjs":
+				case ".woff":
+				case ".woff2":
+				case ".ttf":
+				case ".otf":
+				case ".eot":
+				case ".mp3":
+				case ".wav":
+				case ".ogg":
+				case ".mp4":
+				case ".webm":
+				case ".m4v":
 					return true;
 				default:
 					return false;
