@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- 补丁对比视图插件：认领 .patch / .diff，把两侧补丁按 unified / git diff 容错解析
+         （git 扩展头 / @@ hunk / 二进制标记，PatchParser），按路径把文件对齐成
+         「相同 / 已变 / 仅左 / 仅右」（PatchData），提供「文件」表格 diff 视图，以及
+         「预览」——并排双 WebView 真渲染两侧补丁内容（PatchHtmlComposer 组装的自包含
+         HTML，依赖宿主共享组件 ForkPlus.Plugins.Ui 的 HtmlPreview）。
+         零第三方依赖：全部逻辑（解析 / 对齐 / 组装）均为纯托管实现，
+         不需要 third-party.json，随包进 plugins/ 的只有插件自身主 DLL。
+         公共属性（net10.0 / AvaloniaVersion / 契约引用）见 ../Directory.Build.props。 -->
+    <AssemblyName>ForkPlus.Plugins.Patch</AssemblyName>
+    <RootNamespace>ForkPlus.Plugins.Patch</RootNamespace>
+
+    <!-- 插件自身版本（与宿主版本解耦）；偏好设置 → 插件页展示的 Version 与此一致。 -->
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 契约 + 共享视图组件（含 HtmlPreview 并排双 WebView 预览）；Private=false：
+         运行期由宿主提供同一份程序集，不随插件分发（见 README「依赖与共享程序集」）。 -->
+    <ProjectReference Include="..\..\sdk\ForkPlus.Plugins.Abstractions\ForkPlus.Plugins.Abstractions.csproj">
+      <Private>false</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\..\sdk\ForkPlus.Plugins.Ui\ForkPlus.Plugins.Ui.csproj">
+      <Private>false</Private>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- 本插件视图用 Avalonia 控件纯代码构建（未使用 .axaml）。 -->
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+  </ItemGroup>
+</Project>

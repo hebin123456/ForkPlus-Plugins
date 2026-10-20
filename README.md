@@ -277,6 +277,15 @@ ForkPlus-Plugins/
 │       │   └── FrontendStrings.cs        # 插件自带译文（7 语言）
 │       ├── plugin.json / third-party.json# 插件清单 / 第三方声明登记（Vue.js）
 │       └── ForkPlus.Plugins.Frontend.csproj # 唯一第三方：内嵌 Vue 3 运行时
+│   ├── ForkPlus.Plugins.Patch/           # 补丁对比插件（文件级对齐 / 预览，.patch / .diff）
+│       ├── PatchDiffPlugin.cs
+│       ├── PatchDiffView.cs              # 两模式视图：文件 / 预览（并排双 WebView）
+│       ├── PatchParser.cs                # unified / git diff 容错解析（git 扩展头 / hunk / 二进制标记）
+│       ├── PatchData.cs                  # 补丁模型（文件 / hunk / 行）+ 文件级对齐
+│       ├── PatchHtmlComposer.cs          # 组装补丁的自包含 HTML（内联样式，预算截断）供预览
+│       ├── Localization/
+│       │   └── PatchStrings.cs           # 插件自带译文（8 语言）
+│       └── ForkPlus.Plugins.Patch.csproj # 零第三方依赖（纯托管解析 + 组装）
 ├── licenses/                             # 第三方许可全文仓库（按组件分目录，集中管理）
 │   ├── docnet-core/LICENSE.txt           # Docnet.Core（MIT）
 │   ├── open-xml-sdk/LICENSE.txt          # Open XML SDK（MIT）
@@ -493,6 +502,9 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 `Example Compare`，8 语言译文见 `Localization/ExampleStrings.cs`）、版本 `1.0.0` 与描述。
 
 写新插件的最快路径：**复制示例目录 → 改工程名、命名空间、`Id`、扩展名**。
+
+示例插件只作开发模板：**不随包发布**——CI 打包阶段（合集包与单插件包）会跳过
+`ForkPlus.Plugins.Example`，它也不会出现在 Release 资产里。
 
 ---
 
@@ -1146,6 +1158,41 @@ INI / `.cfg` / `.properties` 自写解析器。
 
 ---
 
+## 补丁对比插件
+
+[plugins/ForkPlus.Plugins.Patch](plugins/ForkPlus.Plugins.Patch) 认领 `.patch` / `.diff`：
+同一个补丁改了两版（rebase 后重导、手工修订），并排看清**两份补丁本身**的差异——
+哪些文件的改动变了、哪些文件只在一侧。
+
+- **纯托管容错解析**（`PatchParser`）：识别 git 扩展头（`new file mode` / `deleted file mode` /
+  `rename from/to` / `index` / `similarity`）、`GIT binary patch` 与 `Binary files … differ`
+  二进制标记、传统 unified diff 的 `--- / +++` 头与 `@@` hunk；hunk 体识别 空格 / `+` / `-` /
+  `\ No newline at end of file`，空行按上下文处理。无法识别的行一律跳过——目标是
+  「尽量还原可视化所需的结构」，不是严格校验。
+- **文件级对齐**（`PatchData`）：按「新路径优先，缺失回退旧路径」的键把两侧文件对齐成
+  「相同 / 已变 / 仅左 / 仅右」四态，对上的文件再按头部 + 逐行判定是否完全一致。
+- 两模式（`Files / Preview` 切换，默认文件表；CI 截图可用环境变量 `FORKPLUS_PLUGIN_VIEW_MODE`
+  预选 `preview`）：
+  - **文件**：一张四列表——「文件 | 旧 | 新 | 状态」，路径用等宽字体，旧 / 新单元格给
+    「改动类型 · +增 −删」，逐行按四色标注底色，一眼看出两版补丁间的文件增删与改动变化；
+  - **预览**：并排双 WebView 真渲染两侧补丁内容——`PatchHtmlComposer` 按文件分卡片
+    （文件头给路径 / 改动类型 / 增删统计），hunk 表按「旧行号 | 新行号 | 着色行」排布
+    （新增绿 / 删除红 / 上下文原样 / hunk 头蓝），内容与样式全部内联生成、跟随系统明暗主题，
+    交给宿主共享组件 `ForkPlus.Plugins.Ui` 的 `SideBySideHtmlPreview` 渲染；逼近 90 万字符
+    预算即截断并注明（规避 WebView2 `NavigateToString` 的 2MB 硬限制，与 CHM / EPUB 同口径）；
+    WebView 不可用（headless、缺 WebView2 运行时 / WPE WebKit / WebKitGTK）时两侧仅给提示
+    （降级不报错）。
+- **路由**：补丁是文本文件，宿主 5.0.4 起文本差异同样查询插件路由
+  （用户绑定 &gt; 精确扩展名认领），`.patch` / `.diff` 默认即自动接管；用户绑定优先级最高。
+- 文件表上限 3000 行，单侧声明大小超过 300 MB 只提示不解析。
+- **零第三方依赖**（纯托管实现，不需要 `third-party.json`），随包进 `plugins/` 的只有插件自身主 DLL。
+- 插件实现 `IPluginMetadata`，名称「补丁对比」（`Patch Compare`，
+  译文见 `Localization/PatchStrings.cs`）、版本 `1.0.0` 与描述。
+- 「预览」依赖宿主 **5.1.1** 起提供的共享组件 `ForkPlus.Plugins.Ui`（`HtmlPreview`），
+  `plugin.json` 的 `minHostVersion` 声明 `5.1.1`。
+
+---
+
 ## Pages 截图约定
 
 插件对比视图的截图由 CI 在真实 ForkPlus 中现场采集（无头 X + 整屏截图），并随 Pages 一起发布上线；
@@ -1332,11 +1379,12 @@ workflow：[.github/workflows/build.yml](.github/workflows/build.yml)
 - **出包**：每个平台构建一遍全部插件，用 `install-plugin-artifacts.sh` 把每个插件装进包内
   `plugins/<AssemblyName>/` 子目录（目录名=程序集名），内含 `plugin.json`、**主 DLL + 私有依赖
   （托管程序集 / 原生库）+ 第三方许可声明**；宿主共享程序集（契约 / Ui / Avalonia / SkiaSharp /
-  NLog…）由脚本排除，不随插件分发。每个平台产出**两类包**（内部结构一致）：
+  NLog…）由脚本排除，不随插件分发；示例插件 `ForkPlus.Plugins.Example` 只是开发模板，
+  打包阶段跳过、不进任何交付包。每个平台产出**两类包**（内部结构一致）：
 
   ```
-  ForkPlus-Plugins-<插件仓版本>-<平台>.zip      # 合集包：含全部插件
-  ForkPlus-Plugins-<Short>-1.0.0-<平台>.zip     # 单插件包：每插件一个
+  ForkPlus-Plugins-<插件仓版本>-<平台>.zip      # 合集包：含全部插件（不含示例插件）
+  ForkPlus-Plugins-<Short>-1.0.0-<平台>.zip     # 单插件包：每插件一个（不含示例插件）
   └── plugins/
       ├── ForkPlus.Plugins.Pdf/
       │   ├── plugin.json
