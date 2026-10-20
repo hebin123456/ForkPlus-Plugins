@@ -203,6 +203,29 @@ namespace ForkPlus.Plugins.Chm
 					{ "es-ES", "no presente" }
 				}
 			},
+			// 侧存在但字节没拿到（宿主 Hex 预载失败等）：与「不存在」区分的占位。
+			{ "content unavailable", new Dictionary<string, string>
+				{
+					{ "zh-Hans", "内容不可用" },
+					{ "zh-Hant", "內容無法使用" },
+					{ "ja-JP", "内容を利用できません" },
+					{ "ko-KR", "콘텐츠를 사용할 수 없음" },
+					{ "fr-FR", "contenu indisponible" },
+					{ "de-DE", "Inhalt nicht verfügbar" },
+					{ "es-ES", "contenido no disponible" }
+				}
+			},
+			{ "One side's content is unavailable; values shown for the other side only.", new Dictionary<string, string>
+				{
+					{ "zh-Hans", "一侧内容不可用；仅显示另一侧的值。" },
+					{ "zh-Hant", "一側內容無法使用；僅顯示另一側的值。" },
+					{ "ja-JP", "一方の内容を利用できないため、他方の値のみを表示します。" },
+					{ "ko-KR", "한쪽 콘텐츠를 사용할 수 없어 다른 쪽 값만 표시합니다." },
+					{ "fr-FR", "Le contenu d'un côté est indisponible ; seules les valeurs de l'autre côté sont affichées." },
+					{ "de-DE", "Der Inhalt einer Seite ist nicht verfügbar; es werden nur die Werte der anderen Seite angezeigt." },
+					{ "es-ES", "El contenido de un lado no está disponible; solo se muestran los valores del otro lado." }
+				}
+			},
 			{ "directory", new Dictionary<string, string>
 				{
 					{ "zh-Hans", "目录" },

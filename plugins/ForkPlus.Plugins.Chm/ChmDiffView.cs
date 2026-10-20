@@ -149,6 +149,15 @@ namespace ForkPlus.Plugins.Chm
 
 		private bool _dstAbsent;
 
+		/// <summary>
+		/// 左 / 右两侧「侧存在却拿不到字节」（宿主未供给 Hex 预载、侧无懒加载、无 LFS 缓存）。
+		/// 典型成因：宿主 Hex 预载失败（如 Windows 下文件被预览器/杀软占用）。与「侧不存在」
+		/// 区分展示，避免把还在的文件误标成「不存在」。
+		/// </summary>
+		private bool _srcNoBytes;
+
+		private bool _dstNoBytes;
+
 		private bool _tooLarge;
 
 		public ChmDiffView()
@@ -292,6 +301,8 @@ namespace ForkPlus.Plugins.Chm
 			_entryDiff = null;
 			_leftHtml = null;
 			_rightHtml = null;
+			_srcNoBytes = false;
+			_dstNoBytes = false;
 			_content.Content = null;
 			_status.Text = string.Empty;
 		}
@@ -310,6 +321,8 @@ namespace ForkPlus.Plugins.Chm
 			_error = null;
 			_srcParseError = null;
 			_dstParseError = null;
+			_srcNoBytes = false;
+			_dstNoBytes = false;
 			_tooLarge = false;
 			UpdateStatus();
 			_content.Content = null;
@@ -367,6 +380,13 @@ namespace ForkPlus.Plugins.Chm
 						if (_generation != generation || _cts != cts)
 						{
 							return;
+						}
+						// 供给诊断：侧存在却拿不到字节时记一条日志（宿主 Hex 预载 / 侧懒加载 / LFS 缓存全空）。
+						_srcNoBytes = src != null && leftBytes == null;
+						_dstNoBytes = dst != null && rightBytes == null;
+						if (_srcNoBytes || _dstNoBytes)
+						{
+							PluginLog.Info($"ChmDiffView content supply incomplete: src(hex:{hexSrc != null}, side:{src != null}) dst(hex:{hexDst != null}, side:{dst != null})");
 						}
 						_left = left;
 						_right = right;
@@ -593,6 +613,13 @@ namespace ForkPlus.Plugins.Chm
 				_content.Content = NoteText(ChmStrings.F("Failed to parse: {0}", DisplayError()));
 				return;
 			}
+			// 两侧都没解析出文档又没有解析错误 = 两侧字节都没拿到（宿主 Hex 预载失败等）：
+			// 直接给「内容不可用」占位——空表只有表头，什么都说明不了。
+			if (_left == null && _right == null && DisplayError() == null)
+			{
+				_content.Content = NoteText(ChmStrings.T("content unavailable"));
+				return;
+			}
 			if (_mode == PreviewMode)
 			{
 				BuildPreviewContent();
@@ -618,6 +645,8 @@ namespace ForkPlus.Plugins.Chm
 			AddTableRow(table, ref row, ChmStrings.T("Key path"), ChmStrings.T("Old"), ChmStrings.T("New"), ChmStrings.T("State"), null, null, true);
 
 			int shown = 0;
+			bool srcResolvable = _srcAbsent || _left != null;
+			bool dstResolvable = _dstAbsent || _right != null;
 			foreach (ChmRowDiff item in _metaDiff.Rows)
 			{
 				if (shown >= MaxRows)
@@ -625,7 +654,7 @@ namespace ForkPlus.Plugins.Chm
 					break;
 				}
 				shown++;
-				AddTableRow(table, ref row, item.Path, DisplayValue(item.Left), DisplayValue(item.Right), StateLabel(item.State), TintOf(item.State), StateBrush(item.State), false);
+				AddTableRow(table, ref row, item.Path, DisplayValue(item.Left, srcResolvable), DisplayValue(item.Right, dstResolvable), StateLabel(item.State), TintOf(item.State), StateBrush(item.State), false);
 			}
 
 			StackPanel stack = new StackPanel
@@ -637,10 +666,7 @@ namespace ForkPlus.Plugins.Chm
 			{
 				stack.Children.Add(NoteText(ChmStrings.F("Showing first {0} of {1} rows", shown, _metaDiff.Total)));
 			}
-			if (_srcAbsent || _dstAbsent)
-			{
-				stack.Children.Add(NoteText(ChmStrings.T("One side is not present; values shown for the other side only.")));
-			}
+			AddSideNote(stack);
 			return new ScrollViewer
 			{
 				Content = stack,
@@ -661,6 +687,8 @@ namespace ForkPlus.Plugins.Chm
 			AddTableRow(table, ref row, ChmStrings.T("Path"), ChmStrings.T("Old"), ChmStrings.T("New"), ChmStrings.T("State"), null, null, true);
 
 			int shown = 0;
+			bool srcResolvable = _srcAbsent || _left != null;
+			bool dstResolvable = _dstAbsent || _right != null;
 			foreach (ChmEntryDiff item in _entryDiff.Rows)
 			{
 				if (shown >= MaxEntryRows)
@@ -669,7 +697,7 @@ namespace ForkPlus.Plugins.Chm
 				}
 				shown++;
 				string path = (item.Left ?? item.Right)?.Path ?? string.Empty;
-				AddTableRow(table, ref row, path, DisplayEntry(item.Left), DisplayEntry(item.Right), StateLabel(item.State), TintOf(item.State), StateBrush(item.State), false);
+				AddTableRow(table, ref row, path, DisplayEntry(item.Left, srcResolvable), DisplayEntry(item.Right, dstResolvable), StateLabel(item.State), TintOf(item.State), StateBrush(item.State), false);
 			}
 
 			StackPanel stack = new StackPanel
@@ -682,10 +710,7 @@ namespace ForkPlus.Plugins.Chm
 			{
 				stack.Children.Add(NoteText(ChmStrings.F("Showing first {0} of {1} rows", shown, _entryDiff.Total)));
 			}
-			if (_srcAbsent || _dstAbsent)
-			{
-				stack.Children.Add(NoteText(ChmStrings.T("One side is not present; values shown for the other side only.")));
-			}
+			AddSideNote(stack);
 			return new ScrollViewer
 			{
 				Content = stack,
@@ -713,7 +738,8 @@ namespace ForkPlus.Plugins.Chm
 				};
 			}
 			// 占位 / 降级文案随界面语言（shared 组件默认中文，这里按插件译文覆盖）。
-			_preview.AbsentText = DisplayAbsentText();
+			// 两侧都「不存在」用 not present；两侧都在却拿不到字节（或混合）用 content unavailable。
+			_preview.AbsentText = (_srcAbsent || _dstAbsent) ? ChmStrings.T("not present") : ChmStrings.T("content unavailable");
 			_preview.UnavailableText = ChmStrings.T("Preview not available in this environment");
 			_preview.SetContent(
 				DisplayTitle(_left, _context?.Src),
@@ -723,10 +749,18 @@ namespace ForkPlus.Plugins.Chm
 			_content.Content = _preview;
 		}
 
-		/// <summary>不存在占位文案（与表格口径一致的「not present」译文，缺失回退）。</summary>
-		private static string DisplayAbsentText()
+		/// <summary>表格下方单侧说明：一侧不存在（add / delete）与一侧内容不可用（字节没拿到）
+		/// 分开口径，不再把「内容不可用」误述成「不存在」。</summary>
+		private void AddSideNote(StackPanel stack)
 		{
-			return ChmStrings.T("not present");
+			if (_srcAbsent || _dstAbsent)
+			{
+				stack.Children.Add(NoteText(ChmStrings.T("One side is not present; values shown for the other side only.")));
+			}
+			else if (_srcNoBytes || _dstNoBytes)
+			{
+				stack.Children.Add(NoteText(ChmStrings.T("One side's content is unavailable; values shown for the other side only.")));
+			}
 		}
 
 		/// <summary>四列表加一行：可带四色底（Border 跨四列）+ 状态列彩色；首列为等宽字体（键路径 / 路径）。</summary>
@@ -816,18 +850,24 @@ namespace ForkPlus.Plugins.Chm
 			}
 		}
 
-		/// <summary>元数据值：无此侧的值为 not present。</summary>
-		private static string DisplayValue(string value)
+		/// <summary>元数据值：null 值区分两种口径——该侧文档存在（键在该侧缺失）或该侧本身
+		/// 不存在时为 not present；该侧存在但字节没拿到 / 解析失败时为 content unavailable。</summary>
+		private string DisplayValue(string value, bool sideResolvable)
 		{
-			return value ?? ChmStrings.T("not present");
+			if (value != null)
+			{
+				return value;
+			}
+			return sideResolvable ? ChmStrings.T("not present") : ChmStrings.T("content unavailable");
 		}
 
-		/// <summary>目录条目单元格：目录项标注「目录」；文件给「体积 · 内容指纹」，无指纹时只给体积。</summary>
-		private static string DisplayEntry(ChmEntry entry)
+		/// <summary>目录条目单元格：目录项标注「目录」；文件给「体积 · 内容指纹」，无指纹时只给体积；
+		/// null 条目按 <see cref="DisplayValue"/> 同口径区分 not present / content unavailable。</summary>
+		private string DisplayEntry(ChmEntry entry, bool sideResolvable)
 		{
 			if (entry == null)
 			{
-				return ChmStrings.T("not present");
+				return sideResolvable ? ChmStrings.T("not present") : ChmStrings.T("content unavailable");
 			}
 			if (entry.IsDirectory)
 			{
