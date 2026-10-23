@@ -286,6 +286,15 @@ ForkPlus-Plugins/
 │       ├── Localization/
 │       │   └── PatchStrings.cs           # 插件自带译文（8 语言）
 │       └── ForkPlus.Plugins.Patch.csproj # 零第三方依赖（纯托管解析 + 组装）
+│   ├── ForkPlus.Plugins.Markdown/        # Markdown 对比插件（渲染 / 大纲 / 源码，.md / .markdown）
+│       ├── MarkdownDiffPlugin.cs
+│       ├── MarkdownDiffView.cs           # 三模式视图：渲染（并排双 WebView）/ 大纲 / 源码
+│       ├── MarkdownHtmlComposer.cs       # Markdig 渲成样式化 HTML（明暗主题，预算截断）供预览
+│       ├── MarkdownOutline.cs            # 标题大纲抽取 + 按标题文本对齐的层级语义 diff
+│       ├── Localization/
+│       │   └── MarkdownStrings.cs        # 插件自带译文（8 语言）
+│       ├── third-party.json              # Markdig（MIT）登记
+│       └── ForkPlus.Plugins.Markdown.csproj # 私有依赖 Markdig（MIT）
 ├── licenses/                             # 第三方许可全文仓库（按组件分目录，集中管理）
 │   ├── docnet-core/LICENSE.txt           # Docnet.Core（MIT）
 │   ├── open-xml-sdk/LICENSE.txt          # Open XML SDK（MIT）
@@ -1193,6 +1202,44 @@ INI / `.cfg` / `.properties` 自写解析器。
 
 ---
 
+## Markdown 对比插件
+
+[plugins/ForkPlus.Plugins.Markdown](plugins/ForkPlus.Plugins.Markdown) 认领 `.md` / `.markdown`：
+README / 文档改了两版，除逐行看源码外，更常见的问题是「渲出来长什么样」「章节结构动没动」——
+本插件把两侧 Markdown 各自渲成样式化 HTML 并排预览，再对标题大纲做语义 diff。
+
+- 三模式（`Render / Outline / Source` 切换，默认渲染；CI 截图可用环境变量 `FORKPLUS_PLUGIN_VIEW_MODE`
+  预选 `outline` / `source`）：
+  - **渲染**：并排双 WebView 预览两侧渲好的页面——`MarkdownHtmlComposer` 用 **Markdig**
+    （高级扩展管线：表格 / 任务列表 / 自动链接 / 删除线…）把 Markdown 转成 HTML，套一层跟随
+    系统明暗主题的排版样式壳（GitHub 风格：标题下划线、等宽代码块、表格边框、引用条），
+    内容与样式全部内联生成，交给宿主共享组件 `ForkPlus.Plugins.Ui` 的 `SideBySideHtmlPreview`
+    渲染；逼近 90 万字符预算即截断（截断点回退到最近一个块级闭合标签）并注明（规避 WebView2
+    `NavigateToString` 的 2MB 硬限制，与 CHM / EPUB / 补丁插件同口径）；WebView 不可用
+    （headless、缺 WebView2 运行时 / WPE WebKit / WebKitGTK）时两侧仅给提示（降级不报错）。
+  - **大纲**：标题层级语义 diff——「标题 | 旧 | 新 | 状态」四列表，旧 / 新单元格给 `H1`-`H6`
+    层级，逐行按四色标注底色，一眼看出章节增删与升降级；**键 = 标题文本归一化**（折叠空白、
+    统一小写，同侧重复标题按出现次序消歧），刻意不用位置索引做键——中间插入标题会让后续
+    序号整体漂移，产生大面积伪差异；层级相同 → 相同、层级变了 → 已变、仅一侧 → 仅左 / 仅右。
+  - **源码**：左右两栏并排看两侧原始文本（等宽、只读、可选中），是前两个模式的兜底。
+- **一份解析两用**：渲染 HTML 与标题大纲共用同一 Markdig 管线与同一次后台解析，两模式口径一致。
+- **路由**：Markdown 是文本文件，宿主 5.0.5 起文本差异同样查询插件路由
+  （用户绑定 &gt; 精确扩展名认领，不含 `"*"` 通配兜底），`.md` / `.markdown` 默认即自动接管；
+  用户绑定优先级最高。
+- 大纲表上限 500 行、源码模式单侧 20 万字符截断、单侧声明大小超过 300 MB 只提示不解析；
+  读取 / 解析 / 组装在后台线程执行（代次 + CancellationToken 取消上一轮）。
+- **已知限制**（如实标注）：插件只拿到仓库相对路径，文档里以相对路径引用的**外部**图片无法解析
+  （渲染模式顶部有说明）；「渲染」的并排预览无跨侧滚动同步（共享组件未提供脚本桥）。
+- 解析用 MIT 许可的 **Markdig**（纯托管、无传递依赖）：`Markdig.dll` 为私有托管依赖，与插件 DLL
+  同放 `plugins/`；第三方许可登记在插件目录的 `third-party.json`，打包时合并成
+  `ForkPlus.Plugins.Markdown.THIRD-PARTY-NOTICES.txt`（见「第三方许可管理」）。
+- 插件实现 `IPluginMetadata`，名称「Markdown 预览对比」（`Markdown Preview`，
+  译文见 `Localization/MarkdownStrings.cs`）、版本 `1.0.0` 与描述。
+- 「渲染」依赖宿主 **5.1.1** 起提供的共享组件 `ForkPlus.Plugins.Ui`（`HtmlPreview`），
+  `plugin.json` 的 `minHostVersion` 声明 `5.1.1`。
+
+---
+
 ## Pages 截图约定
 
 插件对比视图的截图由 CI 在真实 ForkPlus 中现场采集（无头 X + 整屏截图），并随 Pages 一起发布上线；
@@ -1216,7 +1263,7 @@ INI / `.cfg` / `.properties` 自写解析器。
   机器学习模型插件即 `mlmodel-*.png`，MIDI 插件即 `midi-*.png`，Torrent 插件即 `torrent-*.png`，
   抓包插件即 `pcap-*.png`，PSD 插件即 `psd-*.png`，EPUB 插件即 `epub-*.png`，
   SQLite 插件即 `sqlite-*.png`，托管程序集插件即 `managedassembly-*.png`，邮件 EML 插件即 `eml-*.png`，
-  CHM 插件即 `chm-*.png`，前端代码插件即 `frontend-*.png`）；
+  CHM 插件即 `chm-*.png`，前端代码插件即 `frontend-*.png`，Markdown 插件即 `markdown-*.png`）；
 - 截图规格：整屏 `1920×1280`，完整软件界面，不做局部裁切；
 - 缺任一场景视为截图不完整；插件新增变更形态时，同步补对应场景截图与 `plugins.json` 登记。
 - demo 素材由采集脚本现场构造（PDF 用 `write_demo_pdf`，Office 用 `write_demo_office`，
@@ -1272,6 +1319,10 @@ INI / `.cfg` / `.properties` 自写解析器。
   运行时做运行期编译。样本仍是**纯文本**，脚本比照上面文本格式的做法，在 demo 仓库用 `.gitattributes`
   的 `-diff` 让差异走插件而非内置文本编辑器；渲染三场景各一张，另取「源码」模式一张
   （用 `FORKPLUS_PLUGIN_VIEW_MODE=source` 预选）。
+- **Markdown** demo（`write_demo_markdown`）三场景共用同一对 `.md`（旧：README 风格、
+  两章带表格与代码块；新：改标题层级、加一章、删一小节、改表格数据），样本是**纯文本**，
+  比照前端代码的做法在 demo 仓库用 `.gitattributes` 的 `-diff` 让差异走插件；渲染三场景各一张，
+  另取「大纲」/「源码」模式各一张（用 `FORKPLUS_PLUGIN_VIEW_MODE=outline` / `source` 预选）。
 - 采集脚本在构建插件前先跑 [fetch-third-party.sh](.github/scripts/fetch-third-party.sh) 从三方件仓
   最新 Release 取原生件并校验 sha256，否则音视频插件按 RID 拷不出原生库。
 

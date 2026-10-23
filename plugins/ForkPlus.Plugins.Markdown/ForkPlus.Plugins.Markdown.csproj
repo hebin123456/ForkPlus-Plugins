@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Markdown 对比视图插件：认领 .md / .markdown，三模式视图——
+         渲染（Markdig 渲成样式化 HTML，交给宿主共享组件 ForkPlus.Plugins.Ui 的
+         HtmlPreview 并排双 WebView 预览）/ 大纲（标题层级四色语义 diff）/ 源码（并排原始文本）。
+         Markdig（MIT）为私有托管依赖，随包分发；公共属性见 ../Directory.Build.props。 -->
+    <AssemblyName>ForkPlus.Plugins.Markdown</AssemblyName>
+    <RootNamespace>ForkPlus.Plugins.Markdown</RootNamespace>
+
+    <!-- 插件自身版本（与宿主版本解耦）；偏好设置 → 插件页展示的 Version 与此一致。 -->
+    <Version>1.0.0</Version>
+
+    <!-- 本插件带私有依赖（Markdig），需随插件产物拷贝出来。
+         类库工程默认不拷 PackageReference 资产，这里显式开启；打包脚本再排除宿主共享程序集。 -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 共享视图组件（含 HtmlPreview 并排双 WebView 预览）；Private=false：
+         运行期由宿主提供同一份程序集，不随插件分发（见 README「依赖与共享程序集」）。 -->
+    <ProjectReference Include="..\..\sdk\ForkPlus.Plugins.Ui\ForkPlus.Plugins.Ui.csproj">
+      <Private>false</Private>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- 本插件视图用 Avalonia 控件纯代码构建（未使用 .axaml）。
+         运行期 Avalonia 由宿主提供，打包时不随插件分发（见 README「依赖与共享程序集」）。 -->
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+
+    <!-- Markdig：MIT 许可，纯托管的 Markdown 解析库，无传递依赖。
+         一份解析两用：渲染模式把 Markdown 转 HTML，大纲模式从文档对象模型抽标题层级。
+         随包分发的依赖与许可全文见本目录 third-party.json 与 licenses/。 -->
+    <PackageReference Include="Markdig" Version="0.42.0" />
+  </ItemGroup>
+</Project>

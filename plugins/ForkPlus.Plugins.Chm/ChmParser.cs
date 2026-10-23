@@ -300,7 +300,9 @@ namespace ForkPlus.Plugins.Chm
 			{
 				return null;
 			}
-			string path = Encoding.UTF8.GetString(data, pos, (int)strLen);
+			// CHM 目录条目名按编译机 ANSI 代码页存储（中文 CHM 即 GBK，规范未提供编码声明），
+			// 不能一律按 UTF-8 解码：严格 UTF-8 失败时回退 ANSI（见 ChmTextEncoding.Decode）。
+			string path = ChmTextEncoding.Decode(data, pos, (int)strLen);
 			pos += (int)strLen;
 			if (pos >= end)
 			{
@@ -410,7 +412,8 @@ namespace ForkPlus.Plugins.Chm
 			return records;
 		}
 
-		/// <summary>#SYSTEM 文本解码：容 BOM / UTF-16LE（奇数字节多为 0），否则 UTF-8；去掉尾部 NUL。</summary>
+		/// <summary>#SYSTEM 文本解码：容 BOM / UTF-16LE（奇数字节多为 0），否则严格 UTF-8、
+		/// 失败回退系统 ANSI 代码页（中文 CHM 的标题等记录是 GBK）；去掉尾部 NUL。</summary>
 		private static string DecodeText(byte[] bytes)
 		{
 			if (bytes == null || bytes.Length == 0)
@@ -434,7 +437,7 @@ namespace ForkPlus.Plugins.Chm
 						zeros++;
 					}
 				}
-				text = (pairs > 0 && zeros * 2 >= pairs) ? Encoding.Unicode.GetString(bytes) : Encoding.UTF8.GetString(bytes);
+				text = (pairs > 0 && zeros * 2 >= pairs) ? Encoding.Unicode.GetString(bytes) : ChmTextEncoding.Decode(bytes, 0, bytes.Length);
 			}
 			int end = text.Length;
 			while (end > 0 && text[end - 1] == '\0')
