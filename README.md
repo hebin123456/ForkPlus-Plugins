@@ -490,7 +490,7 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 | --- | --- |
 | `schemaVersion` | 清单格式版本，当前固定 `1`。 |
 | `id` | 插件唯一 Id，与代码里 `IDiffViewPlugin.Id` 一致（官方为 `forkplus.<name>`）。 |
-| `version` | 插件**自身**版本，与工程 `<Version>` 一致；本仓官方插件统一 `1.0.0`（EPUB / CHM / 前端代码 / Markdown 为 `1.0.1`）。 |
+| `version` | 插件**自身**版本，与工程 `<Version>` 一致；本仓官方插件基线 `1.0.0`（EPUB / CHM / 前端代码 / Markdown 为 `1.0.1`，v1.3.0 起大表格虚拟化改造的 11 个插件为 `1.1.0`）。 |
 | `minHostVersion` | **最低支持主程序版本**：宿主主程序版本 **≥** 该值才兼容并加载，否则不加载。本仓多数为 `5.1.0`；依赖宿主 `ForkPlus.Plugins.Ui` 共享组件「并排双 WebView 预览」的 EPUB / CHM / 前端代码声明 `5.1.1`。 |
 | `assembly` | 程序集名，取该插件 csproj 的 `<AssemblyName>`。 |
 
@@ -500,6 +500,34 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
   `plugin.json` 会报错退出（须先补齐清单）。宿主共享程序集（契约 / Ui / Avalonia / SkiaSharp…）不随插件分发。
 - 分发两种包（内部结构一致）：合集包 `ForkPlus-Plugins-<插件仓版本>-<平台>.zip`；单插件包
   `ForkPlus-Plugins-<Short>-1.0.0-<平台>.zip`（`<Short>` = 程序集名去前缀 `ForkPlus.Plugins.`）。
+
+### 10. UI 线程纪律（别把宿主主界面卡死，重要）
+
+宿主在 **UI 线程**上调用 `SetContent` / `SetMode` / `Activate` / `ApplyLocalization`，并在这些调用期间
+冻结整个主界面——插件里任何毫秒级以上的同步重活，用户都会感知为「ForkPlus 卡死了」。**每条都是红线**：
+
+1. **`SetContent` 必须毫秒级返回**：只做字段赋值、轻量状态判断与「后台任务启动」。读流、解析、哈希、
+   解码、diff 全部放进 `Task.Run` + `ConfigureAwait(false)`；回 UI 只 `Post` 轻量的控件赋值。
+2. **字节流绝不在 UI 线程碰**：`side.Data` / `context.HexSrc` / `HexDst` 是**懒加载**——首次访问会
+   同步把整个文件读进内存（几 GB 的视频就是几秒的冻结）。内容去重签名一律用**零字节元数据**
+   （路径、大小、`Lfs.Sha256`、流长度），不要为了「证明内容相同」在 UI 线程全量 SHA-256
+   （视频 / Hex / Image 曾因此每次刷新都卡住）。
+3. **大表格禁止一次性铺行**：UI 线程逐行 `AddTableRow` 铺几千行 × 4 列 ≈ 上万个控件，创建加布局测量
+   就是数秒冻结。统一走**行模型 + 虚拟化列表**范式（见 `ChmDiffView` 的 `NewTableCard` /
+   `TableTemplate` / `VirtualTableTemplate`）：
+   - UI 线程只映射行模型（纯字符串 + 画刷引用，零控件创建）；
+   - 行控件由 `ItemsControl` + `VirtualizingStackPanel` 按可见范围惰性物化；
+   - **滚动条必须长在控件模板内部**（`FuncControlTemplate` 里放 `ScrollViewer` + 注册
+     `PART_ItemsPresenter`）——外层再包一个 `ScrollViewer` 会把视口撑成无限高，虚拟化退化成
+     全量物化，等于白改（DBC 曾踩此坑）；
+   - 横向滚动禁用、长文本换行；状态列用**固定星号宽**（`Auto` 列在虚拟化下每行独立测宽会错列）；
+   - 表头固定在卡片首行、截断提示固定在卡片下方，不随表体滚动。
+4. **内存别翻倍**：宿主预载的 `MemoryStream` 不要再 `ToArray()` 整份拷贝——几百 MB 的副本进 LOH，
+   GC 停顿就是界面顿挫。要字节就在后台按需读、读完就放。
+5. **后台任务可作废**：`SetContent` / 模式切换可能连续触发，用「代次计数 + `CancellationToken`」
+   让旧任务的结果直接丢弃（参考 PDF / Office 插件的 `CancelRender`）。
+6. **验收标准**：拿大样张实测——GB 级视频、几 MB 的 CHM、几千行数据的表格/抓包，
+   `SetContent` 之后主界面必须仍然可拖动、可缩放、可切换文件；发现冻结按上面 1→3 的顺序排查。
 
 ---
 

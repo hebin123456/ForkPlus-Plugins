@@ -8,7 +8,9 @@
       "assembly": "ForkPlus.Plugins.Pdf",
       "source": "plugins/ForkPlus.Plugins.Pdf",
       "summary": "PDF 文件对比视图：认领 .pdf，命中后把差异区替换为左右两栏，按页号逐页并排渲染旧版本与新版本 PDF，天然纵向同步滚动；新增 / 删除 / 修改三种变更都有对应形态。",
-      "extensions": [".pdf"],
+      "extensions": [
+        ".pdf"
+      ],
       "screenshots": [
         {
           "file": "pdf-modify.png",
@@ -61,7 +63,11 @@
       "assembly": "ForkPlus.Plugins.Office",
       "source": "plugins/ForkPlus.Plugins.Office",
       "summary": "Office 套件对比视图：认领 .docx / .xlsx / .pptx，命中后用 Open XML SDK 提取正文内容，把差异区换成左右两栏并排对比——Word 段落 / 标题 / 表格、Excel 工作表网格、PowerPoint 幻灯片文字。呈现上尽量「像文档」而非纯文字：保留 run 级字符格式（加粗 / 斜体 / 下划线 / 删除线），栏顶文档类型徽章，标题做成强调色条卡片，表格首行表头 + 隔行浅底，Excel 网格补列字母与行号；新增 / 删除 / 修改三种变更都有对应形态。",
-      "extensions": [".docx", ".xlsx", ".pptx"],
+      "extensions": [
+        ".docx",
+        ".xlsx",
+        ".pptx"
+      ],
       "screenshots": [
         {
           "file": "office-modify.png",
@@ -118,7 +124,20 @@
       "assembly": "ForkPlus.Plugins.Archive",
       "source": "plugins/ForkPlus.Plugins.Archive",
       "summary": "压缩包对比视图：认领 zip / 7z / rar / tar 及 gz / bz2 / xz / zst 等主流压缩包，命中后把两侧压缩包各自展开成「条目树」，用成熟 <code>TreeView</code> 控件左右并排对比——目录 / 文件 / 大小 / 是否加密，并给出整包 MD5 与每个文件的内容 MD5，便于核对两侧是否一致；带密码的压缩包（如头部加密的 7z / rar）可在视图里输入密码。",
-      "extensions": [".zip", ".7z", ".rar", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".zst", ".jar", ".apk", ".nupkg"],
+      "extensions": [
+        ".zip",
+        ".7z",
+        ".rar",
+        ".tar",
+        ".gz",
+        ".tgz",
+        ".bz2",
+        ".xz",
+        ".zst",
+        ".jar",
+        ".apk",
+        ".nupkg"
+      ],
       "screenshots": [
         {
           "file": "archive-modify.png",
@@ -183,7 +202,13 @@
       "assembly": "ForkPlus.Plugins.Font",
       "source": "plugins/ForkPlus.Plugins.Font",
       "summary": "字体对比视图：认领 .ttf / .otf / .ttc / .otc / .woff，命中后把差异区换成左右两栏，用同一套固定样张（多字号）并排渲染旧 / 新字体，同一字号落在同一行、天然对齐；再对 sfnt 表做结构化 diff——元数据（Identity / Vertical metrics / Weight & width / Tables）与 cmap 码位覆盖（含 Unicode block 归类），逐项按「相同 / 变了 / 仅左 / 仅右」四色标注。.ttc / .otc 集合字体可在工具栏切换「第几套」。",
-      "extensions": [".ttf", ".otf", ".ttc", ".otc", ".woff"],
+      "extensions": [
+        ".ttf",
+        ".otf",
+        ".ttc",
+        ".otc",
+        ".woff"
+      ],
       "screenshots": [
         {
           "file": "font-modify.png",
@@ -254,7 +279,15 @@
       "assembly": "ForkPlus.Plugins.Executable",
       "source": "plugins/ForkPlus.Plugins.Executable",
       "summary": "可执行文件 / 库对比视图：认领 .exe / .dll / .so / .dylib / .a / .lib / .wasm，命中后把两侧二进制各自解析成结构模型——格式、架构、节 / 段表、导入导出符号、依赖与体积构成——左右并排逐行标注「相同 / 变了 / 仅左 / 仅右」。四种模式：结构摘要 / 段·节表 / 导入导出 / 体积构成（含彩色堆叠条 + 图例 + 百分比）。零第三方依赖：PE 走共享框架内置的 System.Reflection.Metadata，ELF / Mach-O / WebAssembly / ar 自解析。",
-      "extensions": [".exe", ".dll", ".so", ".dylib", ".a", ".lib", ".wasm"],
+      "extensions": [
+        ".exe",
+        ".dll",
+        ".so",
+        ".dylib",
+        ".a",
+        ".lib",
+        ".wasm"
+      ],
       "screenshots": [
         {
           "file": "executable-modify.png",
@@ -326,7 +359,15 @@
       "assembly": "ForkPlus.Plugins.Certificate",
       "source": "plugins/ForkPlus.Plugins.Certificate",
       "summary": "证书对比视图：认领证书容器（.der / 二进制 .cer / .p12 / .pfx / .p7b / .p7c / .crl），命中后把两侧证书的身份、有效期、密钥与签名、用途、扩展、指纹并排对比，逐行按「相同 / 变了 / 仅左 / 仅右」四色铺底；有效期画成水平时间轴并按当前时间标「现在」、绿橙红表示有效 / 即将过期 / 已过期；SAN / KeyUsage / EKU 做成彩色徽章；另有「证书链」模式逐张列出容器内证书并标两侧数量差异。安全边界：不导入 / 不导出私钥，不解密任何内容。",
-      "extensions": [".der", ".cer", ".p12", ".pfx", ".p7b", ".p7c", ".crl"],
+      "extensions": [
+        ".der",
+        ".cer",
+        ".p12",
+        ".pfx",
+        ".p7b",
+        ".p7c",
+        ".crl"
+      ],
       "screenshots": [
         {
           "file": "certificate-modify.png",
@@ -392,7 +433,17 @@
       "assembly": "ForkPlus.Plugins.Audio",
       "source": "plugins/ForkPlus.Plugins.Audio",
       "summary": "音频对比视图：认领 .mp3 / .wav / .flac / .ogg / .oga / .opus / .m4a / .aac / .wma，命中后把差异区换成左右两栏，并排呈现元数据、波形包络、声谱图与内嵌封面四种模式（默认元数据），波形 / 频谱模式下还可对旧 / 新两侧就地试听（播放 / 暂停 + 进度定位），旧 / 新两侧逐行标注「相同 / 已变更 / 仅左 / 仅右」；解码走共享核心 ForkPlus.Plugins.Media（FFmpeg.AutoGen 动态绑定），声音输出用三方件 miniaudio（音频时钟为主、暂停冻结、seek 双路同步）。单侧声明大小超过 300 MB 只给提示、不渲染媒体内容。",
-      "extensions": [".mp3", ".wav", ".flac", ".ogg", ".oga", ".opus", ".m4a", ".aac", ".wma"],
+      "extensions": [
+        ".mp3",
+        ".wav",
+        ".flac",
+        ".ogg",
+        ".oga",
+        ".opus",
+        ".m4a",
+        ".aac",
+        ".wma"
+      ],
       "screenshots": [
         {
           "file": "audio-modify.png",
@@ -464,7 +515,18 @@
       "assembly": "ForkPlus.Plugins.Video",
       "source": "plugins/ForkPlus.Plugins.Video",
       "summary": "视频对比视图：认领 .mp4 / .mkv / .mov / .webm / .avi / .m4v / .mpg / .mpeg / .wmv / .flv，命中后把差异区换成左右两栏，并排呈现元数据、关键帧帧条、单帧像素差异与播放四种模式（默认元数据），旧 / 新逐行标注「相同 / 已变更 / 仅左 / 仅右」；单帧对比复用宿主「高亮差异像素」偏好，播放模式可就地对旧 / 新任一侧放画面与声音（播放 / 暂停 + 进度定位）。解码走共享核心 ForkPlus.Plugins.Media（FFmpeg.AutoGen 动态绑定，视频优先硬件解码、失败静默回落软解；声音走三方件 miniaudio）。单侧声明大小超过 300 MB 只给提示、不渲染媒体内容。",
-      "extensions": [".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v", ".mpg", ".mpeg", ".wmv", ".flv"],
+      "extensions": [
+        ".mp4",
+        ".mkv",
+        ".mov",
+        ".webm",
+        ".avi",
+        ".m4v",
+        ".mpg",
+        ".mpeg",
+        ".wmv",
+        ".flv"
+      ],
       "screenshots": [
         {
           "file": "video-modify.png",
@@ -536,7 +598,17 @@
       "assembly": "ForkPlus.Plugins.Structured",
       "source": "plugins/ForkPlus.Plugins.Structured",
       "summary": "结构化数据对比视图：认领 .json / .jsonc / .yaml / .yml / .toml / .xml / .ini / .cfg / .properties，命中后把差异区换成键路径表与结构树两种模式——把两侧解析成同一套数据模型（对象 / 数组 / 标量）后按键路径做语义 diff，逐行标注「相同 / 已变更 / 仅左 / 仅右」，而不是逐字符比文本。YAML 用 YamlDotNet、TOML 用 Tomlyn，JSON / XML 走共享框架自带解析器，INI 系列自写解析器。这些扩展名都是纯文本格式，自动路由通常不命中，需在偏好设置里把扩展名绑定到本插件。单侧声明大小超过 300 MB 只给提示、不解析。",
-      "extensions": [".json", ".jsonc", ".yaml", ".yml", ".toml", ".xml", ".ini", ".cfg", ".properties"],
+      "extensions": [
+        ".json",
+        ".jsonc",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".xml",
+        ".ini",
+        ".cfg",
+        ".properties"
+      ],
       "screenshots": [
         {
           "file": "structured-modify.png",
@@ -590,7 +662,9 @@
       "assembly": "ForkPlus.Plugins.Dbc",
       "source": "plugins/ForkPlus.Plugins.Dbc",
       "summary": "DBC（CAN 数据库）对比视图：认领 .dbc，命中后用第三方库 DbcParserLib 把两侧解析成同一套数据模型，对节点 / 报文 / 信号 / 环境变量做语义 diff——把差异区换成键路径表与原文对照两种模式，逐行标注「相同 / 已变更 / 仅左 / 仅右」，而不是逐字符比文本。报文按 ID、信号按起始位排序保证行序稳定；覆盖 ID（十进制 / 十六进制 / 扩展帧）、DLC、发送方、起始位、长度、字节序（Motorola / Intel）、数值类型、因子、偏移、取值范围、单位、初值、多路复用、接收方、值表（VAL_）与属性（BA_）。.dbc 是纯文本格式，自动路由通常不命中，需在偏好设置里把 .dbc 绑定到本插件。单侧声明大小超过 300 MB 只给提示、不解析。",
-      "extensions": [".dbc"],
+      "extensions": [
+        ".dbc"
+      ],
       "screenshots": [
         {
           "file": "dbc-modify.png",
@@ -620,7 +694,7 @@
         },
         {
           "heading": "结构化模式：拍平 + 按键路径语义 diff",
-          "html": "<p>默认模式由 <code>BuildKeyPathContent</code> 渲染。核心是 <code>DataFlatten.Flatten</code>：把两侧数据树各拍平成「键路径 → 标量」的有序列表，键路径用点号连接（如 <code>Messages.EngineData.Signals.EngineSpeed.Factor</code>）。<code>DataDiff.Compute</code> 分别以左右两张 <code>Dictionary</code> 建索引，先按左表再按右表的顺序 <code>Emit</code> 去重合并，得到四类 <code>DiffState</code>：<code>Same / Changed / LeftOnly / RightOnly</code>，汇总成 <code>DiffSummary</code>。为了让两侧行序稳定，解析阶段就按 ID 给报文、按起始位给信号排序，因此同一对象在旧 / 新两侧落在同一批键路径上，改值才表现为「已变更」而不是「删一条加一条」。</p><p>渲染成一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>，键路径用等宽字体），每行按 <code>TintOf</code> 铺状态底色、行尾附一个状态小标签；本侧缺失的值显示为「不存在」而不是留空。单值超过 <code>MaxValueChars</code>（300）截断展示，但<strong>不影响比较</strong>（比较用的是完整值）。行数上限 <code>MaxRows</code>（4000），超出截断以免 UI 被拖死。</p>"
+          "html": "<p>默认模式由 <code>BuildKeyPathContent</code> 渲染。核心是 <code>DataFlatten.Flatten</code>：把两侧数据树各拍平成「键路径 → 标量」的有序列表，键路径用点号连接（如 <code>Messages.EngineData.Signals.EngineSpeed.Factor</code>）。<code>DataDiff.Compute</code> 分别以左右两张 <code>Dictionary</code> 建索引，先按左表再按右表的顺序 <code>Emit</code> 去重合并，得到四类 <code>DiffState</code>：<code>Same / Changed / LeftOnly / RightOnly</code>，汇总成 <code>DiffSummary</code>。为了让两侧行序稳定，解析阶段就按 ID 给报文、按起始位给信号排序，因此同一对象在旧 / 新两侧落在同一批键路径上，改值才表现为「已变更」而不是「删一条加一条」。</p><p>渲染成一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>，键路径用等宽字体），每行按 <code>TintOf</code> 铺状态底色、行尾附一个状态小标签；本侧缺失的值显示为「不存在」而不是留空。单值超过 <code>MaxValueChars</code>（300）截断展示，但<strong>不影响比较</strong>（比较用的是完整值）。行数上限 <code>MaxRows</code>（4000），超出截断以免 UI 被拖死；行控件由<strong>虚拟化列表</strong>惰性物化（v1.3.0 修复：外层 <code>ScrollViewer</code> 会把视口撑成无限高、让虚拟化退化成全量物化——滚动条必须长在控件模板内部）。</p>"
         },
         {
           "heading": "原文模式：并排对照",
@@ -644,7 +718,13 @@
       "assembly": "ForkPlus.Plugins.Subtitle",
       "source": "plugins/ForkPlus.Plugins.Subtitle",
       "summary": "字幕 / 时间轴对比视图：认领 .srt / .vtt / .ass / .ssa / .sub，命中后把差异区换成字幕行表与时间轴两种模式——把两侧解析成同一套 cue 模型（序号 / 起止毫秒 / 文本 / 附加信息）后，先按归一化文本对齐、再按时间配对，给出「相同 / 已变 / 仅左 / 仅右」四类。字幕行表逐条四色标注；时间轴以总时长为横轴、旧 / 新两条轨道按起止时间等比铺开，字幕的提前 / 延后 / 拉长一眼可见。零第三方依赖。这几个扩展名都是纯文本格式，自动路由通常不命中，需在偏好设置里绑定到本插件。单侧声明大小超过 300 MB 只给提示、不解析。",
-      "extensions": [".srt", ".vtt", ".ass", ".ssa", ".sub"],
+      "extensions": [
+        ".srt",
+        ".vtt",
+        ".ass",
+        ".ssa",
+        ".sub"
+      ],
       "screenshots": [
         {
           "file": "subtitle-modify.png",
@@ -698,7 +778,9 @@
       "assembly": "ForkPlus.Plugins.Svg",
       "source": "plugins/ForkPlus.Plugins.Svg",
       "summary": "SVG 矢量图对比视图：认领 .svg，命中后把差异区换成并排渲染与元素结构 diff 两种模式——把两侧 SVG 各自解析成元素树，既按各自 viewBox 等比缩放并排渲染直接比图形，也把元素树拍平成「元素路径 → 属性」列表逐项标出新增 / 删除 / 改值。支持常见图形元素（rect / circle / ellipse / line / polyline / polygon / path）与 g 分组、transform 变换、fill / stroke 等呈现属性，text / tspan 的文字作为伪属性参与比较。解析走 BCL 的 System.Xml.Linq，渲染走 Avalonia 图形原语，零第三方依赖。SVG 是 XML 文本，自动路由通常不命中，需在偏好设置里绑定到本插件。单侧声明大小超过 300 MB 只给提示、不解析。",
-      "extensions": [".svg"],
+      "extensions": [
+        ".svg"
+      ],
       "screenshots": [
         {
           "file": "svg-modify.png",
@@ -732,7 +814,7 @@
         },
         {
           "heading": "结构差异：元素路径 + 属性逐项比较",
-          "html": "<p>切到 <code>StructureMode</code> 后由元素结构表渲染。核心是 <code>SvgFlatten.Flatten</code>：把元素树拍平成「元素路径 → 属性」条目（路径由标签名 + 序号 / <code>id</code> 拼出），<code>SvgDiff.Compute</code> 以左右两张索引表先左后右 <code>Emit</code> 去重合并，得到 <code>Same / Changed / LeftOnly / RightOnly</code> 四类 <code>SvgState</code> 与 <code>SvgDiffResult</code>。表逐行列出元素路径与属性名，旧值 / 新值分列，按四色铺底 + 行尾状态标签。为了让改字也能报出来，<code>&lt;text&gt;</code> / <code>&lt;tspan&gt;</code> 的直接文本被挂成伪属性 <code>#text</code> 一起参与比较。行数上限 4000、单值展示上限 300 字符（截断不影响比较）。</p>"
+          "html": "<p>切到 <code>StructureMode</code> 后由元素结构表渲染。核心是 <code>SvgFlatten.Flatten</code>：把元素树拍平成「元素路径 → 属性」条目（路径由标签名 + 序号 / <code>id</code> 拼出），<code>SvgDiff.Compute</code> 以左右两张索引表先左后右 <code>Emit</code> 去重合并，得到 <code>Same / Changed / LeftOnly / RightOnly</code> 四类 <code>SvgState</code> 与 <code>SvgDiffResult</code>。表逐行列出元素路径与属性名，旧值 / 新值分列，按四色铺底 + 行尾状态标签。为了让改字也能报出来，<code>&lt;text&gt;</code> / <code>&lt;tspan&gt;</code> 的直接文本被挂成伪属性 <code>#text</code> 一起参与比较。行数上限 4000、单值展示上限 300 字符（截断不影响比较）；行控件由虚拟化列表惰性物化，大文件不卡宿主 UI。</p>"
         },
         {
           "heading": "解析：System.Xml.Linq 到元素树",
@@ -843,7 +925,7 @@
         },
         {
           "heading": "音符表模式：按（通道, 音高, 起始）配对",
-          "html": "<p>默认模式由音符表渲染，是一张五列表（<code>旧时间 / 旧音符 / 新时间 / 新音符 / 状态</code>）。<code>MidiDiff.Compute</code> 把两侧音符先按（通道, 音高, 起始毫秒）配对，命中则比较力度与时长，得到 <code>Same / Changed / LeftOnly / RightOnly</code> 四类；每行按状态铺四色底色，本侧缺失的格子显示「不存在」。行数上限 <code>MaxRows</code>（2000）。</p>"
+          "html": "<p>默认模式由音符表渲染，是一张五列表（<code>旧时间 / 旧音符 / 新时间 / 新音符 / 状态</code>）。<code>MidiDiff.Compute</code> 把两侧音符先按（通道, 音高, 起始毫秒）配对，命中则比较力度与时长，得到 <code>Same / Changed / LeftOnly / RightOnly</code> 四类；每行按状态铺四色底色，本侧缺失的格子显示「不存在」。行数上限 <code>MaxRows</code>（2000）；行控件走<strong>虚拟化列表</strong>（<code>VirtualizingStackPanel</code> 惰性物化、表头固定、滚动条长在控件模板内部）。</p>"
         },
         {
           "heading": "钢琴卷帘时间轴：一眼看时间位移",
@@ -894,7 +976,7 @@
         },
         {
           "heading": "键路径表与语义比较",
-          "html": "<p>内容是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>，键路径用等宽字体）：<code>TorrentParser</code> 把 bencode 解码成树、<code>TorrentData</code> 拍平成「键路径 → 值」列表，取并集逐行四色标注，行数上限 <code>MaxRows</code>（4000）。值按语义比较，避免长二进制字面显示相同就误判为「相同」：<code>info.pieces</code> 这类分片串按「分片数（每 20 字节一片）+ FNV-1a 哈希」摘要后比较，真正换了分片也会报「已变更」；名称 / 长度 / tracker 等标量直接比。</p>"
+          "html": "<p>内容是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>，键路径用等宽字体）：<code>TorrentParser</code> 把 bencode 解码成树、<code>TorrentData</code> 拍平成「键路径 → 值」列表，取并集逐行四色标注，行数上限 <code>MaxRows</code>（4000）；行控件走<strong>虚拟化列表</strong>（<code>VirtualizingStackPanel</code> 惰性物化、表头固定、滚动条长在控件模板内部）。值按语义比较，避免长二进制字面显示相同就误判为「相同」：<code>info.pieces</code> 这类分片串按「分片数（每 20 字节一片）+ FNV-1a 哈希」摘要后比较，真正换了分片也会报「已变更」；名称 / 长度 / tracker 等标量直接比。</p>"
         },
         {
           "heading": "解析：bencode 自解析",
@@ -951,7 +1033,7 @@
         },
         {
           "heading": "包列表模式：逐包对齐",
-          "html": "<p>切到 <code>packets</code> 后由包列表渲染，是一张四列表（<code># / 旧 / 新 / 状态</code>）：两侧同序号的包对齐成一行，每格给出「相对首包的时间 · 长度 · 协议与五元组摘要」。为了不让超大抓包拖死 UI，包列表渲染上限 <code>MaxPacketRows</code>（1000）。</p>"
+          "html": "<p>切到 <code>packets</code> 后由包列表渲染，是一张四列表（<code># / 旧 / 新 / 状态</code>）：两侧同序号的包对齐成一行，每格给出「相对首包的时间 · 长度 · 协议与五元组摘要」。为了不让超大抓包拖死 UI，包列表渲染上限 <code>MaxPacketRows</code>（1000）；行控件走虚拟化列表惰性物化，超大抓包也不卡宿主 UI。</p>"
         },
         {
           "heading": "解析：pcap / pcapng 容器 + 链路层剥包",
@@ -1013,7 +1095,7 @@
         },
         {
           "heading": "图层模式：按名称配对",
-          "html": "<p>图层表把两侧图层按名称配对，逐图层四色标注（名称 / 矩形 / 通道构成 / 混合模式 / 不透明度 / 可见性任一不同即 <code>Changed</code>），分组图层带 ▸ / ▾ / — 前缀，一眼看出「哪个图层挪了 / 隐藏了 / 多了一层」。渲染行数上限 <code>MaxRows</code>（1000）。</p>"
+          "html": "<p>图层表把两侧图层按名称配对，逐图层四色标注（名称 / 矩形 / 通道构成 / 混合模式 / 不透明度 / 可见性任一不同即 <code>Changed</code>），分组图层带 ▸ / ▾ / — 前缀，一眼看出「哪个图层挪了 / 隐藏了 / 多了一层」。渲染行数上限 <code>MaxRows</code>（1000）；行控件走虚拟化列表惰性物化（头部表行数天然很少，仍是一次性 Grid）。</p>"
         },
         {
           "heading": "头部模式：头部 / 资源统计键路径表",
@@ -1074,11 +1156,11 @@
         },
         {
           "heading": "元数据模式：OPF 元数据键路径表",
-          "html": "<p>默认模式由元数据表渲染，是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）：书名 / 作者（可多位）/ 语言 / 标识 / 日期 / <code>dcterms:modified</code> 与文档数 / 章节数等统计逐行四色标注。<code>EpubData</code> 按键路径取并集，<code>EpubDiff.Compute</code> 先左后右 <code>Emit</code> 去重合并，得到 <code>Same / Changed / LeftOnly / RightOnly</code> 四类。行数上限 <code>MaxRows</code>（3000）。</p>"
+          "html": "<p>默认模式由元数据表渲染，是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）：书名 / 作者（可多位）/ 语言 / 标识 / 日期 / <code>dcterms:modified</code> 与文档数 / 章节数等统计逐行四色标注。<code>EpubData</code> 按键路径取并集，<code>EpubDiff.Compute</code> 先左后右 <code>Emit</code> 去重合并，得到 <code>Same / Changed / LeftOnly / RightOnly</code> 四类。行数上限 <code>MaxRows</code>（3000）；行控件走<strong>虚拟化列表</strong>（<code>VirtualizingStackPanel</code> 按可见范围惰性物化、表头固定、滚动条长在控件模板内部）。</p>"
         },
         {
           "heading": "章节模式：按 spine 序号对齐",
-          "html": "<p>切到 <code>chapters</code> 后由章节表渲染，是一张四列表（<code># / 旧 / 新 / 状态</code>）：按 spine 序号对齐两侧章节，每格给出「第 i 章 · 标题（href 文件名 · 体积）」，逐章四色标注。章节数上限 <code>MaxChapterRows</code>（2000），超长描述按 <code>MaxDescriptionChars</code>（120）截断展示。</p>"
+          "html": "<p>切到 <code>chapters</code> 后由章节表渲染，是一张四列表（<code># / 旧 / 新 / 状态</code>）：按 spine 序号对齐两侧章节，每格给出「第 i 章 · 标题（href 文件名 · 体积）」，逐章四色标注。章节数上限 <code>MaxChapterRows</code>（2000），超长描述按 <code>MaxDescriptionChars</code>（120）截断展示；行控件与元数据表同为虚拟化列表。</p>"
         },
         {
           "heading": "预览模式：并排双 WebView 真渲染首个阅读章节",
@@ -1102,7 +1184,11 @@
       "assembly": "ForkPlus.Plugins.Sqlite",
       "source": "plugins/ForkPlus.Plugins.Sqlite",
       "summary": "SQLite 数据库对比视图：认领 .db / .sqlite / .sqlite3，命中后纯托管自解析 SQLite 文件格式（100 字节文件头 + sqlite_master 的 B 树 + 各表 B 树的记录序列类型），把两侧库的「表结构」与「数据」分别展开成键路径表并排对比——逐行按「相同 / 已变 / 仅左 / 仅右」四色标注。零第三方依赖：不引入任何 SQLite 原生库 / 托管驱动，随包进 <code>plugins/</code> 的只有插件自身主 DLL。",
-      "extensions": [".db", ".sqlite", ".sqlite3"],
+      "extensions": [
+        ".db",
+        ".sqlite",
+        ".sqlite3"
+      ],
       "screenshots": [
         {
           "file": "sqlite-modify.png",
@@ -1128,7 +1214,7 @@
       "sections": [
         {
           "heading": "对比视图长什么样",
-          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式工具条</strong>、<strong>内容区</strong>。标题行是两列 <code>Grid</code>，左旧右新各一个 <code>TextBlock</code>，文字形如 <code>old  ·  sample.db  ·  28 KB</code>（角色名取 <code>PluginEnvironment.Translate</code>，文件名取 <code>Path.GetFileName</code>，体积取 <code>PluginSizeFormat.ReadableFileSize</code>），并采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>DstTitleBrush</code> 着色。</p><p>内容区是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）外包一个卡片与 <code>ScrollViewer</code>：首列键路径用等宽字体，行按状态铺四色低对比底色，状态列给彩色小词（相同 / 已变 / 仅左 / 仅右）。状态行给出 <code>SQLite compare: 左 / 右</code>、<code>tables: 左 / 右</code>、<code>rows: 左 / 右</code> 与 <code>Summary: N 项 · c 已变 · l 仅左 · r 仅右</code>。</p>"
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式工具条</strong>、<strong>内容区</strong>。标题行是两列 <code>Grid</code>，左旧右新各一个 <code>TextBlock</code>，文字形如 <code>old  ·  sample.db  ·  28 KB</code>（角色名取 <code>PluginEnvironment.Translate</code>，文件名取 <code>Path.GetFileName</code>，体积取 <code>PluginSizeFormat.ReadableFileSize</code>），并采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>DstTitleBrush</code> 着色。</p><p>内容区是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）装进一张<strong>虚拟化表卡片</strong>（表头固定在卡片首行，数据行由 <code>VirtualizingStackPanel</code> 按可见范围惰性物化，滚动条长在控件模板内部——外层不能再包 <code>ScrollViewer</code>，否则视口无限高、虚拟化退化成全量物化）：首列键路径用等宽字体，行按状态铺四色低对比底色，状态列给彩色小词（相同 / 已变 / 仅左 / 仅右）。状态行给出 <code>SQLite compare: 左 / 右</code>、<code>tables: 左 / 右</code>、<code>rows: 左 / 右</code> 与 <code>Summary: N 项 · c 已变 · l 仅左 · r 仅右</code>。</p>"
         },
         {
           "heading": "两种模式：表结构 / 数据",
@@ -1160,7 +1246,10 @@
       "assembly": "ForkPlus.Plugins.ManagedAssembly",
       "source": "plugins/ForkPlus.Plugins.ManagedAssembly",
       "summary": "托管程序集（.NET assembly）对比视图：认领 .dll / .exe，命中后用共享框架内置的 System.Reflection.Metadata / System.Reflection.PortableExecutable 纯托管读取 ECMA-335 元数据，把两侧程序集的「程序集标识」「类型 → 方法 / 字段」「AssemblyRef 引用」分别展开成键路径表并排对比——逐行按「相同 / 已变 / 仅左 / 仅右」四色标注。以更高优先级（120 &gt; 100）接管 .dll / .exe，因为生态中它们绝大多数是托管程序集，元数据对比远比 PE 节段对比有用；零第三方依赖。",
-      "extensions": [".dll", ".exe"],
+      "extensions": [
+        ".dll",
+        ".exe"
+      ],
       "screenshots": [
         {
           "file": "managedassembly-modify.png",
@@ -1191,7 +1280,7 @@
       "sections": [
         {
           "heading": "对比视图长什么样",
-          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式工具条</strong>、<strong>内容区</strong>。标题行是两列 <code>Grid</code>，左旧右新各一个 <code>TextBlock</code>，文字形如 <code>old  ·  sample.dll  ·  4 KB</code>（角色名取 <code>PluginEnvironment.Translate</code>，文件名取 <code>Path.GetFileName</code>，体积取 <code>PluginSizeFormat.ReadableFileSize</code>），并采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>DstTitleBrush</code> 着色。</p><p>内容区是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）外包卡片与 <code>ScrollViewer</code>：首列键路径用等宽字体，行按状态铺四色底色。状态行给出 <code>Managed assembly compare: 左 / 右</code>、<code>types: 左 / 右</code>、<code>members: 左 / 右</code> 与 <code>Summary: N 项 · c 已变 · l 仅左 · r 仅右</code>。</p>"
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式工具条</strong>、<strong>内容区</strong>。标题行是两列 <code>Grid</code>，左旧右新各一个 <code>TextBlock</code>，文字形如 <code>old  ·  sample.dll  ·  4 KB</code>（角色名取 <code>PluginEnvironment.Translate</code>，文件名取 <code>Path.GetFileName</code>，体积取 <code>PluginSizeFormat.ReadableFileSize</code>），并采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>DstTitleBrush</code> 着色。</p><p>内容区是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）装进一张<strong>虚拟化表卡片</strong>（表头固定首行、数据行由 <code>VirtualizingStackPanel</code> 惰性物化、滚动条长在控件模板内部）：首列键路径用等宽字体，行按状态铺四色底色。状态行给出 <code>Managed assembly compare: 左 / 右</code>、<code>types: 左 / 右</code>、<code>members: 左 / 右</code> 与 <code>Summary: N 项 · c 已变 · l 仅左 · r 仅右</code>。</p>"
         },
         {
           "heading": "三种模式：标识 / 类型 / 引用",
@@ -1219,7 +1308,9 @@
       "assembly": "ForkPlus.Plugins.Eml",
       "source": "plugins/ForkPlus.Plugins.Eml",
       "summary": "邮件（.eml）对比视图：认领 .eml，命中后纯托管自解析 RFC 5322 邮件头与 MIME 多部件树（multipart/* 边界切分、Content-Transfer-Encoding base64 / quoted-printable 解码、RFC 2047 编码字解码），把两侧邮件的「邮件头」「MIME 部件」「正文」分别展开成键路径表并排对比——逐行按「相同 / 已变 / 仅左 / 仅右」四色标注。零第三方依赖：全为共享框架内置的 System.*。",
-      "extensions": [".eml"],
+      "extensions": [
+        ".eml"
+      ],
       "screenshots": [
         {
           "file": "eml-modify.png",
@@ -1250,7 +1341,7 @@
       "sections": [
         {
           "heading": "对比视图长什么样",
-          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式工具条</strong>、<strong>内容区</strong>。标题行是两列 <code>Grid</code>，左旧右新各一个 <code>TextBlock</code>，文字形如 <code>old  ·  sample.eml  ·  1 KB</code>（角色名取 <code>PluginEnvironment.Translate</code>，文件名取 <code>Path.GetFileName</code>，体积取 <code>PluginSizeFormat.ReadableFileSize</code>），并采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>DstTitleBrush</code> 着色。</p><p>内容区是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）外包卡片与 <code>ScrollViewer</code>：首列键路径用等宽字体，行按状态铺四色底色。状态行给出 <code>Email compare: 左 / 右</code>（标题行取邮件 Subject）、<code>headers: 左 / 右</code>、<code>parts: 左 / 右</code> 与 <code>Summary: N 项 · c 已变 · l 仅左 · r 仅右</code>。</p>"
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式工具条</strong>、<strong>内容区</strong>。标题行是两列 <code>Grid</code>，左旧右新各一个 <code>TextBlock</code>，文字形如 <code>old  ·  sample.eml  ·  1 KB</code>（角色名取 <code>PluginEnvironment.Translate</code>，文件名取 <code>Path.GetFileName</code>，体积取 <code>PluginSizeFormat.ReadableFileSize</code>），并采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>DstTitleBrush</code> 着色。</p><p>内容区是一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）装进一张<strong>虚拟化表卡片</strong>（表头固定首行、数据行由 <code>VirtualizingStackPanel</code> 惰性物化、滚动条长在控件模板内部）：首列键路径用等宽字体，行按状态铺四色底色。状态行给出 <code>Email compare: 左 / 右</code>（标题行取邮件 Subject）、<code>headers: 左 / 右</code>、<code>parts: 左 / 右</code> 与 <code>Summary: N 项 · c 已变 · l 仅左 · r 仅右</code>。</p>"
         },
         {
           "heading": "三种模式：邮件头 / 部件 / 正文",
@@ -1311,11 +1402,11 @@
         },
         {
           "heading": "元数据模式：头部 / 统计键路径表",
-          "html": "<p>默认模式渲染一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）：<code>title</code>、<code>default topic</code>、<code>contents file</code>、<code>index file</code>、<code>language</code>（Windows LCID 十六进制 · culture）、<code>help format version</code>、<code>last modified</code>、<code>compressed</code>，以及压缩时附带的 <code>window size</code> / <code>reset interval</code> / <code>content stream</code>，再接 <code>directory block size</code> / <code>files</code> / <code>directories</code> / <code>total bytes</code> 统计，逐行四色标注。由 <code>ChmParser.BuildRows</code> 产出，<code>ChmDiff.ComputeRows</code> 按键路径取并集（两侧都有且值相等 = 相同、不等 = 已变、仅左 = 仅左、仅右 = 仅右），是看「标题 / 默认主题 / 语言 / 格式版本 / 统计」等改动的首选口径。行数上限 <code>MaxRows</code>（3000）。</p>"
+          "html": "<p>默认模式渲染一张四列表（<code>键路径 / 旧值 / 新值 / 状态</code>）：<code>title</code>、<code>default topic</code>、<code>contents file</code>、<code>index file</code>、<code>language</code>（Windows LCID 十六进制 · culture）、<code>help format version</code>、<code>last modified</code>、<code>compressed</code>，以及压缩时附带的 <code>window size</code> / <code>reset interval</code> / <code>content stream</code>，再接 <code>directory block size</code> / <code>files</code> / <code>directories</code> / <code>total bytes</code> 统计，逐行四色标注。由 <code>ChmParser.BuildRows</code> 产出，<code>ChmDiff.ComputeRows</code> 按键路径取并集（两侧都有且值相等 = 相同、不等 = 已变、仅左 = 仅左、仅右 = 仅右），是看「标题 / 默认主题 / 语言 / 格式版本 / 统计」等改动的首选口径。行数上限 <code>MaxRows</code>（3000）；行控件走<strong>虚拟化列表</strong>（<code>VirtualizingStackPanel</code> 按可见范围惰性物化、表头固定、滚动条长在控件模板内部），大文档也不卡宿主 UI。</p>"
         },
         {
           "heading": "目录条目模式：按内部路径对齐",
-          "html": "<p>切到「目录条目」后由条目表渲染，是一张四列表（<code>路径 / 旧值 / 新值 / 状态</code>）：按 CHM 内部路径（<strong>不区分大小写</strong>）对齐两侧条目，文件给出「体积 · 内容指纹」（SHA-256 前 8 字节 hex），目录项（路径以 <code>/</code> 结尾）标注「目录」。<code>ChmDiff.ComputeEntries</code> 判定：长度不同即「已变」；长度相同且两侧都有指纹时按指纹判定；仅一侧有 = 仅左 / 仅右。条目数上限 <code>MaxEntryRows</code>（2000），超出截断并在表下注明。</p>"
+          "html": "<p>切到「目录条目」后由条目表渲染，是一张四列表（<code>路径 / 旧值 / 新值 / 状态</code>）：按 CHM 内部路径（<strong>不区分大小写</strong>）对齐两侧条目，文件给出「体积 · 内容指纹」（SHA-256 前 8 字节 hex），目录项（路径以 <code>/</code> 结尾）标注「目录」。<code>ChmDiff.ComputeEntries</code> 判定：长度不同即「已变」；长度相同且两侧都有指纹时按指纹判定；仅一侧有 = 仅左 / 仅右。条目数上限 <code>MaxEntryRows</code>（2000），超出截断并在表下注明；行控件与元数据表同为虚拟化列表。</p>"
         },
         {
           "heading": "预览模式：并排双 WebView 真渲染默认主题页",
