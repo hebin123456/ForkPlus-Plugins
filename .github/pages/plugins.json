@@ -1334,11 +1334,11 @@
     {
       "id": "frontend",
       "name": "前端代码预览对比插件 · Frontend Preview",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "minHostVersion": "5.1.1",
       "assembly": "ForkPlus.Plugins.Frontend",
       "source": "plugins/ForkPlus.Plugins.Frontend",
-      "summary": "前端代码预览对比视图：认领 .html / .htm / .vue，命中后把两侧各自组装成自包含 HTML——.html / .htm 归一 charset 后原样呈现，.vue 交给随包内嵌的 Vue 3 全量运行时（含模板编译器，MIT）做运行期模板编译——交给宿主共享组件 ForkPlus.Plugins.Ui 的并排双 WebView 真渲染；另提供「源码」模式并排查看原始代码。无头环境缺 WebView 运行时时「渲染」模式仅给提示（降级不报错），可切「源码」模式。页面里以相对路径引用的外部 css / js / 图片无法解析（插件只拿到仓库相对路径），仅自包含页面能完整渲染——已在描述与「渲染」模式内容区顶部如实标注。单侧声明大小超过 300 MB 只给提示、不组装。",
+      "summary": "前端代码预览对比视图：认领 .html / .htm / .vue，命中后把两侧各自组装成自包含 HTML——.html / .htm 归一 charset 后原样呈现，.vue 交给随包内嵌的 Vue 3 全量运行时（含模板编译器，MIT）做运行期模板编译——交给宿主共享组件 ForkPlus.Plugins.Ui 的并排双 WebView 真渲染；另提供「源码」模式并排查看原始代码（带行号列）。无头环境缺 WebView 运行时时「渲染」模式仅给提示（降级不报错），可切「源码」模式。页面里以相对路径引用的外部 css / js / 图片无法解析（插件只拿到仓库相对路径），仅自包含页面能完整渲染——已在描述与「渲染」模式内容区顶部如实标注。单侧声明大小超过 300 MB 只给提示、不组装。",
       "extensions": [
         ".html",
         ".htm",
@@ -1363,7 +1363,7 @@
         {
           "file": "frontend-source.png",
           "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.html，差异区切到前端代码插件的「源码」模式，左右两栏并排显示等宽原始代码",
-          "caption": "「源码」模式（前端代码 · .html，modify 场景）：点模式栏的「源码」按钮切到两栏并排的原始代码（等宽、只读、可选中，各带文件名小标题与独立滚动条）。当「渲染」模式看不出差异、或页面引用了无法解析的外部资源时，源码模式是可靠的兜底口径。单侧超过 20 万字符时只显示前若干字符并在栏下注明「仅显示前 N 个字符」。"
+          "caption": "「源码」模式（前端代码 · .html，modify 场景）：点模式栏的「源码」按钮切到两栏并排的原始代码（等宽、只读、可选中、左侧带行号列，各带文件名小标题与独立滚动条）。当「渲染」模式看不出差异、或页面引用了无法解析的外部资源时，源码模式是可靠的兜底口径。单侧超过 20 万字符时只显示前若干字符并在栏下注明「仅显示前 N 个字符」。"
         }
       ],
       "sections": [
@@ -1377,7 +1377,7 @@
         },
         {
           "heading": "源码模式：并排看原始代码",
-          "html": "<p>点「源码」按钮切到两栏并排的原始代码：等宽字体（<code>Consolas, Menlo, DejaVu Sans Mono, Courier New, monospace</code>）、只读、可选中、各自独立滚动（<code>SelectableTextBlock</code> + <code>ScrollViewer</code>），每栏带文件名小标题。是「渲染」模式看不出差异或页面引用外部资源时的可靠兜底。单侧展示上限 <code>MaxSourceChars</code>（<code>200000</code> 字符），超出只显示前段并在栏下注明「仅显示前 N 个字符（共 M 个）」，避免超长文件拖死 UI。源码解码：优先宿主 Hex 预载流，其次侧内容懒加载，再次 LFS 本地缓存。</p>"
+          "html": "<p>点「源码」按钮切到两栏并排的原始代码：等宽字体（<code>Consolas, Menlo, DejaVu Sans Mono, Courier New, monospace</code>）、只读、可选中（<code>SelectableTextBlock</code>），左侧一列右对齐<strong>行号</strong>（同字体同字号，随代码列纵向滚动同步、代码横向滚动时行号保持可见），代码列各自独立滚动（<code>ScrollViewer</code>），每栏带文件名小标题。是「渲染」模式看不出差异或页面引用外部资源时的可靠兜底。单侧展示上限 <code>MaxSourceChars</code>（<code>200000</code> 字符），超出只显示前段并在栏下注明「仅显示前 N 个字符（共 M 个）」，避免超长文件拖死 UI。源码解码：优先宿主 Hex 预载流，其次侧内容懒加载，再次 LFS 本地缓存。</p>"
         },
         {
           "heading": "Vue 单文件组件：随包 Vue 3 运行时编译",
@@ -1396,11 +1396,11 @@
     {
       "id": "markdown",
       "name": "Markdown 预览对比插件 · Markdown Preview",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "minHostVersion": "5.1.1",
       "assembly": "ForkPlus.Plugins.Markdown",
       "source": "plugins/ForkPlus.Plugins.Markdown",
-      "summary": "Markdown 预览对比视图：认领 .md / .markdown，三模式对比——「渲染」把两侧 Markdown 用 Markdig（MIT）渲成跟随系统明暗主题的样式化 HTML，交给宿主共享组件 ForkPlus.Plugins.Ui 的并排双 WebView 预览；「大纲」按标题文本归一化对齐做层级语义 diff（相同 / 层级已变 / 仅左 / 仅右四色标注），一眼看出章节增删与升降级；「源码」并排查看原始文本。一份 Markdig 解析两用，渲染与大纲口径一致。相对路径引用的外部图片无法解析（已如实标注）；无头环境缺 WebView 运行时时「渲染」仅给提示（降级不报错），可切「大纲」/「源码」。单侧声明大小超过 300 MB 只给提示、不解析。",
+      "summary": "Markdown 预览对比视图：认领 .md / .markdown，三模式对比——「渲染」把两侧 Markdown 用 Markdig（MIT）渲成跟随系统明暗主题的样式化 HTML，交给宿主共享组件 ForkPlus.Plugins.Ui 的并排双 WebView 预览；「大纲」按标题文本归一化对齐做层级语义 diff（相同 / 层级已变 / 仅左 / 仅右四色标注），一眼看出章节增删与升降级；「源码」并排查看原始文本（带行号列）。一份 Markdig 解析两用，渲染与大纲口径一致。相对路径引用的外部图片无法解析（已如实标注）；无头环境缺 WebView 运行时时「渲染」仅给提示（降级不报错），可切「大纲」/「源码」。单侧声明大小超过 300 MB 只给提示、不解析。",
       "extensions": [
         ".md",
         ".markdown"
@@ -1429,7 +1429,7 @@
         {
           "file": "markdown-source.png",
           "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.md，差异区切到 Markdown 插件的「源码」模式，左右两栏并排显示等宽原始文本",
-          "caption": "「源码」模式（Markdown · .md，modify 场景）：两栏并排的原始文本（等宽、只读、可选中，各带文件名小标题与独立滚动条），是「渲染」/「大纲」看不出差异时的兜底口径。单侧超过 20 万字符时只显示前若干字符并在栏下注明。"
+          "caption": "「源码」模式（Markdown · .md，modify 场景）：两栏并排的原始文本（等宽、只读、可选中、左侧带行号列，各带文件名小标题与独立滚动条），是「渲染」/「大纲」看不出差异时的兜底口径。单侧超过 20 万字符时只显示前若干字符并在栏下注明。"
         }
       ],
       "sections": [
@@ -1447,7 +1447,7 @@
         },
         {
           "heading": "源码模式与解析口径",
-          "html": "<p>「源码」模式两栏并排看原始文本（等宽、只读、可选中、独立滚动），单侧上限 <code>200000</code> 字符，超出截断并注明。三模式共用<strong>同一次后台解析</strong>：渲染 HTML 与标题大纲都出自同一 Markdig 管线，口径一致。读取 / 解析 / 组装在后台线程执行（代次 <code>_generation</code> + <code>CancellationTokenSource</code> 取消上一轮），控件只在 UI 线程构建；单侧声明大小超过 <code>MaxSideBytes</code>（300 MB）只提示、不解析。</p>"
+          "html": "<p>「源码」模式两栏并排看原始文本（等宽、只读、可选中，左侧一列右对齐<strong>行号</strong>，随代码列纵向滚动同步、横向滚动时行号保持可见），单侧上限 <code>200000</code> 字符，超出截断并注明。三模式共用<strong>同一次后台解析</strong>：渲染 HTML 与标题大纲都出自同一 Markdig 管线，口径一致。读取 / 解析 / 组装在后台线程执行（代次 <code>_generation</code> + <code>CancellationTokenSource</code> 取消上一轮），控件只在 UI 线程构建；单侧声明大小超过 <code>MaxSideBytes</code>（300 MB）只提示、不解析。</p>"
         },
         {
           "heading": "路由与已知限制",

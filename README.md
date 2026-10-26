@@ -411,7 +411,7 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 - **原生库**（`.so` / `.dll` / `.dylib`）不在上述钩子覆盖范围内，需插件自行注册
   `DllImportResolver` 从插件目录解析（参见 PDF 插件 `PdfNativeLibrary`）。
 - 版本与清单约定见「§9 插件清单（plugin.json）与安装布局」：插件自身版本统一 `1.0.0`
-  （EPUB / CHM 因新增并排双 WebView「预览」为 `1.0.1`），
+  （EPUB / CHM 因新增并排双 WebView「预览」为 `1.0.1`，前端代码 / Markdown 修复缺陷后也为 `1.0.1`），
   `minHostVersion` 声明最低支持的主程序版本。
 
 ### 5. 宿主能力桥
@@ -451,7 +451,7 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 
 | 成员 | 说明 |
 | --- | --- |
-| `Version` | 插件**自身**版本号（v1.2.0 起本仓官方插件统一为 `1.0.0`；v1.2.2 起新增并排双 WebView「预览」的 EPUB / CHM 升为 `1.0.1`）；与工程 `<Version>`、`plugin.json` 的 `version` 三处保持一致。 |
+| `Version` | 插件**自身**版本号（v1.2.0 起本仓官方插件统一为 `1.0.0`；v1.2.2 起新增并排双 WebView「预览」的 EPUB / CHM 升为 `1.0.1`，v1.2.9 起修复过缺陷的前端代码 / Markdown 也升为 `1.0.1`）；与工程 `<Version>`、`plugin.json` 的 `version` 三处保持一致。 |
 | `DisplayName` | 插件显示名，约定为**英文原文**，同时作为多语言的缺省值。 |
 | `Description` | 一句话描述插件能力，约定为**英文原文**，同时作为多语言的缺省值。 |
 | `GetDisplayName(language)` | v5.0.3：按界面语言返回显示名；默认实现返回英文原文，无需多语言的插件不必覆写。 |
@@ -488,7 +488,7 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 | --- | --- |
 | `schemaVersion` | 清单格式版本，当前固定 `1`。 |
 | `id` | 插件唯一 Id，与代码里 `IDiffViewPlugin.Id` 一致（官方为 `forkplus.<name>`）。 |
-| `version` | 插件**自身**版本，与工程 `<Version>` 一致；本仓官方插件统一 `1.0.0`（EPUB / CHM 为 `1.0.1`）。 |
+| `version` | 插件**自身**版本，与工程 `<Version>` 一致；本仓官方插件统一 `1.0.0`（EPUB / CHM / 前端代码 / Markdown 为 `1.0.1`）。 |
 | `minHostVersion` | **最低支持主程序版本**：宿主主程序版本 **≥** 该值才兼容并加载，否则不加载。本仓多数为 `5.1.0`；依赖宿主 `ForkPlus.Plugins.Ui` 共享组件「并排双 WebView 预览」的 EPUB / CHM / 前端代码声明 `5.1.1`。 |
 | `assembly` | 程序集名，取该插件 csproj 的 `<AssemblyName>`。 |
 
@@ -1142,8 +1142,9 @@ INI / `.cfg` / `.properties` 自写解析器。
     `.html` / `.htm` 归一 `<meta charset>` 为 UTF-8 后原样呈现；`.vue` 走运行期编译（见下）。
     WebView 不可用（headless、缺 WebView2 运行时 / WPE WebKit / WebKitGTK）时两侧仅给
     「当前环境不支持渲染预览」提示（降级不报错），可切「源码」模式。
-  - **源码**：左右两栏并排看两侧原始代码（等宽、只读、可选中、各自独立滚动），
-    是「渲染」看不出差异、或页面引用外部资源时的可靠兜底；单侧超过 20 万字符只显示前段并注明。
+  - **源码**：左右两栏并排看两侧原始代码（等宽、只读、可选中、带行号列，纵向滚动时行号
+    随代码同步、横向滚动时行号保持可见），是「渲染」看不出差异、或页面引用外部资源时的
+    可靠兜底；单侧超过 20 万字符只显示前段并注明。
 - **Vue 单文件组件运行期编译**：`VueComponentCompiler` 提取顶层 `<template>` / `<script>` /
   `<script setup>` / `<style>` 块，内联**随包 Vue 3 全量构建**（`Assets/vue.global.prod.js`，
   3.5.43，MIT，嵌入式资源，168 KB）后执行 `Vue.createApp(...).mount('#app')`——**离线自包含**，
@@ -1221,7 +1222,7 @@ README / 文档改了两版，除逐行看源码外，更常见的问题是「�
     层级，逐行按四色标注底色，一眼看出章节增删与升降级；**键 = 标题文本归一化**（折叠空白、
     统一小写，同侧重复标题按出现次序消歧），刻意不用位置索引做键——中间插入标题会让后续
     序号整体漂移，产生大面积伪差异；层级相同 → 相同、层级变了 → 已变、仅一侧 → 仅左 / 仅右。
-  - **源码**：左右两栏并排看两侧原始文本（等宽、只读、可选中），是前两个模式的兜底。
+  - **源码**：左右两栏并排看两侧原始文本（等宽、只读、可选中、带行号列），是前两个模式的兜底。
 - **一份解析两用**：渲染 HTML 与标题大纲共用同一 Markdig 管线与同一次后台解析，两模式口径一致。
 - **路由**：Markdown 是文本文件，宿主 5.0.5 起文本差异同样查询插件路由
   （用户绑定 &gt; 精确扩展名认领，不含 `"*"` 通配兜底），`.md` / `.markdown` 默认即自动接管；

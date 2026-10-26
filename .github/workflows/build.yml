@@ -16,7 +16,7 @@
 #   等均由宿主在运行期提供，绝不随插件包分发（详见 README「依赖与共享程序集」）。
 #   合集包：ForkPlus-Plugins-<插件仓版本>-<平台>.zip（含全部插件；示例插件 Example 只是
 #           开发模板，不随包发布——打包阶段跳过）；
-#   单插件包：ForkPlus-Plugins-<Short>-<插件版本>-<平台>.zip（每插件一个，<Short>=AssemblyName 去前缀；<插件版本> 取插件自身版本，多为 1.0.0，EPUB/CHM 为 1.0.1）。
+#   单插件包：ForkPlus-Plugins-<Short>-<插件版本>-<平台>.zip（每插件一个，<Short>=AssemblyName 去前缀；<插件版本> 取插件自身版本，多为 1.0.0，EPUB/CHM/前端代码/Markdown 为 1.0.1）。
 #
 # 新增插件无需改本文件：构建与打包按 plugins/*/*.csproj 自动发现。
 

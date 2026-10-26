@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "forkplus.markdown",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "minHostVersion": "5.1.1",
   "assembly": "ForkPlus.Plugins.Markdown"
 }

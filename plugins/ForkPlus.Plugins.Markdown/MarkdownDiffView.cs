@@ -28,7 +28,7 @@ namespace ForkPlus.Plugins.Markdown
 	/// （headless、缺 WebView2 运行时 / WPE WebKit / WebKitGTK）时仅给提示，可切「大纲」/「源码」。</item>
 	/// <item>大纲：标题层级语义 diff——「标题 | 旧 | 新 | 状态」四列表，按标题文本对齐，
 	/// 逐行四色标注（相同 / 层级已变 / 仅左 / 仅右），一眼看出章节增删与升降级。</item>
-	/// <item>源码：左右两栏并排看两侧原始文本（等宽、只读、可选中），是前两个模式的兜底。</item>
+	/// <item>源码：左右两栏并排看两侧原始文本（等宽、只读、可选中，带行号列），是前两个模式的兜底。</item>
 	/// </list>
 	///
 	/// 已知限制（如实标注）：插件只拿到仓库相对路径，拿不到工作区绝对路径，文档里以相对路径引用的
@@ -679,9 +679,12 @@ namespace ForkPlus.Plugins.Markdown
 
 		private Border SourceCard(string title, string text, bool absent)
 		{
+			// 行 1 预留给截断注明（无则空行高为 0），行 2 是可滚动的「行号列 + 代码列」。
+			// 注意不能把 ScrollViewer 塞进 StackPanel：StackPanel 纵向给子控件无限高度，
+			// ScrollViewer 视口随之无限大，竖向永远不会滚动（此前「无法滚动」的根源）。
 			Grid card = new Grid
 			{
-				RowDefinitions = new RowDefinitions("Auto,*")
+				RowDefinitions = new RowDefinitions("Auto,Auto,*")
 			};
 			TextBlock header = new TextBlock
 			{
@@ -707,16 +710,36 @@ namespace ForkPlus.Plugins.Markdown
 			}
 			else
 			{
-				StackPanel stack = new StackPanel
-				{
-					Spacing = 4.0
-				};
-				string shown = text ?? string.Empty;
+				// 展示前把 CRLF / 孤立 CR 归一成 LF：行号列与代码列都按 '\n' 切行，逐行严格对齐。
+				string shown = (text ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');
 				if (shown.Length > MaxSourceChars)
 				{
-					stack.Children.Add(NoteText(MarkdownStrings.F("Showing first {0} of {1} characters", MaxSourceChars, shown.Length)));
+					TextBlock note = NoteText(MarkdownStrings.F("Showing first {0} of {1} characters", MaxSourceChars, shown.Length));
+					Grid.SetRow(note, 1);
+					card.Children.Add(note);
 					shown = shown.Substring(0, MaxSourceChars);
 				}
+
+				// 行号列：与代码同字体同字号右对齐；隐藏滚动条、关闭命中测试，自身不可独立滚动，
+				// 只随代码列的垂直偏移同步（代码横向滚动时行号保持可见）。
+				ScrollViewer gutterHost = new ScrollViewer
+				{
+					Content = new TextBlock
+					{
+						Text = LineNumbers(shown),
+						Margin = new Thickness(0.0, 4.0, 8.0, 4.0),
+						FontFamily = MonoFont,
+						FontSize = 12.0,
+						TextWrapping = TextWrapping.NoWrap,
+						TextAlignment = TextAlignment.Right,
+						Opacity = 0.45
+					},
+					VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Hidden,
+					HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+					IsHitTestVisible = false
+				};
+				Grid.SetColumn(gutterHost, 0);
+
 				SelectableTextBlock code = new SelectableTextBlock
 				{
 					Text = shown,
@@ -725,14 +748,30 @@ namespace ForkPlus.Plugins.Markdown
 					FontSize = 12.0,
 					TextWrapping = TextWrapping.NoWrap
 				};
-				stack.Children.Add(new ScrollViewer
+				ScrollViewer codeHost = new ScrollViewer
 				{
 					Content = code,
 					HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
 					VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
-				});
-				Grid.SetRow(stack, 1);
-				card.Children.Add(stack);
+				};
+				codeHost.ScrollChanged += delegate
+				{
+					// 单向同步、无回路：行号列不可交互，只跟随代码列的纵向偏移。
+					if (Math.Abs(gutterHost.Offset.Y - codeHost.Offset.Y) > 0.5)
+					{
+						gutterHost.Offset = gutterHost.Offset.WithY(codeHost.Offset.Y);
+					}
+				};
+				Grid.SetColumn(codeHost, 1);
+
+				Grid body = new Grid
+				{
+					ColumnDefinitions = new ColumnDefinitions("Auto,*")
+				};
+				body.Children.Add(gutterHost);
+				body.Children.Add(codeHost);
+				Grid.SetRow(body, 2);
+				card.Children.Add(body);
 			}
 			return new Border
 			{
@@ -896,6 +935,38 @@ namespace ForkPlus.Plugins.Markdown
 				FontSize = 12.0,
 				Opacity = 0.8
 			};
+		}
+
+		/// <summary>生成「源码」模式的行号列：1..N 逐行编号，换行结构与展示文本（按 '\n' 切行）严格一致，
+		/// 保证行号列与代码列在两种「行尾换行是否成行」的排版实现下行数都相同、逐行对齐。</summary>
+		private static string LineNumbers(string shown)
+		{
+			if (string.IsNullOrEmpty(shown))
+			{
+				return string.Empty;
+			}
+			int lines = 1;
+			for (int i = 0; i < shown.Length; i++)
+			{
+				if (shown[i] == '\n')
+				{
+					lines++;
+				}
+			}
+			StringBuilder gutter = new StringBuilder();
+			for (int i = 1; i <= lines; i++)
+			{
+				if (i > 1)
+				{
+					gutter.Append('\n');
+				}
+				gutter.Append(i);
+			}
+			if (shown[shown.Length - 1] == '\n')
+			{
+				gutter.Append('\n');
+			}
+			return gutter.ToString();
 		}
 	}
 }
