@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "forkplus.psd",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "minHostVersion": "5.1.0",
   "assembly": "ForkPlus.Plugins.Psd"
 }

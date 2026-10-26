@@ -585,7 +585,7 @@
     {
       "id": "dbc",
       "name": "DBC（CAN 数据库）对比插件 · DBC Compare",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "minHostVersion": "5.1.0",
       "assembly": "ForkPlus.Plugins.Dbc",
       "source": "plugins/ForkPlus.Plugins.Dbc",
@@ -693,7 +693,7 @@
     {
       "id": "svg",
       "name": "SVG 矢量图对比插件 · SVG Compare",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "minHostVersion": "5.1.0",
       "assembly": "ForkPlus.Plugins.Svg",
       "source": "plugins/ForkPlus.Plugins.Svg",
@@ -805,7 +805,7 @@
     {
       "id": "midi",
       "name": "MIDI 对比插件 · MIDI Compare",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "minHostVersion": "5.1.0",
       "assembly": "ForkPlus.Plugins.Midi",
       "source": "plugins/ForkPlus.Plugins.Midi",
@@ -862,7 +862,7 @@
     {
       "id": "torrent",
       "name": "种子文件对比插件 · Torrent Compare",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "minHostVersion": "5.1.0",
       "assembly": "ForkPlus.Plugins.Torrent",
       "source": "plugins/ForkPlus.Plugins.Torrent",
@@ -909,7 +909,7 @@
     {
       "id": "pcap",
       "name": "网络抓包对比插件 · Packet Capture Compare",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "minHostVersion": "5.1.0",
       "assembly": "ForkPlus.Plugins.Pcap",
       "source": "plugins/ForkPlus.Plugins.Pcap",
@@ -966,7 +966,7 @@
     {
       "id": "psd",
       "name": "PSD 图层对比插件 · PSD Compare",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "minHostVersion": "5.1.0",
       "assembly": "ForkPlus.Plugins.Psd",
       "source": "plugins/ForkPlus.Plugins.Psd",
@@ -1032,7 +1032,7 @@
     {
       "id": "epub",
       "name": "EPUB 电子书对比插件 · EPUB Compare",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "minHostVersion": "5.1.1",
       "assembly": "ForkPlus.Plugins.Epub",
       "source": "plugins/ForkPlus.Plugins.Epub",
@@ -1097,7 +1097,7 @@
     {
       "id": "sqlite",
       "name": "SQLite 数据库对比插件 · SQLite Compare",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "minHostVersion": "5.1.0",
       "assembly": "ForkPlus.Plugins.Sqlite",
       "source": "plugins/ForkPlus.Plugins.Sqlite",
@@ -1155,7 +1155,7 @@
     {
       "id": "managedassembly",
       "name": "托管程序集对比插件 · Managed Assembly Compare",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "minHostVersion": "5.1.0",
       "assembly": "ForkPlus.Plugins.ManagedAssembly",
       "source": "plugins/ForkPlus.Plugins.ManagedAssembly",
@@ -1214,7 +1214,7 @@
     {
       "id": "eml",
       "name": "邮件对比插件 · EML Compare",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "minHostVersion": "5.1.0",
       "assembly": "ForkPlus.Plugins.Eml",
       "source": "plugins/ForkPlus.Plugins.Eml",
@@ -1269,7 +1269,7 @@
     {
       "id": "chm",
       "name": "CHM 帮助文档对比插件 · CHM Compare",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "minHostVersion": "5.1.1",
       "assembly": "ForkPlus.Plugins.Chm",
       "source": "plugins/ForkPlus.Plugins.Chm",

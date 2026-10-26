@@ -5,6 +5,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -75,6 +78,31 @@ namespace ForkPlus.Plugins.Chm
 
 		/// <summary>目录条目表渲染上限：超大 CHM（条目 &gt; 2000）截断并在表下注明。</summary>
 		private const int MaxEntryRows = 2000;
+
+		/// <summary>四列宽度：键路径 / 旧 / 新按比例伸缩，状态列随内容等比（原来 Auto 在虚拟化下会逐行错列，改星号保证表头与行对齐）。</summary>
+		private const string TableColumns = "2*,3*,3*,1*";
+
+		/// <summary>数据行面板：VirtualizingStackPanel 只物化视口内的行（配合 VirtualTableTemplate 的内置 ScrollViewer）。</summary>
+		private static readonly FuncTemplate<Panel> VirtualizingPanel = new FuncTemplate<Panel>(delegate
+		{
+			return new VirtualizingStackPanel();
+		});
+
+		/// <summary>虚拟列表模板：ScrollViewer 必须长在控件模板内部——外层 ScrollViewer 会把
+		/// ItemsControl 撑成无限高，VirtualizingStackPanel 拿不到有界视口就退化成全量物化。</summary>
+		private static readonly FuncControlTemplate<ItemsControl> VirtualTableTemplate = new FuncControlTemplate<ItemsControl>(delegate(ItemsControl owner, INameScope nameScope)
+		{
+			ScrollViewer scroll = new ScrollViewer
+			{
+				// 星号列宽依赖有限宽度约束；开横向滚动会退化成无限宽（长文本走换行）。
+				HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+				VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+			};
+			ItemsPresenter presenter = new ItemsPresenter();
+			nameScope.Register("PART_ItemsPresenter", presenter);
+			scroll.Content = presenter;
+			return scroll;
+		});
 
 		private static readonly IBrush GridLine = Brushes.Gainsboro;
 
@@ -679,19 +707,14 @@ namespace ForkPlus.Plugins.Chm
 			}
 		}
 
-		/// <summary>元数据表：「键路径 | 旧值 | 新值 | 状态」四列，逐行四色底 + 状态列彩色。</summary>
+		/// <summary>元数据表：「键路径 | 旧值 | 新值 | 状态」四列，逐行四色底 + 状态列彩色。
+		/// UI 线程只做一次轻量行模型映射，行控件由虚拟化列表按可见范围惰性创建（大文档不再卡 UI）。</summary>
 		private Control BuildMetadataContent()
 		{
-			Grid table = new Grid
-			{
-				ColumnDefinitions = new ColumnDefinitions("2*,3*,3*,Auto")
-			};
-			int row = 0;
-			AddTableRow(table, ref row, ChmStrings.T("Key path"), ChmStrings.T("Old"), ChmStrings.T("New"), ChmStrings.T("State"), null, null, true);
-
-			int shown = 0;
 			bool srcResolvable = _srcAbsent || _left != null;
 			bool dstResolvable = _dstAbsent || _right != null;
+			List<TableRow> rows = new List<TableRow>();
+			int shown = 0;
 			foreach (ChmRowDiff item in _metaDiff.Rows)
 			{
 				if (shown >= MaxRows)
@@ -699,41 +722,36 @@ namespace ForkPlus.Plugins.Chm
 					break;
 				}
 				shown++;
-				AddTableRow(table, ref row, item.Path, DisplayValue(item.Left, srcResolvable), DisplayValue(item.Right, dstResolvable), StateLabel(item.State), TintOf(item.State), StateBrush(item.State), false);
+				rows.Add(new TableRow
+				{
+					C0 = item.Path,
+					C1 = DisplayValue(item.Left, srcResolvable),
+					C2 = DisplayValue(item.Right, dstResolvable),
+					C3 = StateLabel(item.State),
+					Tint = TintOf(item.State),
+					StateForeground = StateBrush(item.State),
+					Mono0 = true
+				});
 			}
-
-			StackPanel stack = new StackPanel
+			TableRow header = new TableRow
 			{
-				Spacing = 6.0
+				IsHeader = true,
+				C0 = ChmStrings.T("Key path"),
+				C1 = ChmStrings.T("Old"),
+				C2 = ChmStrings.T("New"),
+				C3 = ChmStrings.T("State")
 			};
-			stack.Children.Add(WrapInCard(table));
-			if (_metaDiff.Total > shown)
-			{
-				stack.Children.Add(NoteText(ChmStrings.F("Showing first {0} of {1} rows", shown, _metaDiff.Total)));
-			}
-			AddSideNote(stack);
-			return new ScrollViewer
-			{
-				Content = stack,
-				HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-				VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
-			};
+			return NewTableCard(header, rows, TableNotes(shown, _metaDiff.Total));
 		}
 
 		/// <summary>目录条目表：「路径 | 旧 | 新 | 状态」四列，按内部路径对齐；
-		/// 单元格：目录项标注「目录」，文件给「体积 · 内容指纹」。</summary>
+		/// 单元格：目录项标注「目录」，文件给「体积 · 内容指纹」。行控件虚拟化。</summary>
 		private Control BuildEntriesContent()
 		{
-			Grid table = new Grid
-			{
-				ColumnDefinitions = new ColumnDefinitions("2*,3*,3*,Auto")
-			};
-			int row = 0;
-			AddTableRow(table, ref row, ChmStrings.T("Path"), ChmStrings.T("Old"), ChmStrings.T("New"), ChmStrings.T("State"), null, null, true);
-
-			int shown = 0;
 			bool srcResolvable = _srcAbsent || _left != null;
 			bool dstResolvable = _dstAbsent || _right != null;
+			List<TableRow> rows = new List<TableRow>();
+			int shown = 0;
 			foreach (ChmEntryDiff item in _entryDiff.Rows)
 			{
 				if (shown >= MaxEntryRows)
@@ -742,26 +760,45 @@ namespace ForkPlus.Plugins.Chm
 				}
 				shown++;
 				string path = (item.Left ?? item.Right)?.Path ?? string.Empty;
-				AddTableRow(table, ref row, path, DisplayEntry(item.Left, srcResolvable), DisplayEntry(item.Right, dstResolvable), StateLabel(item.State), TintOf(item.State), StateBrush(item.State), false);
+				rows.Add(new TableRow
+				{
+					C0 = path,
+					C1 = DisplayEntry(item.Left, srcResolvable),
+					C2 = DisplayEntry(item.Right, dstResolvable),
+					C3 = StateLabel(item.State),
+					Tint = TintOf(item.State),
+					StateForeground = StateBrush(item.State),
+					Mono0 = true
+				});
 			}
+			TableRow header = new TableRow
+			{
+				IsHeader = true,
+				C0 = ChmStrings.T("Path"),
+				C1 = ChmStrings.T("Old"),
+				C2 = ChmStrings.T("New"),
+				C3 = ChmStrings.T("State")
+			};
+			return NewTableCard(header, rows, TableNotes(shown, _entryDiff.Total));
+		}
 
-			StackPanel stack = new StackPanel
+		/// <summary>表下方备注：截断提示 + 单侧缺失/单侧无字节的口径说明（固定在卡片下，不随表体滚动）。</summary>
+		private List<Control> TableNotes(int shown, int total)
+		{
+			List<Control> notes = new List<Control>();
+			if (total > shown)
 			{
-				Spacing = 6.0
-			};
-			stack.Children.Add(WrapInCard(table));
-			// 条目超 2000 截断注明。
-			if (_entryDiff.Total > shown)
-			{
-				stack.Children.Add(NoteText(ChmStrings.F("Showing first {0} of {1} rows", shown, _entryDiff.Total)));
+				notes.Add(NoteText(ChmStrings.F("Showing first {0} of {1} rows", shown, total)));
 			}
-			AddSideNote(stack);
-			return new ScrollViewer
+			if (_srcAbsent || _dstAbsent)
 			{
-				Content = stack,
-				HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-				VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
-			};
+				notes.Add(NoteText(ChmStrings.T("One side is not present; values shown for the other side only.")));
+			}
+			else if (_srcNoBytes || _dstNoBytes)
+			{
+				notes.Add(NoteText(ChmStrings.T("One side's content is unavailable; values shown for the other side only.")));
+			}
+			return notes;
 		}
 
 		/// <summary>
@@ -794,44 +831,105 @@ namespace ForkPlus.Plugins.Chm
 			_content.Content = _preview;
 		}
 
-		/// <summary>表格下方单侧说明：一侧不存在（add / delete）与一侧内容不可用（字节没拿到）
-		/// 分开口径，不再把「内容不可用」误述成「不存在」。</summary>
-		private void AddSideNote(StackPanel stack)
+		/// <summary>虚拟化表卡片：表头固定首行，数据行交给 ItemsControl + VirtualizingStackPanel
+		/// 按可见范围惰性物化。滚动条长在控件模板内部——外层不能再包 ScrollViewer，
+		/// 否则视口无限高，虚拟化退化成全量物化（那就白改了）。
+		/// 截断提示与口径说明固定在卡片下方，不随表体滚动。</summary>
+		private static Control NewTableCard(TableRow header, IList<TableRow> rows, List<Control> notes)
 		{
-			if (_srcAbsent || _dstAbsent)
+			TableTemplate template = new TableTemplate();
+			Grid inner = new Grid
 			{
-				stack.Children.Add(NoteText(ChmStrings.T("One side is not present; values shown for the other side only.")));
-			}
-			else if (_srcNoBytes || _dstNoBytes)
+				RowDefinitions = new RowDefinitions("Auto,*")
+			};
+			inner.Children.Add(template.Build(header));
+			ItemsControl table = new ItemsControl
 			{
-				stack.Children.Add(NoteText(ChmStrings.T("One side's content is unavailable; values shown for the other side only.")));
+				ItemsSource = rows,
+				ItemsPanel = VirtualizingPanel,
+				ItemTemplate = template,
+				Template = VirtualTableTemplate
+			};
+			Grid.SetRow(table, 1);
+			inner.Children.Add(table);
+
+			Border card = new Border
+			{
+				BorderBrush = GridLine,
+				BorderThickness = new Thickness(1.0),
+				CornerRadius = new CornerRadius(6.0),
+				Background = Subtle,
+				Padding = new Thickness(2.0),
+				Child = inner
+			};
+
+			Grid root = new Grid
+			{
+				RowDefinitions = new RowDefinitions("*,Auto")
+			};
+			root.Children.Add(card);
+			StackPanel noteStack = new StackPanel
+			{
+				Spacing = 6.0
+			};
+			foreach (Control note in notes)
+			{
+				noteStack.Children.Add(note);
 			}
+			Grid.SetRow(noteStack, 1);
+			root.Children.Add(noteStack);
+			return root;
 		}
 
-		/// <summary>四列表加一行：可带四色底（Border 跨四列）+ 状态列彩色；首列为等宽字体（键路径 / 路径）。</summary>
-		private static void AddTableRow(Grid table, ref int row, string cell0, string cell1, string cell2, string cell3, IBrush tint, IBrush stateBrush, bool header)
+		/// <summary>四列行模型：四格文本 + 整行四色底 + 状态列前景色；首列可等宽。
+		/// 构建时一次映射，行控件由 <see cref="TableTemplate"/> 在虚拟化物化时才创建。</summary>
+		private sealed class TableRow
 		{
-			table.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-			int current = row++;
-			if (tint != null)
+			internal string C0;
+			internal string C1;
+			internal string C2;
+			internal string C3;
+			internal IBrush Tint;
+			internal IBrush StateForeground;
+			internal bool Mono0;
+			internal bool IsHeader;
+		}
+
+		/// <summary>四列行模板：整行四色底（Border 跨四列）+ 状态列彩色；首列可等宽；表头半粗不换行。</summary>
+		private sealed class TableTemplate : IDataTemplate
+		{
+			public bool Match(object data)
 			{
-				Border background = new Border
+				return data is TableRow;
+			}
+
+			public Control Build(object param)
+			{
+				TableRow row = (TableRow)param;
+				Grid grid = new Grid
 				{
-					Background = tint,
-					CornerRadius = new CornerRadius(3.0)
+					ColumnDefinitions = new ColumnDefinitions(TableColumns)
 				};
-				Grid.SetRow(background, current);
-				Grid.SetColumn(background, 0);
-				Grid.SetColumnSpan(background, 4);
-				table.Children.Add(background);
+				if (row.Tint != null)
+				{
+					Border background = new Border
+					{
+						Background = row.Tint,
+						CornerRadius = new CornerRadius(3.0)
+					};
+					Grid.SetColumnSpan(background, 4);
+					grid.Children.Add(background);
+				}
+				AddCell(grid, 0, row.C0, row.IsHeader, row.Mono0 && !row.IsHeader, null);
+				AddCell(grid, 1, row.C1, row.IsHeader, false, null);
+				AddCell(grid, 2, row.C2, row.IsHeader, false, null);
+				AddCell(grid, 3, row.C3, row.IsHeader, false, row.StateForeground);
+				return grid;
 			}
-			AddCell(table, current, 0, cell0, header, !header, null);
-			AddCell(table, current, 1, cell1, header, false, null);
-			AddCell(table, current, 2, cell2, header, false, null);
-			AddCell(table, current, 3, cell3, header, false, stateBrush);
 		}
 
-		private static void AddCell(Grid table, int row, int column, string text, bool header, bool mono, IBrush foreground)
+		/// <summary>往行 Grid 里加一格文本。</summary>
+		private static void AddCell(Grid grid, int column, string text, bool header, bool mono, IBrush foreground)
 		{
 			TextBlock block = new TextBlock
 			{
@@ -843,9 +941,8 @@ namespace ForkPlus.Plugins.Chm
 				Foreground = foreground ?? Brushes.Black,
 				VerticalAlignment = VerticalAlignment.Top
 			};
-			Grid.SetRow(block, row);
 			Grid.SetColumn(block, column);
-			table.Children.Add(block);
+			grid.Children.Add(block);
 		}
 
 		// ---- 文案 / 小部件 ----
@@ -924,20 +1021,6 @@ namespace ForkPlus.Plugins.Chm
 				text = text + "  ·  " + entry.Hash;
 			}
 			return text;
-		}
-
-		/// <summary>表格外层卡片（Border + 细边框）。</summary>
-		private static Border WrapInCard(Grid table)
-		{
-			return new Border
-			{
-				BorderBrush = GridLine,
-				BorderThickness = new Thickness(1.0),
-				CornerRadius = new CornerRadius(6.0),
-				Background = Subtle,
-				Padding = new Thickness(2.0),
-				Child = table
-			};
 		}
 
 		private static TextBlock NewTitle()

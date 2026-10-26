@@ -11,7 +11,7 @@
     <RootNamespace>ForkPlus.Plugins.Chm</RootNamespace>
 
     <!-- 插件自身版本（与宿主版本解耦）；偏好设置 → 插件页展示的 Version 与此一致。 -->
-    <Version>1.0.1</Version>
+    <Version>1.1.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <!-- 契约 + 共享视图组件（含 HtmlPreview 并排双 WebView 预览）；Private=false：

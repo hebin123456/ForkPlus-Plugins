@@ -6,6 +6,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -56,6 +59,32 @@ namespace ForkPlus.Plugins.Midi
 
 		/// <summary>音符表渲染上限：避免超大 MIDI 把 UI 拖死。</summary>
 		private const int MaxRows = 2000;
+
+		/// <summary>五列宽度：旧时间 / 旧音符 / 新时间 / 新音符按比例伸缩，状态列随内容等比。
+		/// 全部星号——Auto 列在虚拟化下会逐行独立测宽错列，星号保证表头与数据行对齐。</summary>
+		private const string TableColumns = "1*,2*,1*,2*,1*";
+
+		/// <summary>数据行面板：VirtualizingStackPanel 只物化视口内的行（配合 VirtualTableTemplate 的内置 ScrollViewer）。</summary>
+		private static readonly FuncTemplate<Panel> VirtualizingPanel = new FuncTemplate<Panel>(delegate
+		{
+			return new VirtualizingStackPanel();
+		});
+
+		/// <summary>虚拟列表模板：ScrollViewer 必须长在控件模板内部——外层 ScrollViewer 会把
+		/// ItemsControl 撑成无限高，VirtualizingStackPanel 拿不到有界视口就退化成全量物化。</summary>
+		private static readonly FuncControlTemplate<ItemsControl> VirtualTableTemplate = new FuncControlTemplate<ItemsControl>(delegate(ItemsControl owner, INameScope nameScope)
+		{
+			ScrollViewer scroll = new ScrollViewer
+			{
+				// 星号列宽依赖有限宽度约束；开横向滚动会退化成无限宽（长文本走换行）。
+				HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+				VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+			};
+			ItemsPresenter presenter = new ItemsPresenter();
+			nameScope.Register("PART_ItemsPresenter", presenter);
+			scroll.Content = presenter;
+			return scroll;
+		});
 
 		/// <summary>时间轴的逻辑宽度（像素）；配合横向滚动，比例刻度稳定可预期。</summary>
 		private const double TimelineWidth = 1200.0;
@@ -540,15 +569,11 @@ namespace ForkPlus.Plugins.Midi
 
 		// ---- 音符表 ----
 
+		/// <summary>音符表：「旧时间 | 旧音符 | 新时间 | 新音符 | 状态」五列，逐行四色底 + 状态列彩色。
+		/// UI 线程只做一次轻量行模型映射，行控件由虚拟化列表按可见范围惰性创建（大文件不再卡 UI）。</summary>
 		private Control BuildNotesContent()
 		{
-			Grid table = new Grid
-			{
-				ColumnDefinitions = new ColumnDefinitions("Auto,2*,Auto,2*,Auto")
-			};
-			int row = 0;
-			AddTableRow(table, ref row, MidiStrings.T("Old time"), MidiStrings.T("Old"), MidiStrings.T("New time"), MidiStrings.T("New"), MidiStrings.T("State"), null, null, null, true);
-
+			List<TableRow> rows = new List<TableRow>();
 			int shown = 0;
 			foreach (NoteRow item in _diff.Rows)
 			{
@@ -559,37 +584,27 @@ namespace ForkPlus.Plugins.Midi
 				shown++;
 				string oldTime = item.Left != null ? FormatRange(item.Left) : MidiStrings.T("not present");
 				string newTime = item.Right != null ? FormatRange(item.Right) : MidiStrings.T("not present");
-				AddTableRow(table, ref row, oldTime, Describe(item.Left), newTime, Describe(item.Right), StateLabel(item.State), TintOf(item.State), StateBrush(item.State), OutTimeBrush(item), false);
+				rows.Add(new TableRow
+				{
+					C0 = oldTime,
+					C1 = Describe(item.Left),
+					C2 = newTime,
+					C3 = Describe(item.Right),
+					C4 = StateLabel(item.State),
+					Tint = TintOf(item.State),
+					StateForeground = StateBrush(item.State)
+				});
 			}
-
-			StackPanel stack = new StackPanel
+			TableRow header = new TableRow
 			{
-				Spacing = 6.0
+				IsHeader = true,
+				C0 = MidiStrings.T("Old time"),
+				C1 = MidiStrings.T("Old"),
+				C2 = MidiStrings.T("New time"),
+				C3 = MidiStrings.T("New"),
+				C4 = MidiStrings.T("State")
 			};
-			Border card = new Border
-			{
-				BorderBrush = GridLine,
-				BorderThickness = new Thickness(1.0),
-				CornerRadius = new CornerRadius(6.0),
-				Background = Subtle,
-				Padding = new Thickness(2.0),
-				Child = table
-			};
-			stack.Children.Add(card);
-			if (_diff.Total > shown)
-			{
-				stack.Children.Add(NoteText(MidiStrings.F("Showing first {0} of {1} rows", shown, _diff.Total)));
-			}
-			if (_srcAbsent || _dstAbsent)
-			{
-				stack.Children.Add(NoteText(MidiStrings.T("One side is not present; values shown for the other side only.")));
-			}
-			return new ScrollViewer
-			{
-				Content = stack,
-				HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-				VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
-			};
+			return NewTableCard(header, rows, TableNotes(shown, _diff.Total));
 		}
 
 		/// <summary>音符时间范围："起 → 止"（MM:SS.mmm）。</summary>
@@ -598,31 +613,122 @@ namespace ForkPlus.Plugins.Midi
 			return MidiText.FormatNoteTime(note.StartMs) + " → " + MidiText.FormatNoteTime(note.EndMs);
 		}
 
-		private void AddTableRow(Grid table, ref int row, string cell0, string cell1, string cell2, string cell3, string cell4, IBrush tint, IBrush stateBrush, IBrush cell4Brush, bool header)
+		/// <summary>表下方备注：截断提示 + 单侧缺失的口径说明（固定在卡片下，不随表体滚动）。</summary>
+		private List<Control> TableNotes(int shown, int total)
 		{
-			table.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-			int current = row++;
-			if (tint != null)
+			List<Control> notes = new List<Control>();
+			if (total > shown)
 			{
-				Border background = new Border
-				{
-					Background = tint,
-					CornerRadius = new CornerRadius(3.0)
-				};
-				Grid.SetRow(background, current);
-				Grid.SetColumn(background, 0);
-				Grid.SetColumnSpan(background, 5);
-				table.Children.Add(background);
+				notes.Add(NoteText(MidiStrings.F("Showing first {0} of {1} rows", shown, total)));
 			}
-			bool mono = !header;
-			AddCell(table, current, 0, cell0, header, mono, header ? null : Brushes.Gray);
-			AddCell(table, current, 1, cell1, header, false, null);
-			AddCell(table, current, 2, cell2, header, mono, header ? null : Brushes.Gray);
-			AddCell(table, current, 3, cell3, header, false, null);
-			AddCell(table, current, 4, cell4, header, false, stateBrush);
+			if (_srcAbsent || _dstAbsent)
+			{
+				notes.Add(NoteText(MidiStrings.T("One side is not present; values shown for the other side only.")));
+			}
+			return notes;
 		}
 
-		private static void AddCell(Grid table, int row, int column, string text, bool header, bool mono, IBrush foreground)
+		/// <summary>虚拟化表卡片：表头固定首行，数据行交给 ItemsControl + VirtualizingStackPanel
+		/// 按可见范围惰性物化。滚动条长在控件模板内部——外层不能再包 ScrollViewer，
+		/// 否则视口无限高，虚拟化退化成全量物化（那就白改了）。
+		/// 截断提示与口径说明固定在卡片下方，不随表体滚动。</summary>
+		private static Control NewTableCard(TableRow header, IList<TableRow> rows, List<Control> notes)
+		{
+			TableTemplate template = new TableTemplate();
+			Grid inner = new Grid
+			{
+				RowDefinitions = new RowDefinitions("Auto,*")
+			};
+			inner.Children.Add(template.Build(header));
+			ItemsControl table = new ItemsControl
+			{
+				ItemsSource = rows,
+				ItemsPanel = VirtualizingPanel,
+				ItemTemplate = template,
+				Template = VirtualTableTemplate
+			};
+			Grid.SetRow(table, 1);
+			inner.Children.Add(table);
+
+			Border card = new Border
+			{
+				BorderBrush = GridLine,
+				BorderThickness = new Thickness(1.0),
+				CornerRadius = new CornerRadius(6.0),
+				Background = Subtle,
+				Padding = new Thickness(2.0),
+				Child = inner
+			};
+
+			Grid root = new Grid
+			{
+				RowDefinitions = new RowDefinitions("*,Auto")
+			};
+			root.Children.Add(card);
+			StackPanel noteStack = new StackPanel
+			{
+				Spacing = 6.0
+			};
+			foreach (Control note in notes)
+			{
+				noteStack.Children.Add(note);
+			}
+			Grid.SetRow(noteStack, 1);
+			root.Children.Add(noteStack);
+			return root;
+		}
+
+		/// <summary>五列行模型：五格文本 + 整行四色底 + 状态列前景色；时间列灰字等宽。
+		/// 构建时一次映射，行控件由 <see cref="TableTemplate"/> 在虚拟化物化时才创建。</summary>
+		private sealed class TableRow
+		{
+			internal string C0;
+			internal string C1;
+			internal string C2;
+			internal string C3;
+			internal string C4;
+			internal IBrush Tint;
+			internal IBrush StateForeground;
+			internal bool IsHeader;
+		}
+
+		/// <summary>五列行模板：整行四色底（Border 跨五列）+ 状态列彩色；时间列灰字等宽、
+		/// 音符列可换行；每行 Grid 用与表头相同的星号列定义（列定义如 "1*,2*,1*,2*,1*"）。</summary>
+		private sealed class TableTemplate : IDataTemplate
+		{
+			public bool Match(object data)
+			{
+				return data is TableRow;
+			}
+
+			public Control Build(object param)
+			{
+				TableRow row = (TableRow)param;
+				Grid grid = new Grid
+				{
+					ColumnDefinitions = new ColumnDefinitions(TableColumns)
+				};
+				if (row.Tint != null)
+				{
+					Border background = new Border
+					{
+						Background = row.Tint,
+						CornerRadius = new CornerRadius(3.0)
+					};
+					Grid.SetColumnSpan(background, 5);
+					grid.Children.Add(background);
+				}
+				AddCell(grid, 0, row.C0, row.IsHeader, !row.IsHeader, row.IsHeader ? null : Brushes.Gray);
+				AddCell(grid, 1, row.C1, row.IsHeader, false, null);
+				AddCell(grid, 2, row.C2, row.IsHeader, !row.IsHeader, row.IsHeader ? null : Brushes.Gray);
+				AddCell(grid, 3, row.C3, row.IsHeader, false, null);
+				AddCell(grid, 4, row.C4, row.IsHeader, false, row.StateForeground);
+				return grid;
+			}
+		}
+
+		/// <summary>往行 Grid 里加一格文本。</summary>
+		private static void AddCell(Grid grid, int column, string text, bool header, bool mono, IBrush foreground)
 		{
 			TextBlock block = new TextBlock
 			{
@@ -634,9 +740,8 @@ namespace ForkPlus.Plugins.Midi
 				Foreground = foreground ?? Brushes.Black,
 				VerticalAlignment = VerticalAlignment.Top
 			};
-			Grid.SetRow(block, row);
 			Grid.SetColumn(block, column);
-			table.Children.Add(block);
+			grid.Children.Add(block);
 		}
 
 		// ---- 钢琴卷帘时间轴 ----
@@ -873,15 +978,6 @@ namespace ForkPlus.Plugins.Midi
 			default:
 				return Brushes.Gray;
 			}
-		}
-
-		private static IBrush OutTimeBrush(NoteRow item)
-		{
-			if (item.Left != null && item.Right != null && Math.Abs(item.Left.StartMs - item.Right.StartMs) > 0.5)
-			{
-				return StateChanged;
-			}
-			return Brushes.Gray;
 		}
 
 		private static string StateLabel(NoteState state)

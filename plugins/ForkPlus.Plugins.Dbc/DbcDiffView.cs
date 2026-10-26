@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Layout;
@@ -97,6 +98,32 @@ namespace ForkPlus.Plugins.Dbc
 		{
 			return new VirtualizingStackPanel();
 		});
+
+		/// <summary>构造虚拟列表模板：ScrollViewer 必须长在控件模板内部——外层再包 ScrollViewer 会把
+		/// ItemsControl 撑成无限高，VirtualizingStackPanel 拿不到有界视口就退化成全量物化。
+		/// 横向可见性按用途给：键路径表 Disabled（星号列宽依赖有限宽度约束，长文本走换行 / 截断）；
+		/// 原文行等宽不换行、可能超宽，用 Auto 保留横向滚动。</summary>
+		private static FuncControlTemplate<ItemsControl> NewVirtualTableTemplate(ScrollBarVisibility horizontal)
+		{
+			return new FuncControlTemplate<ItemsControl>(delegate(ItemsControl owner, INameScope nameScope)
+			{
+				ScrollViewer scroll = new ScrollViewer
+				{
+					HorizontalScrollBarVisibility = horizontal,
+					VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+				};
+				ItemsPresenter presenter = new ItemsPresenter();
+				nameScope.Register("PART_ItemsPresenter", presenter);
+				scroll.Content = presenter;
+				return scroll;
+			});
+		}
+
+		/// <summary>键路径表模板：横向禁用（列宽里有星号）。</summary>
+		private static readonly FuncControlTemplate<ItemsControl> VirtualTableTemplate = NewVirtualTableTemplate(ScrollBarVisibility.Disabled);
+
+		/// <summary>原文列表模板：横向自动（行文本不换行，可能超宽）。</summary>
+		private static readonly FuncControlTemplate<ItemsControl> VirtualRawTemplate = NewVirtualTableTemplate(ScrollBarVisibility.Auto);
 
 		private readonly Grid _root;
 
@@ -701,23 +728,17 @@ namespace ForkPlus.Plugins.Dbc
 			}
 		}
 
-		/// <summary>表头标记行：作为列表第一项与数据行同列定义，保证跨行列对齐（各行独立 Grid）。</summary>
-		private sealed class HeaderRow
-		{
-			internal static readonly HeaderRow Instance = new HeaderRow();
-		}
-
-		/// <summary>行模板：按需物化（仅视口内），表头 / 数据行共用一套列定义。</summary>
+		/// <summary>行模板：按需物化（仅视口内），与卡片首行的表头共用一套列定义。</summary>
 		private sealed class RowTemplate : IDataTemplate
 		{
 			public bool Match(object data)
 			{
-				return data is DiffRow || data is HeaderRow;
+				return data is DiffRow;
 			}
 
 			public Control Build(object param)
 			{
-				return param is HeaderRow ? BuildHeaderRow() : BuildDataRow((DiffRow)param);
+				return BuildDataRow((DiffRow)param);
 			}
 		}
 
@@ -776,32 +797,27 @@ namespace ForkPlus.Plugins.Dbc
 			}
 		}
 
+		/// <summary>键路径表：「键路径 | 旧值 | 新值 | 状态」四列。表头固定在卡片首行（不随列表滚动），
+		/// 数据行交给 ItemsControl + VirtualizingStackPanel 按可见范围惰性物化——滚动条长在控件模板
+		/// 内部（VirtualTableTemplate），外层不能再包 ScrollViewer，否则视口无限高，虚拟化退化成全量物化。
+		/// 截断提示与口径说明固定在卡片下方，不随表体滚动。</summary>
 		private Control BuildKeyPathContent()
 		{
-			object[] items = new object[_summary.Rows.Count + 1];
-			items[0] = HeaderRow.Instance;
-			for (int i = 0; i < _summary.Rows.Count; i++)
+			Grid inner = new Grid
 			{
-				items[i + 1] = _summary.Rows[i];
-			}
+				RowDefinitions = new RowDefinitions("Auto,*")
+			};
+			inner.Children.Add(BuildHeaderRow());
 			ItemsControl table = new ItemsControl
 			{
-				ItemsSource = items,
+				ItemsSource = _summary.Rows,
 				ItemsPanel = VirtualizingPanel,
-				ItemTemplate = new RowTemplate()
+				ItemTemplate = new RowTemplate(),
+				Template = VirtualTableTemplate
 			};
-			ScrollViewer scroll = new ScrollViewer
-			{
-				Content = table,
-				// 星号列宽依赖有限宽度约束；开横向滚动会退化成无限宽。
-				HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-				VerticalScrollBarVisibility = ScrollBarVisibility.Auto
-			};
+			Grid.SetRow(table, 1);
+			inner.Children.Add(table);
 
-			StackPanel stack = new StackPanel
-			{
-				Spacing = 6.0
-			};
 			Border card = new Border
 			{
 				BorderBrush = GridLine,
@@ -809,21 +825,32 @@ namespace ForkPlus.Plugins.Dbc
 				CornerRadius = new CornerRadius(6.0),
 				Background = Subtle,
 				Padding = new Thickness(2.0),
-				Child = scroll
+				Child = inner
 			};
-			stack.Children.Add(card);
+
+			Grid root = new Grid
+			{
+				RowDefinitions = new RowDefinitions("*,Auto")
+			};
+			root.Children.Add(card);
+			StackPanel noteStack = new StackPanel
+			{
+				Spacing = 6.0
+			};
 			int relevantTotal = _summary.IncludeSame
 				? _summary.Total
 				: _summary.Changed + _summary.LeftOnly + _summary.RightOnly;
 			if (_summary.Rows.Count < relevantTotal)
 			{
-				stack.Children.Add(NoteText(DbcStrings.F("Showing first {0} of {1} rows", _summary.Rows.Count, relevantTotal)));
+				noteStack.Children.Add(NoteText(DbcStrings.F("Showing first {0} of {1} rows", _summary.Rows.Count, relevantTotal)));
 			}
 			if (_srcAbsent || _dstAbsent)
 			{
-				stack.Children.Add(NoteText(DbcStrings.T("One side is not present; values shown for the other side only.")));
+				noteStack.Children.Add(NoteText(DbcStrings.T("One side is not present; values shown for the other side only.")));
 			}
-			return stack;
+			Grid.SetRow(noteStack, 1);
+			root.Children.Add(noteStack);
+			return root;
 		}
 
 		private static Control BuildHeaderRow()
@@ -901,13 +928,15 @@ namespace ForkPlus.Plugins.Dbc
 			}
 			else
 			{
-				ItemsControl list = new ItemsControl
+				// 滚动条长在控件模板内部（VirtualRawTemplate，横向 Auto 保留原文的横向滚动）——
+				// 外层再包 ScrollViewer 会把 ItemsControl 撑成无限高，虚拟化退化成全量物化。
+				body = new ItemsControl
 				{
 					ItemsSource = lines,
 					ItemsPanel = VirtualizingPanel,
-					ItemTemplate = new RawLineTemplate(GutterWidth(lines.Count))
+					ItemTemplate = new RawLineTemplate(GutterWidth(lines.Count)),
+					Template = VirtualRawTemplate
 				};
-				body = list;
 			}
 			return new Border
 			{
@@ -917,12 +946,7 @@ namespace ForkPlus.Plugins.Dbc
 				CornerRadius = new CornerRadius(6.0),
 				Background = Subtle,
 				Padding = new Thickness(6.0),
-				Child = new ScrollViewer
-				{
-					Content = body,
-					HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-					VerticalScrollBarVisibility = ScrollBarVisibility.Auto
-				}
+				Child = body
 			};
 		}
 

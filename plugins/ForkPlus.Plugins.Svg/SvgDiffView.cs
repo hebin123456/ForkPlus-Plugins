@@ -6,6 +6,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -50,6 +52,31 @@ namespace ForkPlus.Plugins.Svg
 
 		/// <summary>单元格里单值最大展示长度，超出截断（不影响 diff 比较）。</summary>
 		private const int MaxValueChars = 300;
+
+		/// <summary>四列宽度：元素 / 属性 / 旧 / 新按比例伸缩，状态列随内容等比（原来 Auto 在虚拟化下会逐行错列，改星号保证表头与行对齐）。</summary>
+		private const string TableColumns = "3*,2*,2*,1*";
+
+		/// <summary>数据行面板：VirtualizingStackPanel 只物化视口内的行（配合 VirtualTableTemplate 的内置 ScrollViewer）。</summary>
+		private static readonly FuncTemplate<Panel> VirtualizingPanel = new FuncTemplate<Panel>(delegate
+		{
+			return new VirtualizingStackPanel();
+		});
+
+		/// <summary>虚拟列表模板：ScrollViewer 必须长在控件模板内部——外层 ScrollViewer 会把
+		/// ItemsControl 撑成无限高，VirtualizingStackPanel 拿不到有界视口就退化成全量物化。</summary>
+		private static readonly FuncControlTemplate<ItemsControl> VirtualTableTemplate = new FuncControlTemplate<ItemsControl>(delegate(ItemsControl owner, INameScope nameScope)
+		{
+			ScrollViewer scroll = new ScrollViewer
+			{
+				// 星号列宽依赖有限宽度约束；开横向滚动会退化成无限宽（长文本走换行）。
+				HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+				VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
+			};
+			ItemsPresenter presenter = new ItemsPresenter();
+			nameScope.Register("PART_ItemsPresenter", presenter);
+			scroll.Content = presenter;
+			return scroll;
+		});
 
 		private static readonly IBrush GridLine = Brushes.Gainsboro;
 
@@ -567,16 +594,11 @@ namespace ForkPlus.Plugins.Svg
 			return Math.Round(value, 2).ToString(System.Globalization.CultureInfo.InvariantCulture);
 		}
 
-		/// <summary>结构 diff：一张四列表——「元素 / 属性 | 旧 | 新 | 状态」，逐行四色标注底色。</summary>
+		/// <summary>结构 diff 表：「元素 / 属性 | 旧 | 新 | 状态」四列，逐行四色标注底色。
+		/// UI 线程只做一次轻量行模型映射，行控件由虚拟化列表按可见范围惰性创建（大文件不再卡 UI）。</summary>
 		private Control BuildStructureContent()
 		{
-			Grid table = new Grid
-			{
-				ColumnDefinitions = new ColumnDefinitions("3*,2*,2*,Auto")
-			};
-			int row = 0;
-			AddTableRow(table, ref row, SvgStrings.T("Element / attribute"), SvgStrings.T("Old"), SvgStrings.T("New"), SvgStrings.T("State"), null, null, true);
-
+			List<TableRow> rows = new List<TableRow>();
 			int shown = 0;
 			foreach (SvgDiffRow item in _diff.Rows)
 			{
@@ -585,61 +607,145 @@ namespace ForkPlus.Plugins.Svg
 					break;
 				}
 				shown++;
-				AddTableRow(table, ref row, item.Path, Display(item.Left, item.LeftPresent), Display(item.Right, item.RightPresent), StateLabel(item.State), TintOf(item.State), StateBrush(item.State), false);
+				rows.Add(new TableRow
+				{
+					C0 = item.Path,
+					C1 = Display(item.Left, item.LeftPresent),
+					C2 = Display(item.Right, item.RightPresent),
+					C3 = StateLabel(item.State),
+					Tint = TintOf(item.State),
+					StateForeground = StateBrush(item.State),
+					C0Foreground = Brushes.Gray,
+					Mono0 = true
+				});
 			}
-
-			StackPanel stack = new StackPanel
+			TableRow header = new TableRow
 			{
-				Spacing = 6.0
+				IsHeader = true,
+				C0 = SvgStrings.T("Element / attribute"),
+				C1 = SvgStrings.T("Old"),
+				C2 = SvgStrings.T("New"),
+				C3 = SvgStrings.T("State"),
+				Mono0 = true
 			};
-			stack.Children.Add(new Border
+			return NewTableCard(header, rows, TableNotes(shown, _diff.Total));
+		}
+
+		/// <summary>表下方备注：截断提示 + 单侧缺失的口径说明（固定在卡片下，不随表体滚动）。</summary>
+		private List<Control> TableNotes(int shown, int total)
+		{
+			List<Control> notes = new List<Control>();
+			if (total > shown)
+			{
+				notes.Add(NoteText(SvgStrings.F("Showing first {0} of {1} rows", shown, total)));
+			}
+			if (_srcAbsent || _dstAbsent)
+			{
+				notes.Add(NoteText(SvgStrings.T("One side is not present; values shown for the other side only.")));
+			}
+			return notes;
+		}
+
+		/// <summary>虚拟化表卡片：表头固定首行，数据行交给 ItemsControl + VirtualizingStackPanel
+		/// 按可见范围惰性物化。滚动条长在控件模板内部——外层不能再包 ScrollViewer，
+		/// 否则视口无限高，虚拟化退化成全量物化（那就白改了）。
+		/// 截断提示与口径说明固定在卡片下方，不随表体滚动。</summary>
+		private static Control NewTableCard(TableRow header, IList<TableRow> rows, List<Control> notes)
+		{
+			TableTemplate template = new TableTemplate();
+			Grid inner = new Grid
+			{
+				RowDefinitions = new RowDefinitions("Auto,*")
+			};
+			inner.Children.Add(template.Build(header));
+			ItemsControl table = new ItemsControl
+			{
+				ItemsSource = rows,
+				ItemsPanel = VirtualizingPanel,
+				ItemTemplate = template,
+				Template = VirtualTableTemplate
+			};
+			Grid.SetRow(table, 1);
+			inner.Children.Add(table);
+
+			Border card = new Border
 			{
 				BorderBrush = GridLine,
 				BorderThickness = new Thickness(1.0),
 				CornerRadius = new CornerRadius(6.0),
 				Background = Subtle,
 				Padding = new Thickness(2.0),
-				Child = table
-			});
-			if (_diff.Total > shown)
-			{
-				stack.Children.Add(NoteText(SvgStrings.F("Showing first {0} of {1} rows", shown, _diff.Total)));
-			}
-			if (_srcAbsent || _dstAbsent)
-			{
-				stack.Children.Add(NoteText(SvgStrings.T("One side is not present; values shown for the other side only.")));
-			}
-			return new ScrollViewer
-			{
-				Content = stack,
-				HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-				VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
+				Child = inner
 			};
-		}
 
-		private void AddTableRow(Grid table, ref int row, string path, string left, string right, string state, IBrush tint, IBrush stateBrush, bool header)
-		{
-			table.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-			int current = row++;
-			if (tint != null)
+			Grid root = new Grid
 			{
-				Border background = new Border
-				{
-					Background = tint,
-					CornerRadius = new CornerRadius(3.0)
-				};
-				Grid.SetRow(background, current);
-				Grid.SetColumn(background, 0);
-				Grid.SetColumnSpan(background, 4);
-				table.Children.Add(background);
+				RowDefinitions = new RowDefinitions("*,Auto")
+			};
+			root.Children.Add(card);
+			StackPanel noteStack = new StackPanel
+			{
+				Spacing = 6.0
+			};
+			foreach (Control note in notes)
+			{
+				noteStack.Children.Add(note);
 			}
-			AddCell(table, current, 0, path, header, true, header ? null : Brushes.Gray);
-			AddCell(table, current, 1, left, header, false, null);
-			AddCell(table, current, 2, right, header, false, null);
-			AddCell(table, current, 3, state, header, false, stateBrush);
+			Grid.SetRow(noteStack, 1);
+			root.Children.Add(noteStack);
+			return root;
 		}
 
-		private static void AddCell(Grid table, int row, int column, string text, bool header, bool mono, IBrush foreground)
+		/// <summary>四列行模型：四格文本 + 整行四色底 + 状态列前景色；首列可等宽。
+		/// 构建时一次映射，行控件由 <see cref="TableTemplate"/> 在虚拟化物化时才创建。</summary>
+		private sealed class TableRow
+		{
+			internal string C0;
+			internal string C1;
+			internal string C2;
+			internal string C3;
+			internal IBrush Tint;
+			internal IBrush StateForeground;
+			internal IBrush C0Foreground;
+			internal bool Mono0;
+			internal bool IsHeader;
+		}
+
+		/// <summary>四列行模板：整行四色底（Border 跨四列）+ 状态列彩色；首列可等宽；表头半粗不换行。</summary>
+		private sealed class TableTemplate : IDataTemplate
+		{
+			public bool Match(object data)
+			{
+				return data is TableRow;
+			}
+
+			public Control Build(object param)
+			{
+				TableRow row = (TableRow)param;
+				Grid grid = new Grid
+				{
+					ColumnDefinitions = new ColumnDefinitions(TableColumns)
+				};
+				if (row.Tint != null)
+				{
+					Border background = new Border
+					{
+						Background = row.Tint,
+						CornerRadius = new CornerRadius(3.0)
+					};
+					Grid.SetColumnSpan(background, 4);
+					grid.Children.Add(background);
+				}
+				AddCell(grid, 0, row.C0, row.IsHeader, row.Mono0, row.C0Foreground);
+				AddCell(grid, 1, row.C1, row.IsHeader, false, null);
+				AddCell(grid, 2, row.C2, row.IsHeader, false, null);
+				AddCell(grid, 3, row.C3, row.IsHeader, false, row.StateForeground);
+				return grid;
+			}
+		}
+
+		/// <summary>往行 Grid 里加一格文本。</summary>
+		private static void AddCell(Grid grid, int column, string text, bool header, bool mono, IBrush foreground)
 		{
 			TextBlock block = new TextBlock
 			{
@@ -651,9 +757,8 @@ namespace ForkPlus.Plugins.Svg
 				Foreground = foreground ?? Brushes.Black,
 				VerticalAlignment = VerticalAlignment.Top
 			};
-			Grid.SetRow(block, row);
 			Grid.SetColumn(block, column);
-			table.Children.Add(block);
+			grid.Children.Add(block);
 		}
 
 		private static IBrush TintOf(SvgState state)

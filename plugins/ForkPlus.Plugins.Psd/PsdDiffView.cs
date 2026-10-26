@@ -5,6 +5,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -65,6 +68,32 @@ namespace ForkPlus.Plugins.Psd
 
 		/// <summary>表格渲染上限：避免超大图层文件把 UI 拖死。</summary>
 		private const int MaxRows = 1000;
+
+		/// <summary>图层表四列宽度：图层 / 旧 / 新按比例伸缩，状态列随内容等比。
+		/// 状态列由 Auto 改星号——Auto 列在虚拟化下会逐行独立测宽错列，星号保证表头与数据行对齐。</summary>
+		private const string TableColumns = "2*,3*,3*,1*";
+
+		/// <summary>数据行面板：VirtualizingStackPanel 只物化视口内的行（配合 VirtualTableTemplate 的内置 ScrollViewer）。</summary>
+		private static readonly FuncTemplate<Panel> VirtualizingPanel = new FuncTemplate<Panel>(delegate
+		{
+			return new VirtualizingStackPanel();
+		});
+
+		/// <summary>虚拟列表模板：ScrollViewer 必须长在控件模板内部——外层 ScrollViewer 会把
+		/// ItemsControl 撑成无限高，VirtualizingStackPanel 拿不到有界视口就退化成全量物化。</summary>
+		private static readonly FuncControlTemplate<ItemsControl> VirtualTableTemplate = new FuncControlTemplate<ItemsControl>(delegate(ItemsControl owner, INameScope nameScope)
+		{
+			ScrollViewer scroll = new ScrollViewer
+			{
+				// 星号列宽依赖有限宽度约束；开横向滚动会退化成无限宽（长文本走换行）。
+				HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+				VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+			};
+			ItemsPresenter presenter = new ItemsPresenter();
+			nameScope.Register("PART_ItemsPresenter", presenter);
+			scroll.Content = presenter;
+			return scroll;
+		});
 
 		/// <summary>缩略图显示上限：整图缩略图通常 ≤ 1024，超出按此约束显示。</summary>
 		private const double MaxPreviewSize = 640.0;
@@ -717,15 +746,12 @@ namespace ForkPlus.Plugins.Psd
 
 		// ---- 图层模式 ----
 
+		/// <summary>图层表：「图层 | 旧 | 新 | 状态」四列，图层属性摘要逐行四色标注，分组图层带
+		/// ▸ / ▾ / — 前缀。UI 线程只做一次轻量行模型映射，行控件由虚拟化列表按可见范围惰性创建
+		/// （大文件不再卡 UI）。</summary>
 		private Control BuildLayersContent()
 		{
-			Grid table = new Grid
-			{
-				ColumnDefinitions = new ColumnDefinitions("2*,3*,3*,Auto")
-			};
-			int row = 0;
-			AddTableRow(table, ref row, PsdStrings.T("Layer"), PsdStrings.T("Old"), PsdStrings.T("New"), PsdStrings.T("State"), null, null, true);
-
+			List<TableRow> rows = new List<TableRow>();
 			int shown = 0;
 			foreach (PsdLayerRow item in _layerDiff.Rows)
 			{
@@ -734,37 +760,40 @@ namespace ForkPlus.Plugins.Psd
 					break;
 				}
 				shown++;
-				AddTableRow(table, ref row, LayerName(item), LayerSummary(item.Left), LayerSummary(item.Right), StateLabel(item.State), TintOf(item.State), StateBrush(item.State), false);
+				rows.Add(new TableRow
+				{
+					C0 = LayerName(item),
+					C1 = LayerSummary(item.Left),
+					C2 = LayerSummary(item.Right),
+					C3 = StateLabel(item.State),
+					Tint = TintOf(item.State),
+					StateForeground = StateBrush(item.State)
+				});
 			}
+			TableRow header = new TableRow
+			{
+				IsHeader = true,
+				C0 = PsdStrings.T("Layer"),
+				C1 = PsdStrings.T("Old"),
+				C2 = PsdStrings.T("New"),
+				C3 = PsdStrings.T("State")
+			};
+			return NewTableCard(header, rows, TableNotes(shown, _layerDiff.Total));
+		}
 
-			StackPanel stack = new StackPanel
+		/// <summary>表下方备注：截断提示 + 单侧缺失的口径说明（固定在卡片下，不随表体滚动）。</summary>
+		private List<Control> TableNotes(int shown, int total)
+		{
+			List<Control> notes = new List<Control>();
+			if (total > shown)
 			{
-				Spacing = 6.0
-			};
-			Border card = new Border
-			{
-				BorderBrush = GridLine,
-				BorderThickness = new Thickness(1.0),
-				CornerRadius = new CornerRadius(6.0),
-				Background = Subtle,
-				Padding = new Thickness(2.0),
-				Child = table
-			};
-			stack.Children.Add(card);
-			if (_layerDiff.Total > shown)
-			{
-				stack.Children.Add(NoteText(PsdStrings.F("Showing first {0} of {1} rows", shown, _layerDiff.Total)));
+				notes.Add(NoteText(PsdStrings.F("Showing first {0} of {1} rows", shown, total)));
 			}
 			if (_srcAbsent || _dstAbsent)
 			{
-				stack.Children.Add(NoteText(PsdStrings.T("One side is not present; values shown for the other side only.")));
+				notes.Add(NoteText(PsdStrings.T("One side is not present; values shown for the other side only.")));
 			}
-			return new ScrollViewer
-			{
-				Content = stack,
-				HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-				VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
-			};
+			return notes;
 		}
 
 		/// <summary>图层单元文案：分组前缀 + 名称（优先左侧，仅右侧时用右侧名称）。</summary>
@@ -845,6 +874,103 @@ namespace ForkPlus.Plugins.Psd
 				HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
 				VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
 			};
+		}
+
+		/// <summary>虚拟化表卡片（图层表用）：表头固定首行，数据行交给 ItemsControl + VirtualizingStackPanel
+		/// 按可见范围惰性物化。滚动条长在控件模板内部——外层不能再包 ScrollViewer，
+		/// 否则视口无限高，虚拟化退化成全量物化（那就白改了）。
+		/// 截断提示与口径说明固定在卡片下方，不随表体滚动。</summary>
+		private static Control NewTableCard(TableRow header, IList<TableRow> rows, List<Control> notes)
+		{
+			TableTemplate template = new TableTemplate();
+			Grid inner = new Grid
+			{
+				RowDefinitions = new RowDefinitions("Auto,*")
+			};
+			inner.Children.Add(template.Build(header));
+			ItemsControl table = new ItemsControl
+			{
+				ItemsSource = rows,
+				ItemsPanel = VirtualizingPanel,
+				ItemTemplate = template,
+				Template = VirtualTableTemplate
+			};
+			Grid.SetRow(table, 1);
+			inner.Children.Add(table);
+
+			Border card = new Border
+			{
+				BorderBrush = GridLine,
+				BorderThickness = new Thickness(1.0),
+				CornerRadius = new CornerRadius(6.0),
+				Background = Subtle,
+				Padding = new Thickness(2.0),
+				Child = inner
+			};
+
+			Grid root = new Grid
+			{
+				RowDefinitions = new RowDefinitions("*,Auto")
+			};
+			root.Children.Add(card);
+			StackPanel noteStack = new StackPanel
+			{
+				Spacing = 6.0
+			};
+			foreach (Control note in notes)
+			{
+				noteStack.Children.Add(note);
+			}
+			Grid.SetRow(noteStack, 1);
+			root.Children.Add(noteStack);
+			return root;
+		}
+
+		/// <summary>四列行模型：四格文本 + 整行四色底 + 状态列前景色。
+		/// 构建时一次映射，行控件由 <see cref="TableTemplate"/> 在虚拟化物化时才创建。</summary>
+		private sealed class TableRow
+		{
+			internal string C0;
+			internal string C1;
+			internal string C2;
+			internal string C3;
+			internal IBrush Tint;
+			internal IBrush StateForeground;
+			internal bool IsHeader;
+		}
+
+		/// <summary>四列行模板：整行四色底（Border 跨四列）+ 状态列彩色；每行 Grid 用与表头
+		/// 相同的星号列定义（TableColumns）；图层名与属性摘要列等宽字体，长文本走换行。</summary>
+		private sealed class TableTemplate : IDataTemplate
+		{
+			public bool Match(object data)
+			{
+				return data is TableRow;
+			}
+
+			public Control Build(object param)
+			{
+				TableRow row = (TableRow)param;
+				Grid grid = new Grid
+				{
+					ColumnDefinitions = new ColumnDefinitions(TableColumns)
+				};
+				if (row.Tint != null)
+				{
+					Border background = new Border
+					{
+						Background = row.Tint,
+						CornerRadius = new CornerRadius(3.0)
+					};
+					Grid.SetColumnSpan(background, 4);
+					grid.Children.Add(background);
+				}
+				AddCell(grid, 0, 0, row.C0, row.IsHeader, true, row.IsHeader ? null : Brushes.Gray);
+				AddCell(grid, 0, 1, row.C1, row.IsHeader, true, null);
+				AddCell(grid, 0, 2, row.C2, row.IsHeader, true, null);
+				AddCell(grid, 0, 3, row.C3, row.IsHeader, false, row.StateForeground);
+				return grid;
+			}
 		}
 
 		// ---- 文案 / 小部件 ----

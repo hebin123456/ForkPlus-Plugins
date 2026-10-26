@@ -411,7 +411,9 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 - **原生库**（`.so` / `.dll` / `.dylib`）不在上述钩子覆盖范围内，需插件自行注册
   `DllImportResolver` 从插件目录解析（参见 PDF 插件 `PdfNativeLibrary`）。
 - 版本与清单约定见「§9 插件清单（plugin.json）与安装布局」：插件自身版本统一 `1.0.0`
-  （EPUB / CHM 因新增并排双 WebView「预览」为 `1.0.1`，前端代码 / Markdown 修复缺陷后也为 `1.0.1`），
+  （EPUB / CHM 因新增并排双 WebView「预览」为 `1.0.1`，前端代码 / Markdown 修复缺陷后也为 `1.0.1`；
+  v1.3.0 起大表格改为虚拟化列表的 11 个插件——CHM / DBC / EML / EPUB / SQLite / 托管程序集 / SVG /
+  Torrent / MIDI / PSD / PCAP——升为 `1.1.0`），
   `minHostVersion` 声明最低支持的主程序版本。
 
 ### 5. 宿主能力桥
@@ -451,7 +453,7 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 
 | 成员 | 说明 |
 | --- | --- |
-| `Version` | 插件**自身**版本号（v1.2.0 起本仓官方插件统一为 `1.0.0`；v1.2.2 起新增并排双 WebView「预览」的 EPUB / CHM 升为 `1.0.1`，v1.2.9 起修复过缺陷的前端代码 / Markdown 也升为 `1.0.1`）；与工程 `<Version>`、`plugin.json` 的 `version` 三处保持一致。 |
+| `Version` | 插件**自身**版本号（v1.2.0 起本仓官方插件统一为 `1.0.0`；v1.2.2 起新增并排双 WebView「预览」的 EPUB / CHM 升为 `1.0.1`，v1.2.9 起修复过缺陷的前端代码 / Markdown 也升为 `1.0.1`，v1.3.0 起大表格虚拟化改造的 11 个插件升为 `1.1.0`）；与工程 `<Version>`、`plugin.json` 的 `version` 三处保持一致。 |
 | `DisplayName` | 插件显示名，约定为**英文原文**，同时作为多语言的缺省值。 |
 | `Description` | 一句话描述插件能力，约定为**英文原文**，同时作为多语言的缺省值。 |
 | `GetDisplayName(language)` | v5.0.3：按界面语言返回显示名；默认实现返回英文原文，无需多语言的插件不必覆写。 |
