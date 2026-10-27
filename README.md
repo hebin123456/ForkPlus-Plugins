@@ -413,7 +413,8 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 - 版本与清单约定见「§9 插件清单（plugin.json）与安装布局」：插件自身版本统一 `1.0.0`
   （EPUB / CHM 因新增并排双 WebView「预览」为 `1.0.1`，前端代码 / Markdown 修复缺陷后也为 `1.0.1`；
   v1.3.0 起大表格改为虚拟化列表的 11 个插件——CHM / DBC / EML / EPUB / SQLite / 托管程序集 / SVG /
-  Torrent / MIDI / PSD / PCAP——升为 `1.1.0`），
+  Torrent / MIDI / PSD / PCAP——升为 `1.1.0`；v1.3.1 起内容签名改为零字节判重的
+  视频 / Hex / Image 三个插件也升为 `1.1.0`），
   `minHostVersion` 声明最低支持的主程序版本。
 
 ### 5. 宿主能力桥
@@ -490,7 +491,7 @@ CreateView → SetContent →（SetMode / Activate / Deactivate / ApplyLocalizat
 | --- | --- |
 | `schemaVersion` | 清单格式版本，当前固定 `1`。 |
 | `id` | 插件唯一 Id，与代码里 `IDiffViewPlugin.Id` 一致（官方为 `forkplus.<name>`）。 |
-| `version` | 插件**自身**版本，与工程 `<Version>` 一致；本仓官方插件基线 `1.0.0`（EPUB / CHM / 前端代码 / Markdown 为 `1.0.1`，v1.3.0 起大表格虚拟化改造的 11 个插件为 `1.1.0`）。 |
+| `version` | 插件**自身**版本，与工程 `<Version>` 一致；本仓官方插件基线 `1.0.0`（EPUB / CHM / 前端代码 / Markdown 为 `1.0.1`，v1.3.0 起大表格虚拟化改造的 11 个插件、v1.3.1 起零字节签名的视频 / Hex / Image 也为 `1.1.0`）。 |
 | `minHostVersion` | **最低支持主程序版本**：宿主主程序版本 **≥** 该值才兼容并加载，否则不加载。本仓多数为 `5.1.0`；依赖宿主 `ForkPlus.Plugins.Ui` 共享组件「并排双 WebView 预览」的 EPUB / CHM / 前端代码声明 `5.1.1`。 |
 | `assembly` | 程序集名，取该插件 csproj 的 `<AssemblyName>`。 |
 

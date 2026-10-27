@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -448,8 +447,10 @@ namespace ForkPlus.Plugins.Video
 		// ---- 内容签名（v1.2.4：同内容重复下发去重） ----
 
 		/// <summary>把视图可观察到的全部输入折成一个签名：路径 / 角色 / 声明大小 / LFS 指针 /
-		/// 标题画刷颜色 / 字节内容（SHA-256）。任何一项不同都得到不同签名，照常重新装配；
-		/// 不可回退的流用唯一值代表「无法证明相等」，同样不会误判为相同。</summary>
+		/// 标题画刷颜色 / Hex 预载流长度。v1.3.1 起为<strong>零字节签名</strong>：LFS 侧自带内容
+		/// SHA-256、非 LFS 侧用「同路径 + 同大小」判重，SetContent 在 UI 线程上全程不读任何字节
+		/// （旧版对最多 4 路全流 SHA-256，是窗口重新激活就卡死 UI 的元凶）。「同路径同大小但内容
+		/// 已变」的极端情况会被误判为相同——概率与代价都可接受，宁可如此也不回 UI 线程读字节。</summary>
 		private static string ComputeContentSignature(DiffViewContext context)
 		{
 			if (context == null)
@@ -465,8 +466,8 @@ namespace ForkPlus.Plugins.Video
 				.Append(BrushKey(context.DstTitleBrush)).Append('\u0001');
 			AppendSideSignature(builder, context.Src);
 			AppendSideSignature(builder, context.Dst);
-			AppendStreamHash(builder, context.HexSrc);
-			AppendStreamHash(builder, context.HexDst);
+			AppendStreamLength(builder, context.HexSrc);
+			AppendStreamLength(builder, context.HexDst);
 			return builder.ToString();
 		}
 
@@ -483,41 +484,14 @@ namespace ForkPlus.Plugins.Video
 				.Append(side.Lfs?.Sha256).Append('\u0002')
 				.Append(side.Lfs?.Size ?? -1L).Append('\u0002')
 				.Append(side.IsLfsImage ? '1' : '0').Append('\u0002');
-			AppendStreamHash(builder, side.Data);
+			// v1.3.1：不再触碰 side.Data（懒加载首次访问会同步读整个文件）——签名全程字节零访问。
 			builder.Append('\u0001');
 		}
 
-		private static void AppendStreamHash(StringBuilder builder, Stream stream)
+		/// <summary>Hex 预载流的签名项：只取长度，不读内容（v1.3.1 零字节签名）。</summary>
+		private static void AppendStreamLength(StringBuilder builder, Stream stream)
 		{
-			builder.Append(HashStream(stream)).Append('\u0002');
-		}
-
-		/// <summary>流内容哈希：可回退流按 SHA-256（取哈希后复位位置，不影响后续读取）；
-		/// 不可回退 / 读取失败用唯一值，保证不会被误判为「与上次相同」。</summary>
-		private static string HashStream(Stream stream)
-		{
-			if (stream == null)
-			{
-				return null;
-			}
-			if (!stream.CanSeek)
-			{
-				return Guid.NewGuid().ToString("N");
-			}
-			long position = stream.Position;
-			try
-			{
-				stream.Position = 0L;
-				return Convert.ToHexString(SHA256.HashData(stream));
-			}
-			catch (Exception)
-			{
-				return Guid.NewGuid().ToString("N");
-			}
-			finally
-			{
-				stream.Position = position;
-			}
+			builder.Append(stream?.Length ?? -1L).Append('\u0002');
 		}
 
 		/// <summary>标题画刷标识：取颜色值（同色视为同渲染，不受画刷实例更换影响），无法取值时退回 ToString。</summary>
