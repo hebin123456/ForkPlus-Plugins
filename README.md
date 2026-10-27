@@ -18,7 +18,7 @@ ForkPlus 的「文件对比视图」是插件化的：宿主启动时扫描可�
 - **加载目录**：ForkPlus 安装目录下的 `plugins/`；每个插件独占一个子目录
   （`plugins/<AssemblyName>/`，目录内含 `plugin.json` 清单），依赖彼此隔离、可整目录卸载
 - **契约程序集**：`ForkPlus.Plugins.Abstractions`（运行期由宿主提供，插件不随包分发）
-- **目标平台**：与 ForkPlus 四平台一致 —— Windows x64 / Linux x64 / Linux ARM64 / macOS ARM64
+- **目标平台**：与 ForkPlus 五平台一致 —— Windows x64 / Linux x64 / Linux ARM64 / macOS ARM64 / macOS x64
 
 ---
 
@@ -36,7 +36,7 @@ ForkPlus-Plugins/
 │   │   └── build-pages.py                # Pages 站点生成
 │   ├── pages/                            # Pages 模板与插件登记表（template-*.html / style.css / plugins.json）
 │   └── workflows/
-│       ├── build.yml                     # GitHub Actions：四平台构建 + 打包 + Release（附版本说明）
+│       ├── build.yml                     # GitHub Actions：五平台构建 + 打包 + Release（附版本说明）
 │       └── pages.yml                     # GitHub Actions：截图 + 生成站点 + 发布 Pages
 ├── sdk/
 │   └── ForkPlus.Plugins.Abstractions/    # 插件契约工程（主仓 src/ForkPlus.Plugins.Abstractions 的源码镜像）
@@ -1402,7 +1402,7 @@ YamlDotNet / Tomlyn、DBC 插件的 DbcParserLib、音视频插件的 FFmpeg / F
 
 **原生件（如 FFmpeg）另有一层「件与锁」**：托管依赖走 NuGet 即可，但随包分发的原生二进制不在
 NuGet 里。这类件统一收到**三方件仓** [ForkPlus-Plugins-Third_Party](https://github.com/hebin123456/ForkPlus-Plugins-Third_Party)：
-源码按组件分目录锁版本、自建编译，tag 触发四平台出包；本仓的取件脚本
+源码按组件分目录锁版本、自建编译，tag 触发五平台出包；本仓的取件脚本
 （[fetch-third-party.sh](.github/scripts/fetch-third-party.sh)）按 RID 从**最新 Release** 取件：
 先读 `releases/latest/download/index.json` 拿本 RID 的资产名与 sha256，再下载该资产、校验、
 解出运行期库到 `third_party/<组件>/<rid>/`，构建时由插件工程拷进输出。二进制**不入库**
@@ -1440,17 +1440,17 @@ dotnet build plugins/ForkPlus.Plugins.Audio/ForkPlus.Plugins.Audio.csproj -c Rel
 > 不传 `-r <rid>` 时 csproj 里的原生件 ItemGroup 不生效，输出只有托管 DLL，运行期降级为
 > 「FFmpeg decoding unavailable」。三方件仓尚未收录的 RID 取件脚本会跳过，该平台同样降级。
 
-### 通过 GitHub Actions 出包（四平台）
+### 通过 GitHub Actions 出包（五平台）
 
 workflow：[.github/workflows/build.yml](.github/workflows/build.yml)
 
-- **触发**：push `v*` 标签 → 构建四平台并发布 Release；`workflow_dispatch` 手动 → 只构建并上传 Artifacts。
+- **触发**：push `v*` 标签 → 构建五平台并发布 Release；`workflow_dispatch` 手动 → 只构建并上传 Artifacts。
 - **版本说明**：Release 的正文由 [release-notes.py](.github/scripts/release-notes.py) 依据
   **conventional commit** 自动生成——取上一个 `v*` 标签到当前标签之间的提交，按 `feat` / `fix` /
   `docs` / `ci` … 分组为「新增 / 修复 / 文档 / CI…」，去掉冗余前缀并附 Full Changelog 链接。
   因此**提交信息请遵循 `type(scope): 描述` 规范**，发版时版本说明即自动带上；如需人工润色，
   可在 Release 页面直接编辑（自动化生成仅保证「不为空」）。
-- **四平台矩阵**（与 ForkPlus 宿主一致）：
+- **五平台矩阵**（与 ForkPlus 宿主一致）：
 
   | 平台 | Runner | RID |
   | --- | --- | --- |
@@ -1458,6 +1458,7 @@ workflow：[.github/workflows/build.yml](.github/workflows/build.yml)
   | linux-x64 | `ubuntu-latest` | `linux-x64` |
   | linux-arm64 | `ubuntu-22.04-arm` | `linux-arm64` |
   | macos-arm64 | `macos-latest` | `osx-arm64` |
+  | macos-x64 | `macos-13` | `osx-x64` |
 
 - **出包**：每个平台构建一遍全部插件，用 `install-plugin-artifacts.sh` 把每个插件装进包内
   `plugins/<AssemblyName>/` 子目录（目录名=程序集名），内含 `plugin.json`、**主 DLL + 私有依赖

@@ -1,14 +1,15 @@
-# ForkPlus 插件仓库 · 四平台自动构建与发布
+# ForkPlus 插件仓库 · 五平台自动构建与发布
 #
 # 触发：
-#   - push v* 标签：四平台构建 + 打包，并创建 GitHub Release
+#   - push v* 标签：五平台构建 + 打包，并创建 GitHub Release
 #   - workflow_dispatch：只构建 + 上传 Artifacts（不发 Release）
 #
-# 四平台与 ForkPlus 宿主一致：
+# 五平台与 ForkPlus 宿主一致：
 #   windows-x64  → windows-latest   / win-x64
 #   linux-x64    → ubuntu-latest    / linux-x64
 #   linux-arm64  → ubuntu-22.04-arm / linux-arm64（原生 ARM64 runner，公开仓库免费）
 #   macos-arm64  → macos-latest     / osx-arm64
+#   macos-x64    → macos-13         / osx-x64（Intel runner，macos-latest 已无 x64）
 #
 # 出包内容（v1.2.0 起每插件一个目录）：每个平台的包内是 plugins/ 目录，其下**每个插件一个子目录**
 #   plugins/<AssemblyName>/（内含 plugin.json、插件主 DLL、私有依赖（托管 / 原生）+ 许可声明）。
@@ -74,6 +75,10 @@ jobs:
             name: macos-arm64
             rid: osx-arm64
             platformtarget: arm64
+          - os: macos-13
+            name: macos-x64
+            rid: osx-x64
+            platformtarget: x64
 
     steps:
       - name: Checkout
@@ -155,7 +160,7 @@ jobs:
           echo "packaged $count plugin(s)"
           # 打包统一走 python 的 zipfile，条目名一律用正斜杠（zip 规范）。此前 windows 走 PowerShell 的
           # Compress-Archive，它把条目分隔符写成反斜杠（plugins\xxx.dll），在 Linux / macOS 上解压会得到
-          # 带反斜杠字面量的文件名——交付件必须四平台都能正常解压。与 capture-screenshots.sh /
+          # 带反斜杠字面量的文件名——交付件必须五平台都能正常解压。与 capture-screenshots.sh /
           # fetch-third-party.sh 同思路：不依赖 zip / unzip 外部工具。
           # windows runner 通常只有 python（无 python3），选择方式与 install-plugin-artifacts.sh 一致。
           py=python3
@@ -208,7 +213,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # 仅 tag 触发：四平台全绿后创建 Release，附带各平台 zip
+  # 仅 tag 触发：五平台全绿后创建 Release，附带各平台 zip
   release:
     name: Release
     needs: build
