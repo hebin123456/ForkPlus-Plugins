@@ -1458,7 +1458,7 @@ workflow：[.github/workflows/build.yml](.github/workflows/build.yml)
   | linux-x64 | `ubuntu-latest` | `linux-x64` |
   | linux-arm64 | `ubuntu-22.04-arm` | `linux-arm64` |
   | macos-arm64 | `macos-latest` | `osx-arm64` |
-  | macos-x64 | `macos-13` | `osx-x64` |
+  | macos-x64 | `macos-latest` | `osx-x64`（arm64 runner 上交叉构建，不依赖 Intel runner） |
 
 - **出包**：每个平台构建一遍全部插件，用 `install-plugin-artifacts.sh` 把每个插件装进包内
   `plugins/<AssemblyName>/` 子目录（目录名=程序集名），内含 `plugin.json`、**主 DLL + 私有依赖

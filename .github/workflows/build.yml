@@ -9,7 +9,9 @@
 #   linux-x64    → ubuntu-latest    / linux-x64
 #   linux-arm64  → ubuntu-22.04-arm / linux-arm64（原生 ARM64 runner，公开仓库免费）
 #   macos-arm64  → macos-latest     / osx-arm64
-#   macos-x64    → macos-13         / osx-x64（Intel runner，macos-latest 已无 x64）
+#   macos-x64    → macos-latest     / osx-x64（arm64 runner 上交叉构建：托管 IL 与 runner
+#                                    架构无关；原生三方件由三方件仓同法交叉产出。不用
+#                                    容量小且已进退役流程的 Intel runner macos-13）
 #
 # 出包内容（v1.2.0 起每插件一个目录）：每个平台的包内是 plugins/ 目录，其下**每个插件一个子目录**
 #   plugins/<AssemblyName>/（内含 plugin.json、插件主 DLL、私有依赖（托管 / 原生）+ 许可声明）。
@@ -75,7 +77,7 @@ jobs:
             name: macos-arm64
             rid: osx-arm64
             platformtarget: arm64
-          - os: macos-13
+          - os: macos-latest
             name: macos-x64
             rid: osx-x64
             platformtarget: x64
