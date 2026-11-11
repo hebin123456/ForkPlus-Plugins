@@ -346,6 +346,17 @@ namespace ForkPlus.Plugins.Chm
 					{ "de-DE", "Eine Seite ist nicht vorhanden; es werden nur die Werte der anderen Seite angezeigt." },
 					{ "es-ES", "Un lado no está presente; solo se muestran los valores del otro lado." }
 				}
+			},
+			{ "Failed to load LFS content: {0}", new Dictionary<string, string>
+				{
+					{ "zh-Hans", "LFS 内容加载失败：{0}" },
+					{ "zh-Hant", "LFS 內容載入失敗：{0}" },
+					{ "ja-JP", "LFS コンテンツの読み込みに失敗しました：{0}" },
+					{ "ko-KR", "LFS 콘텐츠를 로드하지 못했습니다: {0}" },
+					{ "fr-FR", "Échec du chargement du contenu LFS : {0}" },
+					{ "de-DE", "LFS-Inhalt konnte nicht geladen werden: {0}" },
+					{ "es-ES", "No se pudo cargar el contenido LFS: {0}" }
+				}
 			}
 		};
 

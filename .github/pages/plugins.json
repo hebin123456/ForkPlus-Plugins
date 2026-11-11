@@ -1392,6 +1392,72 @@
           "html": "<p>随包进 <code>plugins/</code> 的只有插件自身主 DLL，而 Vue 3 全量运行时（<code>vue.global.prod.js</code>，<strong>3.5.43</strong>，<strong>MIT</strong>）作为<strong>嵌入式资源编进主 DLL</strong>（运行期从 <code>Assembly.GetManifestResourceStream(\"vue.global.prod.js\")</code> 读出，懒加载 + 进程级缓存），因此不额外分发独立文件；第三方声明登记在 <code>third-party.json</code>，许可全文见 <code>licenses/vue/LICENSE.txt</code>，由脚本合并进 <code>ForkPlus.Plugins.Frontend.THIRD-PARTY-NOTICES.txt</code>。除 Vue 外无任何第三方托管 / 原生依赖（Avalonia 与「渲染」用的 <code>HtmlPreview</code> 共享组件均由宿主运行期提供）。「渲染」依赖宿主 <strong>5.1.1</strong> 起的共享组件，故 <code>plugin.json</code> 的 <code>minHostVersion</code> 声明 <code>5.1.1</code>。</p>"
         }
       ]
+    },
+    {
+      "id": "markdown",
+      "name": "Markdown 预览对比插件 · Markdown Preview",
+      "version": "1.0.0",
+      "minHostVersion": "5.1.1",
+      "assembly": "ForkPlus.Plugins.Markdown",
+      "source": "plugins/ForkPlus.Plugins.Markdown",
+      "summary": "Markdown 预览对比视图：认领 .md / .markdown，三模式对比——「渲染」把两侧 Markdown 用 Markdig（MIT）渲成跟随系统明暗主题的样式化 HTML，交给宿主共享组件 ForkPlus.Plugins.Ui 的并排双 WebView 预览；「大纲」按标题文本归一化对齐做层级语义 diff（相同 / 层级已变 / 仅左 / 仅右四色标注），一眼看出章节增删与升降级；「源码」并排查看原始文本。一份 Markdig 解析两用，渲染与大纲口径一致。相对路径引用的外部图片无法解析（已如实标注）；无头环境缺 WebView 运行时时「渲染」仅给提示（降级不报错），可切「大纲」/「源码」。单侧声明大小超过 300 MB 只给提示、不解析。",
+      "extensions": [
+        ".md",
+        ".markdown"
+      ],
+      "screenshots": [
+        {
+          "file": "markdown-modify.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.md，差异区由 Markdown 插件以「渲染」模式并排双 WebView 预览两侧样式化 HTML",
+          "caption": "「修改」对比（Markdown · .md，1920×1280 完整界面，未裁切）：默认停在「渲染」模式。顶部两栏标题由宿主注入的主题画刷着色；状态行给出 <code>Markdown 对比：sample.md / sample.md · 标题 … · 内容有差异</code>。内容区顶部一行浅色小字如实标注「文档里以相对路径引用的图片无法解析，可能缺失。」；其下是并排双 WebView——左右两侧各渲染 demo 文档的样式化 HTML（GitHub 风格排版，跟随系统明暗主题），标题、表格、代码块、列表一目了然。"
+        },
+        {
+          "file": "markdown-add.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 add: sample.md，差异区右栏渲染新增的 Markdown 文档，左栏显示不存在占位",
+          "caption": "「新增」对比（Markdown · .md）：提交给仓库新增了 <code>sample.md</code>，旧侧不存在。左栏标题写 <code>旧 · 不存在</code>，右栏标题 <code>已创建 · sample.md · …</code>；右栏「渲染」模式真渲染新文档的完整内容，而不是空白。"
+        },
+        {
+          "file": "markdown-remove.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 remove: delete sample.md，差异区左栏渲染被删除的 Markdown 文档，右栏显示不存在占位",
+          "caption": "「删除」对比（Markdown · .md）：提交删除了 <code>sample.md</code>，新侧不存在。左栏标题 <code>已删除 · sample.md · …</code> 下「渲染」模式真渲染被删文档的完整内容，右栏标题 <code>新 · 不存在</code>。"
+        },
+        {
+          "file": "markdown-outline.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.md，差异区切到 Markdown 插件的「大纲」模式，标题层级语义 diff 四色标注",
+          "caption": "「大纲」模式（Markdown · .md，modify 场景）：四列表「标题 | 旧 | 新 | 状态」，按标题文本归一化对齐（同侧重复标题按出现次序消歧），旧 / 新单元格给 <code>H1</code>-<code>H6</code> 层级，逐行四色标注——层级相同铺原底、层级已变橙字铺浅绿、仅左红字铺浅红、仅右绿字铺浅绿。新增 / 删除 / 升降级的章节一眼可见。"
+        },
+        {
+          "file": "markdown-source.png",
+          "alt": "ForkPlus 完整软件界面：提交视图选中 update: modify sample.md，差异区切到 Markdown 插件的「源码」模式，左右两栏并排显示等宽原始文本",
+          "caption": "「源码」模式（Markdown · .md，modify 场景）：两栏并排的原始文本（等宽、只读、可选中，各带文件名小标题与独立滚动条），是「渲染」/「大纲」看不出差异时的兜底口径。单侧超过 20 万字符时只显示前若干字符并在栏下注明。"
+        }
+      ],
+      "sections": [
+        {
+          "heading": "对比视图长什么样",
+          "html": "<p>视图是一块 <code>Grid</code>：<code>RowDefinitions=\"Auto,Auto,Auto,*\"</code> 依次是<strong>两栏标题行</strong>、<strong>状态行</strong>、<strong>模式工具栏</strong>、<strong>内容区</strong>。标题行采用宿主注入的 <code>context.SrcTitleBrush</code> / <code>context.DstTitleBrush</code> 着色，文字形如 <code>旧 · sample.md · 4 KB</code>（角色名取 <code>PluginEnvironment.Translate</code>，文件名取 <code>Path.GetFileName</code>，体积取 <code>PluginSizeFormat.ReadableFileSize</code>）；某一侧为 <code>null</code> 时显示 <code>不存在</code>。状态行给出 <code>Markdown 对比：&lt;标题&gt; / &lt;标题&gt;</code> 与两侧标题数，再按情况追加「大纲：N 层级变化 · N 仅左 · N 仅右」与「内容有差异 / 无差异 / 一侧不存在，仅显示另一侧。」。模式工具栏三个 <code>Button</code>（<code>渲染 / 大纲 / 源码</code>），当前项加浅蓝底 + 半粗。</p>"
+        },
+        {
+          "heading": "渲染模式：Markdig 渲成样式化 HTML 并排预览",
+          "html": "<p>默认的「渲染」模式在后台把两侧 Markdown 各自转成<strong>自包含 HTML</strong>：Markdig 高级扩展管线（表格 / 任务列表 / 自动链接 / 删除线…）转 HTML，套一层跟随系统明暗主题的排版样式壳（GitHub 风格：标题下划线、等宽代码块、表格边框、引用条），交给宿主共享组件 <code>ForkPlus.Plugins.Ui</code> 的 <code>SideBySideHtmlPreview</code>（基于官方 <code>Avalonia.Controls.WebView</code>：Windows=WebView2 / macOS=WKWebView / Linux=WPE WebKit，缺失回退 WebKitGTK）并排渲染。某侧不存在 / 无内容时该侧占位；WebView 不可用（headless、缺 WebView2 运行时）时两侧仅给提示——<strong>降级只提示，不报错</strong>。逼近 90 万字符预算即截断（截断点回退到最近一个块级闭合标签）并注明，规避 WebView2 <code>NavigateToString</code> 的 2MB 硬限制。内容区顶部固定一行小字如实标注「文档里以相对路径引用的图片无法解析，可能缺失。」。</p>"
+        },
+        {
+          "heading": "大纲模式：标题层级语义 diff",
+          "html": "<p>「大纲」模式是一张四列表——「标题 | 旧 | 新 | 状态」：从 Markdig 文档对象模型抽两侧全部标题（<code>HeadingBlock</code>，含 setext 风格），<strong>键 = 标题文本的归一化</strong>（折叠连续空白、去首尾、统一小写；同侧重复标题按出现次序消歧），逐行判定<strong>相同 / 层级已变 / 仅左 / 仅右</strong>四态并四色标注。刻意不用位置索引做键：在中间插入一个标题会让后续同级标题的序号整体漂移，产生大面积伪差异；按标题文本对齐时，插入 / 删除标题只影响该行本身。升降级（如 <code>##</code> 改 <code>###</code>）显示为「层级已变」。行序取「先左后右」——左侧原有标题保持文档序，右侧独有的追加在后。表上限 500 行，超出截断并注明。</p>"
+        },
+        {
+          "heading": "源码模式与解析口径",
+          "html": "<p>「源码」模式两栏并排看原始文本（等宽、只读、可选中、独立滚动），单侧上限 <code>200000</code> 字符，超出截断并注明。三模式共用<strong>同一次后台解析</strong>：渲染 HTML 与标题大纲都出自同一 Markdig 管线，口径一致。读取 / 解析 / 组装在后台线程执行（代次 <code>_generation</code> + <code>CancellationTokenSource</code> 取消上一轮），控件只在 UI 线程构建；单侧声明大小超过 <code>MaxSideBytes</code>（300 MB）只提示、不解析。</p>"
+        },
+        {
+          "heading": "路由与已知限制",
+          "html": "<p><code>.md</code> / <code>.markdown</code> 是<strong>文本</strong>文件，git 默认判文本、走内置文本编辑器；宿主 <strong>5.0.5</strong> 起文本差异也会查询插件路由（<code>DiffViewPluginRegistry.ResolveClaimed</code>：用户绑定 &gt; 精确扩展名认领，不含 <code>\"*\"</code> 通配兜底），本插件以精确扩展名显式认领，因此<strong>默认即自动接管</strong>；用户在「偏好设置 → 扩展名绑定」里的绑定优先于自动路由（优先级最高）。<strong>已知限制（如实标注）</strong>：插件只拿到仓库相对路径，文档里以相对路径引用的<strong>外部</strong>图片无法解析（渲染模式顶部注明）；「渲染」的并排预览无跨侧滚动同步（共享组件未提供脚本桥）。CI 截图可用环境变量 <code>FORKPLUS_PLUGIN_VIEW_MODE</code> 预选 <code>outline</code> / <code>source</code> 模式（其余走默认 <code>render</code>）。</p>"
+        },
+        {
+          "heading": "第三方依赖：Markdig",
+          "html": "<p>解析用 MIT 许可的 <strong>Markdig</strong>（纯托管、无传递依赖），作为<strong>私有托管依赖</strong>随包分发（<code>Markdig.dll</code> 与插件主 DLL 同放 <code>plugins/&lt;AssemblyName&gt;/</code>）；第三方声明登记在 <code>third-party.json</code>，许可全文见 <code>licenses/markdig/LICENSE.txt</code>，由脚本合并进 <code>ForkPlus.Plugins.Markdown.THIRD-PARTY-NOTICES.txt</code>。「渲染」依赖宿主 <strong>5.1.1</strong> 起的共享组件 <code>ForkPlus.Plugins.Ui</code>（<code>HtmlPreview</code>），故 <code>plugin.json</code> 的 <code>minHostVersion</code> 声明 <code>5.1.1</code>。</p>"
+        }
+      ]
     }
   ]
 }

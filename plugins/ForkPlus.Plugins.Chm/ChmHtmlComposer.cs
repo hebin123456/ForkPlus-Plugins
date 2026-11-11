@@ -18,8 +18,8 @@ namespace ForkPlus.Plugins.Chm
 	/// 排除 exe / zip / pdf 等附件），并按 base64 膨胀记账，逼近预算的资源保留原引用——页面其余
 	/// 部分照常渲染，宁可图片缺失也不让整页挂掉。
 	///
-	/// 尽力而为：编码不在 .NET 内置集（如 GBK）或引用的资源在 CHM 里找不到时，退化为原样 /
-	/// 保留原引用，不抛异常（返回 null 表示该侧无默认主题可渲染，视图显示占位）。
+	/// 尽力而为：编码不可解析（拼错 / 极冷门）或引用的资源在 CHM 里找不到时，退化为
+	/// ANSI 回退解码 / 保留原引用，不抛异常（返回 null 表示该侧无默认主题可渲染，视图显示占位）。
 	/// </summary>
 	internal static class ChmHtmlComposer
 	{
@@ -41,6 +41,10 @@ namespace ForkPlus.Plugins.Chm
 				return null;
 			}
 			string html = DecodeHtml(bytes);
+			// 字节已按页面声明解码成正确文本，声明必须同步改写为 utf-8：WebView 的
+			// NavigateToString 按自身规则装载文档，若页面仍声明 gb2312 等旧编码，
+			// 可能按声明把已是 UTF-8 的字节再解码一次 → 乱码回潮。
+			html = ForceUtf8Declaration(html);
 			string baseDir = DirectoryOf(topic.Path);
 			InlineBudget budget = new InlineBudget(html.Length);
 			return HtmlResourceInliner.Inline(html, url => Resolve(document, baseDir, url, budget));
@@ -253,7 +257,10 @@ namespace ForkPlus.Plugins.Chm
 
 		// ---- 解码 ----
 
-		/// <summary>按 BOM &gt; 页面声明编码 &gt; UTF-8 的顺序解码 HTML 字节。</summary>
+		/// <summary>按 BOM &gt; 页面声明编码 &gt;（严格 UTF-8 → ANSI 回退）的顺序解码 HTML 字节。
+		/// 页面声明的 gb2312 / gbk / big5 / shift_jis 等经 CodePages 提供程序解析（此前不在
+		/// .NET 默认编码集，声明 GBK 的中文页面被错误地按 UTF-8 解码成乱码）；无声明时按
+		/// 「严格 UTF-8 失败回退系统 ANSI 代码页」（无 meta 的 GBK 页面同此恢复）。</summary>
 		private static string DecodeHtml(byte[] bytes)
 		{
 			if (bytes == null || bytes.Length == 0)
@@ -275,17 +282,39 @@ namespace ForkPlus.Plugins.Chm
 			string name = SniffCharset(bytes);
 			if (!string.IsNullOrEmpty(name))
 			{
-				try
+				Encoding declared = ChmTextEncoding.TryGetEncoding(name);
+				if (declared != null)
 				{
-					return Encoding.GetEncoding(name).GetString(bytes);
+					return declared.GetString(bytes);
 				}
-				catch (Exception)
-				{
-					// 该编码不在内置集（GBK / windows-1252 需 CodePages 提供程序）：回退 UTF-8。
-				}
+				// 声明的编码不可解析（拼错 / 极冷门）：落到下面的探测回退，而不是无脑 UTF-8。
 			}
-			return Encoding.UTF8.GetString(bytes);
+			return ChmTextEncoding.Decode(bytes, 0, bytes.Length);
 		}
+
+		/// <summary>把 HTML 里的编码声明统一改写为 utf-8（&lt;meta charset=…&gt;、
+		/// &lt;meta http-equiv=Content-Type content="…; charset=…"&gt;、&lt;?xml encoding=…?&gt;）。
+		/// 字节已按原声明解码成正确的 .NET 字符串，再交给 WebView 之前声明必须与实际一致。</summary>
+		private static string ForceUtf8Declaration(string html)
+		{
+			if (string.IsNullOrEmpty(html))
+			{
+				return html;
+			}
+			string result = MetaCharsetPattern.Replace(html, "${prefix}utf-8");
+			return XmlEncodingPattern.Replace(result, "${prefix}utf-8");
+		}
+
+		/// <summary>匹配 meta 里的 charset 声明（HTML 4 的 http-equiv=Content-Type 与 HTML 5 的
+		/// charset= 两种形态都在内；捕获组 prefix 保留声明之前的全部原文，只替换编码名）。</summary>
+		private static readonly System.Text.RegularExpressions.Regex MetaCharsetPattern = new System.Text.RegularExpressions.Regex(
+			"(?<prefix><meta[^>]*?charset\\s*=\\s*[\"']?)(?<charset>[^\"'\\s;>/]+)",
+			System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+		/// <summary>匹配 XHTML 的 &lt;?xml version="…" encoding="…" ?&gt; 声明（只替换 encoding 值）。</summary>
+		private static readonly System.Text.RegularExpressions.Regex XmlEncodingPattern = new System.Text.RegularExpressions.Regex(
+			"(?<prefix><\\?xml[^>]*?encoding\\s*=\\s*[\"']?)(?<encoding>[^\"'\\s]+)",
+			System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
 
 		/// <summary>从前 2 KB 的 ASCII 区里嗅探 charset=xxx 的值；没有返回 null。</summary>
 		private static string SniffCharset(byte[] bytes)

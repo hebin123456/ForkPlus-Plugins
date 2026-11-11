@@ -145,6 +145,12 @@ namespace ForkPlus.Plugins.Chm
 
 		private string _dstParseError;
 
+		/// <summary>左 / 右两侧各自的 LFS 加载错误（侧是 LFS 文件、缓存未命中且 smudge 失败时记录；
+		/// 用于在状态行给出真实原因，而不是笼统的「内容不可用」）。</summary>
+		private string _srcLfsError;
+
+		private string _dstLfsError;
+
 		private bool _srcAbsent;
 
 		private bool _dstAbsent;
@@ -303,6 +309,8 @@ namespace ForkPlus.Plugins.Chm
 			_rightHtml = null;
 			_srcNoBytes = false;
 			_dstNoBytes = false;
+			_srcLfsError = null;
+			_dstLfsError = null;
 			_content.Content = null;
 			_status.Text = string.Empty;
 		}
@@ -321,6 +329,8 @@ namespace ForkPlus.Plugins.Chm
 			_error = null;
 			_srcParseError = null;
 			_dstParseError = null;
+			_srcLfsError = null;
+			_dstLfsError = null;
 			_srcNoBytes = false;
 			_dstNoBytes = false;
 			_tooLarge = false;
@@ -347,7 +357,7 @@ namespace ForkPlus.Plugins.Chm
 			MemoryStream hexSrc = context.HexSrc;
 			MemoryStream hexDst = context.HexDst;
 
-			Task.Run(delegate
+			Task.Run(async delegate
 			{
 				ChmDocument left = null;
 				ChmDocument right = null;
@@ -355,8 +365,8 @@ namespace ForkPlus.Plugins.Chm
 				string dstParseError = null;
 				try
 				{
-					byte[] leftBytes = ReadBytes(src, hexSrc, cts.Token);
-					byte[] rightBytes = ReadBytes(dst, hexDst, cts.Token);
+					(byte[] leftBytes, string srcLfsError) = await ResolveSideAsync(src, hexSrc, cts.Token).ConfigureAwait(false);
+					(byte[] rightBytes, string dstLfsError) = await ResolveSideAsync(dst, hexDst, cts.Token).ConfigureAwait(false);
 					cts.Token.ThrowIfCancellationRequested();
 					if (leftBytes != null)
 					{
@@ -381,7 +391,7 @@ namespace ForkPlus.Plugins.Chm
 						{
 							return;
 						}
-						// 供给诊断：侧存在却拿不到字节时记一条日志（宿主 Hex 预载 / 侧懒加载 / LFS 缓存全空）。
+						// 供给诊断：侧存在却拿不到字节时记一条日志（宿主 Hex 预载 / 侧懒加载 / LFS 缓存与 smudge 全空）。
 						_srcNoBytes = src != null && leftBytes == null;
 						_dstNoBytes = dst != null && rightBytes == null;
 						if (_srcNoBytes || _dstNoBytes)
@@ -396,6 +406,8 @@ namespace ForkPlus.Plugins.Chm
 						_rightHtml = rightHtml;
 						_srcParseError = srcParseError;
 						_dstParseError = dstParseError;
+						_srcLfsError = srcLfsError;
+						_dstLfsError = dstLfsError;
 						UpdateStatus();
 						BuildContent();
 					});
@@ -436,61 +448,79 @@ namespace ForkPlus.Plugins.Chm
 		}
 
 		/// <summary>
-		/// 取一侧原始字节：宿主 Hex 预载 &gt; 侧内容懒加载 &gt; LFS 本地缓存；
-		/// 保存 / 恢复流 Position，拷成 byte[]（解析器自建 MemoryStream 用，不动宿主的流）。
+		/// 取一侧原始字节：宿主 Hex 预载 &gt; 侧内容懒加载 &gt; LFS 本地缓存 &gt; LFS smudge 下载。
+		/// 拷成 byte[]（解析器自建 MemoryStream 用，不动宿主的流——ToArray 不改变宿主流 Position）。
+		/// 侧是 LFS 文件且缓存未命中时启动 smudge（宿主在 UI 线程回调，TCS 桥回后台线程），
+		/// 成功返回真身字节；失败返回错误描述（供状态行展示真实原因，而非笼统的「内容不可用」）。
+		/// 模式与 Archive / Pdf / Video 等插件一致（此前 Chm 只查缓存、从不触发下载，
+		/// 导致未 smudge 的 LFS chm 恒显示「内容不可用」）。
 		/// </summary>
-		private byte[] ReadBytes(DiffSideContent side, MemoryStream preloaded, CancellationToken token)
+		private async Task<(byte[] bytes, string lfsError)> ResolveSideAsync(DiffSideContent side, MemoryStream preloaded, CancellationToken token)
 		{
 			if (side == null)
 			{
-				return null;
+				return (null, null);
 			}
-			MemoryStream data = preloaded;
-			if (data == null)
+			if (preloaded != null && preloaded.Length > 0)
+			{
+				return (preloaded.ToArray(), null);
+			}
+			MemoryStream data = null;
+			try
 			{
 				data = side.Data;
 			}
-			if (data == null && side.Lfs != null && _host != null)
+			catch (Exception ex)
 			{
-				data = _host.GetCachedLfsData(side.Lfs);
+				PluginLog.Warn("Chm: failed to load side bytes for '" + side.Path + "'", ex);
 			}
-			if (data == null)
+			if (data != null && data.Length > 0)
 			{
-				return null;
+				return (data.ToArray(), null);
 			}
-			token.ThrowIfCancellationRequested();
-			long position = data.Position;
+			if (side.Lfs == null || _host == null)
+			{
+				return (null, null);
+			}
+			MemoryStream cached = null;
 			try
 			{
-				data.Position = 0L;
-				byte[] bytes = new byte[data.Length];
-				int offset = 0;
-				while (offset < bytes.Length)
+				cached = _host.GetCachedLfsData(side.Lfs);
+			}
+			catch (Exception ex)
+			{
+				PluginLog.Warn("Chm: LFS cache lookup failed", ex);
+			}
+			if (cached != null && cached.Length > 0)
+			{
+				return (cached.ToArray(), null);
+			}
+			// 缓存未命中：启动 LFS smudge，宿主在 UI 线程回调，用 TCS 桥回后台线程。
+			TaskCompletionSource<LfsSmudgeResult> tcs = new TaskCompletionSource<LfsSmudgeResult>();
+			IDisposable subscription = null;
+			CancellationTokenRegistration registration = token.Register(delegate
+			{
+				subscription?.Dispose();
+				tcs.TrySetCanceled();
+			});
+			try
+			{
+				subscription = _host.RunLfsSmudge(side.Lfs, null, delegate(LfsSmudgeResult result)
 				{
-					int read = data.Read(bytes, offset, bytes.Length - offset);
-					if (read <= 0)
-					{
-						break;
-					}
-					offset += read;
-				}
-				if (offset < bytes.Length)
+					tcs.TrySetResult(result);
+				});
+				LfsSmudgeResult smudge = await tcs.Task.ConfigureAwait(false);
+				if (smudge != null && smudge.Succeeded && smudge.Data != null && smudge.Data.Length > 0)
 				{
-					byte[] exact = new byte[offset];
-					Array.Copy(bytes, exact, offset);
-					bytes = exact;
+					return (smudge.Data.ToArray(), null);
 				}
-				return bytes;
+				PluginLog.Warn("Chm: LFS smudge failed for '" + side.Path + "': " + (smudge?.Error ?? "unknown"));
+				return (null, smudge?.Error ?? "LFS smudge failed");
 			}
 			finally
 			{
-				try
-				{
-					data.Position = position;
-				}
-				catch (NotSupportedException)
-				{
-				}
+				registration.Dispose();
+				subscription?.Dispose();
 			}
 		}
 
@@ -535,10 +565,16 @@ namespace ForkPlus.Plugins.Chm
 			}
 		}
 
-		/// <summary>优先展示的状态错误：意外异常 &gt; 左侧解析失败 &gt; 右侧解析失败。</summary>
+		/// <summary>优先展示的状态错误：意外异常 &gt; 左侧解析失败 &gt; 右侧解析失败 &gt; LFS 加载失败。</summary>
 		private string DisplayError()
 		{
 			return _error ?? _srcParseError ?? _dstParseError;
+		}
+
+		/// <summary>LFS smudge 失败的可读原因（左优先）；两侧都不是 LFS 下载失败时为 null。</summary>
+		private string DisplayLfsError()
+		{
+			return _srcLfsError ?? _dstLfsError;
 		}
 
 		private void UpdateStatus()
@@ -552,6 +588,12 @@ namespace ForkPlus.Plugins.Chm
 			if (error != null)
 			{
 				_status.Text = ChmStrings.F("Failed to parse: {0}", error);
+				return;
+			}
+			string lfsError = DisplayLfsError();
+			if (lfsError != null)
+			{
+				_status.Text = ChmStrings.F("Failed to load LFS content: {0}", lfsError);
 				return;
 			}
 			if (_metaDiff == null)
@@ -614,10 +656,13 @@ namespace ForkPlus.Plugins.Chm
 				return;
 			}
 			// 两侧都没解析出文档又没有解析错误 = 两侧字节都没拿到（宿主 Hex 预载失败等）：
-			// 直接给「内容不可用」占位——空表只有表头，什么都说明不了。
+			// LFS smudge 失败时给出真实原因，其余给「内容不可用」占位——空表只有表头，什么都说明不了。
 			if (_left == null && _right == null && DisplayError() == null)
 			{
-				_content.Content = NoteText(ChmStrings.T("content unavailable"));
+				string lfsError = DisplayLfsError();
+				_content.Content = NoteText(lfsError != null
+					? ChmStrings.F("Failed to load LFS content: {0}", lfsError)
+					: ChmStrings.T("content unavailable"));
 				return;
 			}
 			if (_mode == PreviewMode)

@@ -2287,6 +2287,56 @@ print("  demo frontend ->", target, "(" + version + ")")
 PY
 }
 
+# Markdown demo：三场景共用同一对 .md（README 风格，两章带表格与代码块）；
+# v2 改标题层级（Usage H2→H3）、加一章（FAQ）、删一小节（Roadmap）、改表格数据与安装命令——
+# 「大纲」模式的层级已变 / 仅右 / 仅左与「渲染」模式的排版差异都看得到。样本是纯文本，
+# 与前端代码同理靠 .gitattributes 的 `-diff` 走插件路由。
+write_demo_markdown() {
+	local repo="$1" version="$2"
+	python3 - "$repo" "$version" <<'PY'
+import os, sys
+repo, version = sys.argv[1], sys.argv[2]
+is_new = version == "v2"
+
+doc = []
+doc.append("# ForkPlus Demo\n\n")
+doc.append("A sample README rendered by the Markdown compare plugin.\n\n")
+doc.append("## Installation\n\n")
+doc.append("Install from a release archive:\n\n")
+if is_new:
+	doc.append("```bash\ntar -xzf forkplus-2.0.tar.gz\n./forkplus/install.sh\n```\n\n")
+else:
+	doc.append("```bash\ntar -xzf forkplus-1.0.tar.gz\n./forkplus/install.sh\n```\n\n")
+doc.append("### Requirements\n\n")
+doc.append(".NET 10 runtime or a self-contained build.\n\n" if is_new else ".NET 8 runtime or newer.\n\n")
+doc.append("## Features\n\n")
+doc.append("| Feature | Status |\n| --- | --- |\n")
+rows = [
+	("Side-by-side preview", "Done"),
+	("Heading outline diff", "Done" if is_new else "Planned"),
+	("Dark theme", "Done" if is_new else "Planned"),
+]
+for name, status in rows:
+	doc.append("| %s | %s |\n" % (name, status))
+doc.append("\n")
+doc.append("### Usage\n\n" if is_new else "## Usage\n\n")
+doc.append("1. Open a repository\n2. Pick a commit\n3. Select `sample.md` in the changes list\n\n")
+if is_new:
+	doc.append("## FAQ\n\n")
+	doc.append("- **Is it offline?** Yes, rendering is fully local.\n\n")
+else:
+	doc.append("## Roadmap\n\n")
+	doc.append("- Add outline diff mode\n\n")
+doc.append("## License\n\n")
+doc.append("MIT.\n")
+
+target = os.path.join(repo, "sample.md")
+with open(target, "w", encoding="utf-8") as f:
+	f.write("".join(doc))
+print("  demo markdown ->", target, "(" + version + ")")
+PY
+}
+
 # 三类文本格式 demo 仓库共用一套骨架：
 #   ① 写 .gitattributes 给样本加 `-diff`——宿主只对二进制差异查询插件路由，这样样本虽仍是
 #      合法文本，差异却会走插件（否则截图会落到内置文本编辑器上）；
@@ -2659,6 +2709,11 @@ prepare_repo_binary chm remove write_demo_chm chm
 prepare_repo_text frontend modify "sample.html" write_demo_frontend html
 prepare_repo_text frontend add "sample.vue" write_demo_frontend vue
 prepare_repo_text frontend remove "sample.htm" write_demo_frontend htm
+# Markdown demo：三场景共用同一对 .md（v2 改标题层级、加一章、删一小节、改表格数据）；
+# 样本是纯文本，与前端代码同理靠 .gitattributes 的 `-diff` 走插件路由。
+prepare_repo_text markdown modify "sample.md" write_demo_markdown
+prepare_repo_text markdown add "sample.md" write_demo_markdown
+prepare_repo_text markdown remove "sample.md" write_demo_markdown
 start_x
 # PDF 插件三种场景各截一张：修改 / 新增 / 删除
 for mode in modify add remove; do
@@ -2851,5 +2906,15 @@ done
 # 前端代码插件另取「源码」模式一张（modify 场景为样本）
 seed_settings
 capture_one "$WORK/repo-frontend-modify" "FrontendDiffView.SetContent" "frontend-source.png" 4 "前端代码插件 · 源码" "source"
+# Markdown 插件三种场景各截一张（默认渲染模式；同一对 .md）
+for mode in modify add remove; do
+	seed_settings
+	capture_one "$WORK/repo-markdown-$mode" "MarkdownDiffView.SetContent" "markdown-$mode.png" 4 "Markdown 插件 · $mode"
+done
+# Markdown 插件另取「大纲」/「源码」模式各一张（modify 场景为样本）
+for m in "outline:大纲" "source:源码"; do
+	seed_settings
+	capture_one "$WORK/repo-markdown-modify" "MarkdownDiffView.SetContent" "markdown-${m%%:*}.png" 4 "Markdown 插件 · ${m##*:}" "${m%%:*}"
+done
 write_metadata
 log "完成：截图已输出到 $OUT"

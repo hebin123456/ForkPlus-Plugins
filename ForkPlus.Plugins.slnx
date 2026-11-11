@@ -31,6 +31,7 @@
   <Project Path="plugins/ForkPlus.Plugins.Chm/ForkPlus.Plugins.Chm.csproj" />
   <Project Path="plugins/ForkPlus.Plugins.Frontend/ForkPlus.Plugins.Frontend.csproj" />
   <Project Path="plugins/ForkPlus.Plugins.Patch/ForkPlus.Plugins.Patch.csproj" />
+  <Project Path="plugins/ForkPlus.Plugins.Markdown/ForkPlus.Plugins.Markdown.csproj" />
   <!-- 主仓迁入的内置插件：图片对比 / Hex 二进制兜底 -->
   <Project Path="plugins/ForkPlus.Plugins.Image/ForkPlus.Plugins.Image.csproj" />
   <Project Path="plugins/ForkPlus.Plugins.Hex/ForkPlus.Plugins.Hex.csproj" />
